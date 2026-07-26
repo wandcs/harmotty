@@ -55,6 +55,9 @@ and a physical PC.
 - Do not add x86_64 emulator support, mobile layouts, plugins or speculative
   abstraction layers.
 - Add or update tests for state machines, protocols and pure logic.
+- Record user-visible fixes and capabilities in the pending changelog section
+  defined by [the versioning policy](docs/versioning.md); maintainers classify
+  and assign the final target version.
 - Focus, keyboard, clipboard, window, persistence, terminal interaction and SSH
   lifecycle changes need real-PC evidence.
 - Do not commit generated output, SDK files, packages, credentials, private
@@ -77,6 +80,10 @@ A pull request should include:
 
 Small, reviewable pull requests are preferred. There is no mechanical line
 limit, but unrelated refactoring should be split out.
+
+Release branches, version metadata, AppGallery submissions and stable tags are
+maintainer-controlled and follow
+[the release process](docs/release-process.md).
 
 By submitting a contribution, you agree that it is licensed under the
 repository's Apache-2.0 license. The project does not currently require a

@@ -80,21 +80,29 @@ HarmoTTY publishes stable versions directly. Any code, dependency, resource,
 version or packaging change requires a new pushed commit and a new clean build
 from the release checkout.
 
+Prepare the version metadata on a `release/X.Y.Z` branch and merge it to `main`
+through a pull request. The exact pushed `main` commit after that merge is the
+release commit. Do not merge work for the next higher version until that commit
+has passed production verification, been tagged and been submitted. After that,
+`main` may advance; the immutable tag is the recovery anchor described by
+[`versioning.md`](versioning.md).
+
 ## Build
 
 Run only from the release checkout:
 
 ```powershell
-.\tools\build-all.ps1 -Clean -BuildMode release -Metadata -ReleaseId 1.0.0
+$releaseId = 'X.Y.Z'
+.\tools\build-all.ps1 -Clean -BuildMode release -Metadata -ReleaseId $releaseId
 ```
 
 This generates named ARM64 release artifacts:
 
-- `build/outputs/release/HarmoTTY-1.0.0-arm64-v8a-unsigned.hap`
-- `build/outputs/release/HarmoTTY-1.0.0-arm64-v8a-signed.hap` when production
+- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-unsigned.hap`
+- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-signed.hap` when production
   signing is configured
-- `build/outputs/release/HarmoTTY-1.0.0-arm64-v8a-unsigned.app`
-- `build/outputs/release/HarmoTTY-1.0.0-arm64-v8a-signed.app` when production
+- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-unsigned.app`
+- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-signed.app` when production
   signing is configured; this is the AppGallery upload artifact
 - `build/outputs/release/licenses/` with the project license, third-party
   notice, complete Rust dependency inventory, OFL text, and package-specific
@@ -137,7 +145,7 @@ git status --short
    ```powershell
    java -jar "<DevEco SDK>\default\openharmony\toolchains\lib\hap-sign-tool.jar" `
      verify-app `
-     -inFile "build\outputs\release\HarmoTTY-1.0.0-arm64-v8a-signed.hap" `
+     -inFile "build\outputs\release\HarmoTTY-X.Y.Z-arm64-v8a-signed.hap" `
      -outCertChain "build\outputs\metadata\signing-cert-chain.cer" `
      -outProfile "build\outputs\metadata\signing-profile.p7b"
    ```
@@ -146,27 +154,60 @@ git status --short
    `verify-app success`. `keytool -printcert -jarfile` is not a valid HAP
    signature check.
 
-## Publish
+## Submit for AppGallery Review
 
 Only after the exact release artifact passes the final real-PC smoke test:
 
-1. Create an immutable signed tag on the recorded commit:
-   `git tag -s v1.0.0 <release-commit-sha> -m "v1.0.0"`.
-2. Confirm the tag resolves to the release manifest commit.
-3. Push the tag: `git push origin v1.0.0`.
-4. Upload the signed APP and store materials to AppGallery. Use the signed HAP
+1. Confirm the previous AppGallery review is no longer in progress. Normally
+   it is `Released`; if it was rejected and this APP supersedes it, record the
+   rejection and replacement relationship.
+2. Confirm the release commit and signed APP/HAP hashes match
+   `build-manifest.json`.
+3. Create an immutable signed tag on the verified commit:
+   `git tag -s vX.Y.Z <release-commit-sha> -m "vX.Y.Z"`.
+4. Confirm the tag resolves to the commit recorded by
+   `build-manifest.json`, then push it: `git push origin vX.Y.Z`.
+5. Upload the signed APP and store materials to AppGallery. Use the signed HAP
    from the same build only for direct installation and final device smoke.
-5. Attach `build-manifest.json`, `licenses/` and the SHA-256 checksum file to
-   the matching GitHub Release when the repository is made public.
+6. Record the submitted version, tag, exact commit, build manifest, artifact
+   hashes and AppGallery submission state.
+7. Do not publish the GitHub Release while AppGallery review is pending.
 
-Never move or reuse a published version tag.
+If rejection can be resolved only by changing store listing text, screenshots,
+qualifications or other metadata outside the APP, keep the same tag and exact
+artifact and resubmit it.
+
+If rejection requires any code, resource, dependency, permission, signature,
+version or package change, the rejected tag and evidence remain immutable.
+Return to the development checkout, advance to the next PATCH version, increase
+`versionCode`, apply the smallest release-blocking fix, and repeat the entire
+release process with a new pushed commit and tag. Never replace artifacts
+recorded under an existing tag.
+
+Do not increment twice for a development version that has not been submitted.
+If `1.0.1` is already the development target when `1.0.0` review fails, the
+changed replacement submission remains `1.0.1`; it does not become `1.0.2`.
+
+## Finalize an Approved Release
+
+Only after AppGallery reports the submitted version as `Released`:
+
+1. Confirm the approved APP hash, existing signed tag and recorded release
+   commit.
+2. Create the matching GitHub Release and attach `build-manifest.json`,
+   `licenses/` and the SHA-256 checksum file.
+3. Update current-status documentation and remove the release branch after any
+   required fixes have been forwarded to `main`.
+
+Never move or reuse a pushed version tag, including one whose AppGallery
+submission was rejected.
 
 ## Checksum Verification
 
 ```powershell
 Get-FileHash -Algorithm SHA256 `
-  build\outputs\release\HarmoTTY-1.0.0-arm64-v8a-signed.app,
-  build\outputs\release\HarmoTTY-1.0.0-arm64-v8a-signed.hap,
+  build\outputs\release\HarmoTTY-X.Y.Z-arm64-v8a-signed.app,
+  build\outputs\release\HarmoTTY-X.Y.Z-arm64-v8a-signed.hap,
   entry\libs\arm64-v8a\libharmotty_ssh.so,
   build\outputs\metadata\build-manifest.json
 ```

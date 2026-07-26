@@ -288,6 +288,10 @@ AGC 审核期间可以先公开源码，但 README 必须准确写成“审核�
 核对完成后才能建立；如果 tag 位于新的公开 commit，Release 必须同时记录其对应的
 私有 AGC commit。
 
+以上 tag 时序只适用于公开仓库建立前已经提审的 `1.0.0` 历史迁移。后续版本按照
+[`versioning.md`](versioning.md) 执行：生产验证后、AppGallery 提审前创建不可变
+tag，审核通过后再发布对应的 GitHub Release。
+
 ### 4.7 阶段 G：公开后观察
 
 首次公开后至少检查：
