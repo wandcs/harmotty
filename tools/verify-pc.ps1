@@ -16,7 +16,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
-foreach ($scriptName in @('build-native.ps1', 'build-all.ps1', 'dev-pc.ps1', 'deploy-usb.ps1', 'verify-pc.ps1')) {
+foreach ($scriptName in @(
+        'build-native.ps1',
+        'build-all.ps1',
+        'hdc-common.ps1',
+        'dev-pc.ps1',
+        'deploy-usb.ps1',
+        'verify-pc.ps1'
+    )) {
     $scriptPath = Join-Path $PSScriptRoot $scriptName
     $tokens = $null
     $errors = $null
