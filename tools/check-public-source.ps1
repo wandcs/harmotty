@@ -90,6 +90,30 @@ try {
         foreach ($parseError in @($parseErrors)) {
             $failures.Add("PowerShell syntax error in $path`: $($parseError.Message)")
         }
+
+        $content = Get-Content -LiteralPath (Join-Path $repoRoot $path) -Raw
+        foreach ($dotSource in [regex]::Matches(
+                $content,
+                "(?m)^\s*\.\s+\(Join-Path\s+\`$PSScriptRoot\s+'(?<relative>[^']+)'\)\s*$"
+            )) {
+            $scriptDirectory = Split-Path (Join-Path $repoRoot $path) -Parent
+            $dependencyPath = [IO.Path]::GetFullPath(
+                (Join-Path $scriptDirectory $dotSource.Groups['relative'].Value)
+            )
+            if (-not $dependencyPath.StartsWith(
+                    $repoRoot + [IO.Path]::DirectorySeparatorChar,
+                    [StringComparison]::OrdinalIgnoreCase
+                )) {
+                $failures.Add("PowerShell dot-source escapes the repository: $path")
+                continue
+            }
+            $dependencyRelative = $dependencyPath.Substring($repoRoot.Length + 1).Replace('\', '/')
+            if ($tracked -notcontains $dependencyRelative) {
+                $failures.Add(
+                    "PowerShell dot-source is not tracked: $path -> $dependencyRelative"
+                )
+            }
+        }
     }
 
     $workflowFiles = @($tracked | Where-Object {
