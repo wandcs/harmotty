@@ -19,11 +19,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-. (Join-Path $PSScriptRoot 'perf\perf-common.ps1')
+. (Join-Path $PSScriptRoot 'hdc-common.ps1')
 
-$hdc = Resolve-PerfHdc
+$hdc = Resolve-Hdc
 if ([string]::IsNullOrWhiteSpace($Target)) {
-    $readyTargets = @(Get-PerfHdcTargets -Hdc $hdc | Where-Object {
+    $readyTargets = @(Get-HdcTargets -Hdc $hdc | Where-Object {
         $_.transport -match '^(USB|TCP)$' -and $_.status -match '^(Ready|Connected)$'
     })
     $usbTargets = @($readyTargets | Where-Object { $_.transport -eq 'USB' })
@@ -37,15 +37,15 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
         throw 'No ready USB or TCP HarmonyOS PC found. Connect the test PC or pass -Target explicitly.'
     }
 }
-$transport = Get-PerfTargetTransport -Hdc $hdc -Target $Target
+$transport = Get-HdcTargetTransport -Hdc $hdc -Target $Target
 if ($RequireUsb -and $transport -ne 'usb') {
     throw "Target $Target uses $transport, not USB."
 }
 
-$probe = Invoke-PerfHdcShell -Hdc $hdc -Target $Target -Command 'echo HARMOTTY_PC_READY'
+$probe = Invoke-HdcShell -Hdc $hdc -Target $Target -Command 'echo HARMOTTY_PC_READY'
 if ($probe -notmatch 'HARMOTTY_PC_READY') { throw "HarmonyOS PC is not reachable: $Target" }
-$model = (Invoke-PerfHdcShell $hdc $Target 'param get const.product.model').Trim()
-$abi = (Invoke-PerfHdcShell $hdc $Target 'param get const.product.cpu.abilist').Trim()
+$model = (Invoke-HdcShell $hdc $Target 'param get const.product.model').Trim()
+$abi = (Invoke-HdcShell $hdc $Target 'param get const.product.cpu.abilist').Trim()
 if ($abi -notmatch 'arm64-v8a') { throw "Target $Target is not an ARM64 HarmonyOS PC: $abi" }
 Write-Host "HarmonyOS PC: $model ($Target, $transport, $abi)" -ForegroundColor Cyan
 
@@ -74,10 +74,10 @@ if ($LASTEXITCODE -ne 0 -or $installOutput -match '(?i)\[Fail\]|error') {
 Write-Host 'INSTALL SUCCESS' -ForegroundColor Green
 
 if (-not $NoLaunch) {
-    $launchOutput = Invoke-PerfHdcShell $hdc $Target 'aa start -a EntryAbility -b com.harmotty.app'
+    $launchOutput = Invoke-HdcShell $hdc $Target 'aa start -a EntryAbility -b com.harmotty.app'
     if ($launchOutput -match '(?i)\[Fail\]|error') { throw "App launch failed: $launchOutput" }
     Start-Sleep -Milliseconds 800
-    $appPid = (Invoke-PerfHdcShell $hdc $Target 'pidof com.harmotty.app').Trim()
+    $appPid = (Invoke-HdcShell $hdc $Target 'pidof com.harmotty.app').Trim()
     if ([string]::IsNullOrWhiteSpace($appPid)) { throw 'HarmoTTY process did not start' }
     Write-Host "HarmoTTY started. PID=$appPid" -ForegroundColor Green
 }
