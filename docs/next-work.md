@@ -11,8 +11,8 @@
 HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产物哈希、
 签名校验和完整私有 Git 历史已在仓库外冻结并完成恢复验证。
 
-当前只执行“建立可信公开源码基线”。公开不会改变 1.0.0 提审产物；公开后的产品
-开发从公开仓库继续。
+“建立可信公开源码基线”已完成。公开没有改变 1.0.0 提审产物；公开后的产品开发
+从本仓库继续。AppGallery Connect 审核状态仍为审核中。
 
 ## P0：公开源码
 
@@ -32,16 +32,30 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
 ### C. 社区与自动化
 
 - [x] 补齐 README、贡献、安全、支持、行为准则和商标边界。
-- [ ] 启用 Issue 和 Fork；接受 PR，但不承诺合并、响应时限或功能实现。
+- [x] 启用 Issue 和 Fork；接受 PR，但不承诺合并、响应时限或功能实现。
 - [x] 建立不接触秘密和个人设备的公共 CI。
-- [ ] 配置 Issue/PR 模板、Dependabot、私密漏洞报告和合并策略。
+- [x] 配置 Issue/PR 模板、Dependabot、私密漏洞报告和合并策略。
 
 ### D. 公开与验收
 
-- [ ] 使用官方地址 `wandcs/harmotty` 发布干净公开历史。
-- [ ] 公开后从匿名干净 clone 运行公共检查并核对仓库页面。
-- [ ] 验证 Fork、Issue、PR、安全报告和 Actions 权限符合执行方案。
-- [ ] 将首次公开 commit 写入来源记录和 1.0.0 发布证据。
+- [x] 使用官方地址 `wandcs/harmotty` 发布干净公开历史。
+- [x] 公开后从匿名干净 clone 运行公共检查并核对仓库页面。
+- [x] 验证 Fork、Issue、PR、安全报告和 Actions 权限符合执行方案。
+- [x] 将首次公开 commit 写入来源记录和 1.0.0 发布证据。
+
+## P0 完成记录
+
+- 官方公开仓库：`https://github.com/wandcs/harmotty`
+- 首次公开根提交：`93ce79d80533f37ccc7501897d4e92f8549c25de`
+- 来源映射：[`source-provenance.md`](source-provenance.md)
+- 主分支保护：ruleset `19762483`，要求四项公共检查通过、线性历史和 PR 合并
+- 公共 CI：Actions run `30198342930` 的四项检查全部通过
+- 安全状态：Secret scanning、Push protection 和私密漏洞报告已开启；公开的
+  Dependabot 安全告警已清零
+- 外部验收：关闭凭据后完成匿名 HTTPS clone，并通过源码策略、Web 终端策略、
+  Rust 格式及公开历史秘密扫描
+- 私有历史：已迁移到只读私有仓库 `wandcs/harmotty-private-archive`；仓库外
+  Git bundle 和 1.0.0 证据仍可独立恢复
 
 ## 完成定义
 
