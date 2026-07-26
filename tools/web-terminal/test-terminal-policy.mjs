@@ -41,8 +41,12 @@ for (let bellIndex = 0; bellIndex < 61271; bellIndex++) {
 }
 assert.equal(bellAttentionCount, 1);
 assert.equal(bellAttention.isPending(), true);
-assert.equal(bellAttention.clear(), true);
-assert.equal(bellAttention.clear(), false);
+assert.equal(bellAttention.rearmDelivery(), true);
+assert.equal(bellAttention.isPending(), true);
+assert.equal(bellAttention.trigger(), true);
+assert.equal(bellAttention.acknowledge(), true);
+assert.equal(bellAttention.acknowledge(), false);
+assert.equal(bellAttention.isPending(), false);
 assert.equal(bellAttention.trigger(), true);
 
 assert.equal(policy.countPerfPayloadBytes('XXX'), 3);
@@ -136,6 +140,21 @@ assert.doesNotMatch(terminalHtml, /releaseBuffers|term\.clear\(\)|term\.reset\(\
   'normal disconnect cleanup must not clear the current xterm screen or scrollback');
 assert.match(terminalHtml, /term\.onBell\s*\(/,
   'xterm must remain the semantic source for terminal bell events');
+assert.match(terminalHtml,
+  /term\.onKey\s*\(function\(\)\s*\{\s*acknowledgeBellAttention\(\);/s,
+  'the first real keyboard input after BEL must acknowledge the owning pane');
+assert.match(terminalHtml,
+  /term\.textarea\.addEventListener\('compositionstart', acknowledgeBellAttention\);[\s\S]*term\.textarea\.addEventListener\('input', acknowledgeBellAttention, true\);[\s\S]*term\.textarea\.addEventListener\('paste', acknowledgeBellAttention\);/s,
+  'IME composition, ArkWeb text input, and browser paste must acknowledge the owning pane');
+assert.match(terminalHtml,
+  /if \(text\.length > 0 && term\) \{\s*acknowledgeBellAttention\(\);\s*term\.paste\(text\);/s,
+  'a user paste after BEL must acknowledge the owning pane');
+assert.doesNotMatch(terminalHtml,
+  /term\.onData\s*\(function\(data\)\s*\{[^}]*acknowledgeBellAttention/s,
+  'terminal-generated query responses must not acknowledge pane attention');
+assert.match(terminalHtml,
+  /case 'focus':[\s\S]*?bellAttentionGate\.rearmDelivery\(\);[\s\S]*?term\.focus\(\);/s,
+  'programmatic focus must rearm BEL delivery without acknowledging pane attention');
 assert.match(terminalHtml,
   /term\.onBell\s*\(function\(\)\s*\{\s*if\s*\(bellAttentionGate\.trigger\(\)\)\s*\{\s*sendBridgeControl\('bellAttention', ''\)/s,
   'a BEL flood must cross the bridge only after the source-side attention gate accepts it');

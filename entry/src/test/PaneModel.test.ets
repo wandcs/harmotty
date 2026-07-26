@@ -113,7 +113,7 @@ export default function paneModelTest() {
       expect(second.title).assertEqual('two')
     })
 
-    it('bellAttentionStaysInItsPaneAndClearsOnFocus', 0, () => {
+    it('bellAttentionClearsOnlyForAnExplicitlyAcknowledgedPane', 0, () => {
       let vm: AppViewModel = new AppViewModel()
       let tab: TabInfo = vm.addTab('one')
       let leftPane: PaneInfo = tab.panes[0]
@@ -125,6 +125,9 @@ export default function paneModelTest() {
         expect(leftPane.needsAttention).assertEqual(true)
         expect(rightPane.needsAttention).assertEqual(true)
         vm.setActivePane(tab.id, rightPane.id)
+        expect(leftPane.needsAttention).assertEqual(true)
+        expect(rightPane.needsAttention).assertEqual(true)
+        vm.clearPaneAttention(rightPane.id)
         expect(leftPane.needsAttention).assertEqual(true)
         expect(rightPane.needsAttention).assertEqual(false)
       }

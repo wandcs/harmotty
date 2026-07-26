@@ -103,6 +103,12 @@
       }
     }
 
+    function acknowledgeBellAttention() {
+      if (bellAttentionGate.acknowledge()) {
+        sendBridgeControl('attentionAcknowledged', '');
+      }
+    }
+
     function parseBridgeMessage(raw) {
       if (typeof raw !== 'string' || raw.length === 0) return null;
       var versionEnd = raw.indexOf('|');
@@ -315,6 +321,7 @@
       }
       navigator.clipboard.readText().then(function(text) {
         if (text.length > 0 && term) {
+          acknowledgeBellAttention();
           term.paste(text);
         }
         sendBridgeControl('clipboardPaste', 'ok,' + text.length);
@@ -423,9 +430,17 @@
       term.write('\x1b[?25h');
 
       term.onData(function(data) {
-        bellAttentionGate.clear();
         sendBridgeData('terminal', data);
       });
+
+      term.onKey(function() {
+        acknowledgeBellAttention();
+      });
+      if (term.textarea) {
+        term.textarea.addEventListener('compositionstart', acknowledgeBellAttention);
+        term.textarea.addEventListener('input', acknowledgeBellAttention, true);
+        term.textarea.addEventListener('paste', acknowledgeBellAttention);
+      }
 
       term.parser.registerOscHandler(52, function(payload) {
         var decoded = HarmoTTYTerminalPolicy.decodeOsc52(payload);
@@ -558,7 +573,7 @@
               break;
             case 'focus':
               if (message.channel !== BRIDGE_CONTROL) break;
-              bellAttentionGate.clear();
+              bellAttentionGate.rearmDelivery();
               if (term) { term.focus(); }
               break;
             case 'blur':

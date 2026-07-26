@@ -97,7 +97,6 @@ export class AppViewModel {
     }
     this.tabs[tabIndex].activePaneId = paneId
     this.tabs[tabIndex].title = pane.title
-    pane.needsAttention = false
     this.tabs = this.tabs.slice()
   }
 
@@ -201,10 +200,6 @@ export class AppViewModel {
       this.tabs[i].isFocused = (i === index)
     }
     this.activeTabIndex = index
-    let activePane: PaneInfo | null = this.getPane(this.tabs[index].activePaneId)
-    if (activePane !== null) {
-      activePane.needsAttention = false
-    }
     this.tabs = this.tabs.slice()
     this.logger.info('Active tab: ' + this.tabs[index].id)
   }

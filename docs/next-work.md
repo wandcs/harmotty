@@ -27,6 +27,15 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
   宽度回归测试；完整 PC 门禁通过，并在 ARM64 HarmonyOS PC 上由用户独立复现
   和真机截图共同确认图标不再与相邻 `X` 重叠。
 
+## P0：1.0.1 Bell 注意状态确认
+
+- [x] 保持 `PaneInfo.needsAttention` 为黄框的唯一权威状态，由对应 xterm 的真实
+  键盘输入或用户粘贴发送一次性确认事件；程序自动恢复焦点不再静默清除状态，
+  其他 Pane 的操作也不会串清黄框。
+- [x] 在 ARM64 HarmonyOS PC 上验证：BEL 后在对应 Pane 使用物理键盘输入会清除
+  黄框；仅有远端输出、程序恢复焦点和其他 Pane 输入不会清除；确认后新的 BEL
+  能再次显示黄框。
+
 ## P0：公开源码
 
 ### A. 提审证据和历史

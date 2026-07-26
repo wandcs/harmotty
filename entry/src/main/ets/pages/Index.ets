@@ -125,8 +125,8 @@ struct Index {
               onPaneKeyEvent: (event: KeyEvent) => {
                 return this.handleKeyEvent(event)
               },
-              onPaneFocus: () => {
-                this.focusPane(runtime.id)
+              onPaneFocus: (userInitiated: boolean) => {
+                this.focusPane(runtime.id, userInitiated)
               },
               onSecondaryClick: () => {
                 logger.info('Secondary click pane=' + runtime.id)
@@ -362,6 +362,9 @@ struct Index {
     runtime.surface.setOnBellAttention(() => {
       this.markPaneAttention(pane.id)
     })
+    runtime.surface.setOnAttentionAcknowledged(() => {
+      this.clearPaneAttention(pane.id)
+    })
     this.paneRuntimes = this.paneRuntimes.concat([runtime])
   }
 
@@ -380,12 +383,15 @@ struct Index {
       return
     }
     if (index === this.activeTabIndex) {
+      this.appVm.clearPaneAttention(this.tabs[index].activePaneId)
+      this.syncWorkspace()
       this.restoreActivePaneFocus()
       return
     }
     let targetTabId: string = this.tabs[index].id
     this.deactivateActiveTab(targetTabId)
     this.appVm.setActiveTab(index)
+    this.appVm.clearPaneAttention(this.tabs[index].activePaneId)
     this.syncWorkspace()
     this.restoreActivePaneFocus()
   }
@@ -548,7 +554,6 @@ struct Index {
     if (event.type !== KeyType.Down) {
       return false
     }
-    this.clearActivePaneAttention()
     let ctrlKey: boolean = false
     let shiftKey: boolean = false
     if (event.getModifierKeyState) {
@@ -624,12 +629,12 @@ struct Index {
     this.syncWorkspace()
   }
 
-  private clearActivePaneAttention(): void {
-    let pane: PaneInfo | null = this.appVm.getActivePane()
+  private clearPaneAttention(paneId: string): void {
+    let pane: PaneInfo | null = this.appVm.getPane(paneId)
     if (pane === null || !pane.needsAttention) {
       return
     }
-    this.appVm.clearPaneAttention(pane.id)
+    this.appVm.clearPaneAttention(paneId)
     this.syncWorkspace()
   }
 
@@ -691,12 +696,15 @@ struct Index {
     this.activeTabIndex = this.appVm.getActiveTabIndex()
   }
 
-  private focusPane(paneId: string): void {
+  private focusPane(paneId: string, userInitiated: boolean): void {
     let tab: TabInfo | null = this.activeTab()
     if (tab === null) {
       return
     }
     this.appVm.setActivePane(tab.id, paneId)
+    if (userInitiated) {
+      this.appVm.clearPaneAttention(paneId)
+    }
     this.syncWorkspace()
     this.restoreActivePaneFocus()
   }

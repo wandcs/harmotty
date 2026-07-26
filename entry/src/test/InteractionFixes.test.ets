@@ -174,12 +174,20 @@ export default function interactionFixesTest() {
       expect(BridgeProtocol.parse('H2|W2N|CONTROL|bell|')).assertEqual(null)
       expect(BridgeProtocol.parse('H2|W2N|CONTROL|title|remote-title')).assertEqual(null)
       expect(BridgeProtocol.parse('H2|W2N|CONTROL|bellAttention|unexpected')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|attentionAcknowledged|unexpected')).assertEqual(null)
       let bellAttention: BridgeMessage | null =
         BridgeProtocol.parse('H2|W2N|CONTROL|bellAttention|')
       expect(bellAttention !== null).assertEqual(true)
       if (bellAttention !== null) {
         expect(bellAttention.kind).assertEqual(BridgeProtocol.KIND_BELL_ATTENTION)
         expect(bellAttention.payload).assertEqual('')
+      }
+      let attentionAcknowledged: BridgeMessage | null =
+        BridgeProtocol.parse('H2|W2N|CONTROL|attentionAcknowledged|')
+      expect(attentionAcknowledged !== null).assertEqual(true)
+      if (attentionAcknowledged !== null) {
+        expect(attentionAcknowledged.kind).assertEqual(BridgeProtocol.KIND_ATTENTION_ACKNOWLEDGED)
+        expect(attentionAcknowledged.payload).assertEqual('')
       }
       expect(BridgeProtocol.parse('H2|N2W|CONTROL|ready|')).assertEqual(null)
       expect(BridgeProtocol.parse('H2|W2N|CONTROL|theme|{}')).assertEqual(null)

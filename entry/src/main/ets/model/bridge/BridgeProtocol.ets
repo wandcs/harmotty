@@ -36,6 +36,7 @@ export class BridgeProtocol {
   static readonly KIND_READY: string = 'ready'
   static readonly KIND_RESIZE: string = 'resize'
   static readonly KIND_BELL_ATTENTION: string = 'bellAttention'
+  static readonly KIND_ATTENTION_ACKNOWLEDGED: string = 'attentionAcknowledged'
   static readonly KIND_COPY_SELECTION: string = 'copySelection'
   static readonly KIND_CLIPBOARD_WRITE: string = 'clipboardWrite'
   static readonly KIND_WRITE_ACK: string = 'writeAck'
@@ -63,7 +64,8 @@ export class BridgeProtocol {
       return null
     }
     let payload: string = raw.substring(kindEnd + 1)
-    if (kind === BridgeProtocol.KIND_BELL_ATTENTION && payload.length > 0) {
+    if ((kind === BridgeProtocol.KIND_BELL_ATTENTION ||
+      kind === BridgeProtocol.KIND_ATTENTION_ACKNOWLEDGED) && payload.length > 0) {
       return null
     }
     return new BridgeMessage(direction, channel, kind, payload)
@@ -165,6 +167,7 @@ export class BridgeProtocol {
     return kind === BridgeProtocol.KIND_READY ||
       kind === BridgeProtocol.KIND_RESIZE ||
       kind === BridgeProtocol.KIND_BELL_ATTENTION ||
+      kind === BridgeProtocol.KIND_ATTENTION_ACKNOWLEDGED ||
       kind === BridgeProtocol.KIND_COPY_SELECTION ||
       kind === BridgeProtocol.KIND_CLIPBOARD_WRITE ||
       kind === BridgeProtocol.KIND_WRITE_ACK ||

@@ -16,7 +16,7 @@ export struct TerminalPane {
   onWebControllerReady: (ctrl: webview.WebviewController) => void = () => {}
   onPaneDisappear: () => void = () => {}
   onPaneKeyEvent: (event: KeyEvent) => boolean = () => false
-  onPaneFocus: () => void = () => {}
+  onPaneFocus: (userInitiated: boolean) => void = () => {}
   onSecondaryClick: () => void = () => {}
   onClosePane: () => void = () => {}
   onRendererExited: () => void = () => {}
@@ -53,7 +53,7 @@ export struct TerminalPane {
           this.onRendererExited()
         })
         .onContextMenuShow((event: OnContextMenuShowEvent) => {
-          this.onPaneFocus()
+          this.onPaneFocus(true)
           event.result.closeContextMenu()
           return true
         })
@@ -98,18 +98,18 @@ export struct TerminalPane {
     .height('100%')
     .backgroundColor(this.paneBackground)
     .onClick(() => {
-      this.onPaneFocus()
+      this.onPaneFocus(true)
     })
     .onMouse((event: MouseEvent) => {
       if (event.button === MouseButton.Right && event.action === MouseAction.Release) {
         event.stopPropagation()
-        this.onPaneFocus()
+        this.onPaneFocus(true)
         this.onSecondaryClick()
       }
     })
     .onAppear(() => {
       if (this.isFocused) {
-        this.onPaneFocus()
+        this.onPaneFocus(false)
       }
     })
   }

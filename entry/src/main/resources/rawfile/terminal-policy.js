@@ -42,19 +42,27 @@
   }
 
   function createBellAttentionGate() {
-    var pending = false;
+    var deliveryPending = false;
+    var acknowledgementPending = false;
     return {
       trigger: function() {
-        if (pending) return false;
-        pending = true;
+        acknowledgementPending = true;
+        if (deliveryPending) return false;
+        deliveryPending = true;
         return true;
       },
-      clear: function() {
-        if (!pending) return false;
-        pending = false;
+      acknowledge: function() {
+        if (!acknowledgementPending) return false;
+        acknowledgementPending = false;
+        deliveryPending = false;
         return true;
       },
-      isPending: function() { return pending; }
+      rearmDelivery: function() {
+        if (!deliveryPending) return false;
+        deliveryPending = false;
+        return true;
+      },
+      isPending: function() { return acknowledgementPending; }
     };
   }
 

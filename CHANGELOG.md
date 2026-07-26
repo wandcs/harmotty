@@ -11,6 +11,9 @@
 
 ### Fixed
 
+- Cleared a pane's persistent bell-attention border when the user types or
+  pastes in that pane, without letting background output or automatic focus
+  restoration acknowledge it.
 - Kept embedded Nerd Font icons inside their terminal cells so prompt and icon
   glyphs no longer overlap adjacent text.
 - Restored the complete pure-core UTF-8 burst test fixture so Linux public CI
