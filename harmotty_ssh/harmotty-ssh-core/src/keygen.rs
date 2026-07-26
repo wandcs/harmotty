@@ -176,6 +176,20 @@ fn validate_key_name(file_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn read_public_key_fingerprint(key_path: &str) -> Result<String, String> {
+    let content: String =
+        std::fs::read_to_string(key_path).map_err(|e| format!("read failed: {}", e))?;
+
+    let public_key: russh::keys::ssh_key::PublicKey = content
+        .parse()
+        .map_err(|e| format!("parse public key failed: {}", e))?;
+
+    let fingerprint: String = public_key
+        .fingerprint(russh::keys::HashAlg::Sha256)
+        .to_string();
+    Ok(fingerprint)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{generate_key_pair, inspect_private_key};
@@ -220,18 +234,4 @@ mod tests {
         assert!(inspected.public_key.ends_with("test@host"));
         let _ = std::fs::remove_dir_all(&dir);
     }
-}
-
-pub fn read_public_key_fingerprint(key_path: &str) -> Result<String, String> {
-    let content: String =
-        std::fs::read_to_string(key_path).map_err(|e| format!("read failed: {}", e))?;
-
-    let public_key: russh::keys::ssh_key::PublicKey = content
-        .parse()
-        .map_err(|e| format!("parse public key failed: {}", e))?;
-
-    let fingerprint: String = public_key
-        .fingerprint(russh::keys::HashAlg::Sha256)
-        .to_string();
-    Ok(fingerprint)
 }
