@@ -21,9 +21,10 @@ outside every Git repository.
 
 ## Public baseline identity
 
-The canonical first public baseline is the root commit containing this file in
-the public `wandcs/harmotty` repository. Its exact commit SHA is recorded in the
-1.0.0 release evidence and public release notes after publication.
+The canonical first public baseline is root commit
+`93ce79d80533f37ccc7501897d4e92f8549c25de` in the public
+`wandcs/harmotty` repository. The commit is also recorded in the private 1.0.0
+release evidence.
 
 The public baseline was exported from the private source commit above. Runtime
 behavior is preserved, while the public tree deliberately changes
