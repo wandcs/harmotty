@@ -118,7 +118,7 @@ mod tests {
     fn handles_10kb_multiline_tui_redraw() {
         let mut decoder = Utf8StreamDecoder::default();
         let mut line: String = String::new();
-        for i in 0..50 {
+        for i in 0..200 {
             line.push_str(&format!(
                 "\x1b[38;2;{};{};{}m",
                 137 + (i % 10) * 10,
@@ -140,7 +140,7 @@ mod tests {
         }
         total.push_str(&decoder.finish());
 
-        assert!(total.len() > 5000);
+        assert!(total.len() > 10_000);
         assert!(!total.contains('\u{FFFD}'));
         assert!(total.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ"));
     }
