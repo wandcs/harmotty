@@ -101,7 +101,7 @@ pub fn generate_key_pair(
         .map_err(|e| format!("pem encode failed: {}", e))?
         .to_string();
 
-    std::fs::create_dir_all(&output_dir).map_err(|e| format!("mkdir failed: {}", e))?;
+    std::fs::create_dir_all(output_dir).map_err(|e| format!("mkdir failed: {}", e))?;
 
     if std::path::Path::new(&priv_path).exists() || std::path::Path::new(&pub_path).exists() {
         return Err(format!("key already exists: {}", file_name));

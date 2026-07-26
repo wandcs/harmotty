@@ -8,13 +8,13 @@ cargo metadata --locked --offline `
   --format-version 1
 ```
 
-The target-filtered graph contains 145 registry packages. Every package reports
+The target-filtered graph contains 147 registry packages. Every package reports
 a license expression or license file. Package build dependencies are included
 conservatively even when they are not linked into the final shared library.
 
 ## Apache-2.0
 
-`russh 0.62.2`, `russh-cryptovec 0.62.0`, `russh-util 0.52.0`
+`russh 0.62.4`, `russh-cryptovec 0.62.0`, `russh-util 0.52.0`
 
 ## MIT
 
@@ -49,7 +49,7 @@ conservatively even when they are not linked into the final shared library.
 `libc 0.2.186`, `log 0.4.33`, `md5 0.8.1`, `ml-kem 0.3.2`,
 `module-lattice 0.2.3`, `nohash-hasher 0.2.0`, `num-bigint 0.4.8`,
 `num-integer 0.1.46`, `num-traits 0.2.19`, `once_cell 1.21.4`,
-`p256 0.14.0-rc.15`, `p384 0.14.0-rc.15`, `p521 0.14.0-rc.15`,
+`p256 0.14.0`, `p384 0.14.0`, `p521 0.14.0`,
 `password-hash 0.6.1`, `pbkdf2 0.13.0`, `pem-rfc7468 1.0.0`,
 `phc 0.6.1`, `pin-project-lite 0.2.17`, `pkcs5 0.8.1`,
 `pkcs8 0.11.0`, `poly1305 0.9.1`, `polyval 0.7.2`,
@@ -59,7 +59,8 @@ conservatively even when they are not linked into the final shared library.
 `rustversion 1.0.23`, `salsa20 0.11.0`, `scrypt 0.12.0`,
 `sec1 0.8.1`, `semver 1.0.28`, `serde 1.0.228`,
 `serde_core 1.0.228`, `serdect 0.4.3`, `sha1 0.11.0`,
-`sha2 0.11.0`, `sha3 0.11.0`, `shlex 2.0.1`, `signature 3.0.0`,
+`sha2 0.11.0`, `sha3 0.11.0`, `sha3 0.12.0`, `shlex 2.0.1`,
+`signature 3.0.0`, `sponge-cursor 0.1.0`,
 `socket2 0.6.4`, `spki 0.8.0`, `ssh-cipher 0.3.0`,
 `ssh-encoding 0.3.0`, `ssh-key 0.7.0-rc.11`, `syn 2.0.118`,
 `thiserror 2.0.18`, `thiserror-impl 2.0.18`, `typenum 1.20.1`,
@@ -71,7 +72,7 @@ The inventory normalizes the equivalent expressions `Apache-2.0 OR MIT` and
 
 ## BSD-3-Clause
 
-`curve25519-dalek 5.0.0-rc.1`, `ed25519-dalek 3.0.0-rc.1`,
+`curve25519-dalek 5.0.0`, `ed25519-dalek 3.0.0`,
 `subtle 2.6.1`
 
 ## ISC

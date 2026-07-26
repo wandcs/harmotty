@@ -82,6 +82,7 @@ mod tests {
         let mut decoder = Utf8StreamDecoder::default();
 
         let helix_start: &[u8] = b"\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H\x1b[38;2;205;214;244m  _   _      _ _\x1b[0m\r\n\x1b[38;2;137;180;250m | |_| | ___| (_)_____  __\x1b[0m\r\n";
+        let more: &[u8] = b"\x1b[38;2;166;227;161mWelcome to helix\x1b[0m\r\n\x1b[?25h";
         let output1 = decoder.push(helix_start);
         let output2 = decoder.push(more);
         let final_bytes = decoder.finish();

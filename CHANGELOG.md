@@ -2,7 +2,15 @@
 
 ## [Unreleased]
 
-No changes yet.
+### Security
+
+- Updated `russh` to 0.62.4 to address three remote panic conditions reported
+  against earlier 0.62.x releases.
+
+### Fixed
+
+- Restored the complete pure-core UTF-8 burst test fixture so Linux public CI
+  compiles and runs the test suite.
 
 ## [1.0.0] - 2026-07-26
 
