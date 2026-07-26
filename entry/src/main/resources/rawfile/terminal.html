@@ -19,7 +19,7 @@
     #terminal-container > .xterm {
       width: 100%;
       height: 100%;
-      padding: 4px 6px;
+      padding: 4px 2px 4px 10px;
     }
     .xterm .xterm-scrollable-element > .scrollbar {
       background: transparent !important;
@@ -53,6 +53,8 @@
   <script>
     var TERMINAL_SCROLLBACK_LINES = 10000;
     var TERMINAL_SCROLLBAR_WIDTH = 8;
+    var TERMINAL_BASE_PADDING_TOP = 4;
+    var TERMINAL_BASE_PADDING_BOTTOM = 4;
     var nativePort = null;
     var term = null;
     var fitAddon = null;
@@ -256,12 +258,40 @@
       }
     }
 
+    function fitAndCenterTerminalGrid() {
+      if (!fitAddon || !term) return;
+      var terminalElement = term.element;
+      if (!terminalElement || !terminalElement.parentElement) {
+        fitAddon.fit();
+        return;
+      }
+
+      terminalElement.style.paddingTop = TERMINAL_BASE_PADDING_TOP + 'px';
+      fitAddon.fit();
+
+      var screenElement = terminalElement.querySelector('.xterm-screen');
+      if (!screenElement) return;
+      var containerHeight = parseInt(
+        window.getComputedStyle(terminalElement.parentElement).height,
+        10
+      );
+      var gridHeight = screenElement.getBoundingClientRect().height;
+      var centeredTopPadding = HarmoTTYTerminalPolicy.centerGridLeadingPadding(
+        TERMINAL_BASE_PADDING_TOP,
+        TERMINAL_BASE_PADDING_BOTTOM,
+        containerHeight,
+        gridHeight
+      );
+      terminalElement.style.paddingTop = centeredTopPadding + 'px';
+      fitAddon.fit();
+    }
+
     function performResize() {
       resizeFrameScheduled = false;
       if (!fitAddon || !term) return;
       var force = resizeForcePending;
       resizeForcePending = false;
-      fitAddon.fit();
+      fitAndCenterTerminalGrid();
       var cols = term.cols;
       var rows = term.rows;
       if (nativePort && (force || cols !== lastReportedCols || rows !== lastReportedRows)) {
@@ -388,7 +418,7 @@
       term.open(terminalContainer);
       terminalContainer.addEventListener('wheel', handleAlternateWheel, true);
       activateDefaultRenderer();
-      fitAddon.fit();
+      fitAndCenterTerminalGrid();
 
       term.write('\x1b[?25h');
 

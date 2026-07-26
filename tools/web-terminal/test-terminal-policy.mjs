@@ -84,11 +84,20 @@ const mouseWheel = policy.createWheelState();
 policy.enqueueWheel(mouseWheel, 3, 1, 16, 40, 0);
 assert.equal(policy.pendingWheelLines(mouseWheel), 3);
 
+assert.equal(policy.centerGridLeadingPadding(4, 4, 942, 926), 8);
+assert.equal(policy.centerGridLeadingPadding(4, 4, 934, 926), 4);
+assert.equal(policy.centerGridLeadingPadding(4, 4, 930, 926), 4);
+
 const terminalHtml = readFileSync(new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8');
 assert.match(terminalHtml, /addEventListener\('wheel', handleAlternateWheel, true\)/,
   'alternate-buffer wheel handling must run during capture before xterm scrolls its inner viewport');
-assert.match(terminalHtml, /#terminal-container > \.xterm\s*\{[^}]*padding:\s*4px 6px;/s,
-  'terminal cells must keep compact vertical and horizontal padding from pane edges');
+assert.match(terminalHtml, /#terminal-container > \.xterm\s*\{[^}]*padding:\s*4px 2px 4px 10px;/s,
+  'terminal padding must offset the scrollbar gutter without changing the total horizontal inset');
+assert.match(terminalHtml, /function fitAndCenterTerminalGrid\(\)/,
+  'terminal fitting must redistribute unused cell-grid height instead of leaving it all below the grid');
+assert.match(terminalHtml,
+  /centerGridLeadingPadding\(\s*TERMINAL_BASE_PADDING_TOP,\s*TERMINAL_BASE_PADDING_BOTTOM,/s,
+  'terminal fitting must center rows with the tested layout policy');
 assert.match(terminalHtml, /var TERMINAL_SCROLLBAR_WIDTH = 8;/,
   'the auto-hiding scrollbar must reserve less than one default terminal cell');
 assert.match(terminalHtml, /overviewRuler:\s*\{\s*width:\s*TERMINAL_SCROLLBAR_WIDTH\s*\}/,

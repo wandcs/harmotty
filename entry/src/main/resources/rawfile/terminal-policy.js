@@ -125,6 +125,21 @@
     return state ? state.pendingLines : 0;
   }
 
+  function centerGridLeadingPadding(baseLeadingPadding, baseTrailingPadding, containerSize, gridSize) {
+    var leading = typeof baseLeadingPadding === 'number' && isFinite(baseLeadingPadding)
+      ? Math.max(0, baseLeadingPadding)
+      : 0;
+    var trailing = typeof baseTrailingPadding === 'number' && isFinite(baseTrailingPadding)
+      ? Math.max(0, baseTrailingPadding)
+      : 0;
+    if (typeof containerSize !== 'number' || !isFinite(containerSize) ||
+        typeof gridSize !== 'number' || !isFinite(gridSize)) {
+      return leading;
+    }
+    var unusedSize = containerSize - leading - trailing - Math.max(0, gridSize);
+    return leading + Math.max(0, unusedSize) / 2;
+  }
+
   global.HarmoTTYTerminalPolicy = {
     MAX_CLIPBOARD_BYTES: MAX_CLIPBOARD_BYTES,
     MAX_CLIPBOARD_BASE64_LENGTH: MAX_CLIPBOARD_BASE64_LENGTH,
@@ -135,6 +150,7 @@
     enqueueWheel: enqueueWheel,
     consumeWheelFrame: consumeWheelFrame,
     hasPendingWheelSteps: hasPendingWheelSteps,
-    pendingWheelLines: pendingWheelLines
+    pendingWheelLines: pendingWheelLines,
+    centerGridLeadingPadding: centerGridLeadingPadding
   };
 })(globalThis);
