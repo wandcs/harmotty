@@ -1,0 +1,88 @@
+<#
+.SYNOPSIS
+  Incrementally build, install, and launch HarmoTTY on a HarmonyOS PC.
+.DESCRIPTION
+  This is the default high-frequency development command. It builds only the
+  ARM64 debug target, uses the locally configured test signature, replaces the
+  installed app, launches it, and verifies that its process is running.
+#>
+param(
+    [string]$Target = '',
+    [string]$HapPath = '',
+    [switch]$Clean,
+    [switch]$ForceNative,
+    [switch]$SkipBuild,
+    [switch]$NoLaunch,
+    [switch]$FollowLogs,
+    [switch]$RequireUsb
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'perf\perf-common.ps1')
+
+$hdc = Resolve-PerfHdc
+if ([string]::IsNullOrWhiteSpace($Target)) {
+    $readyTargets = @(Get-PerfHdcTargets -Hdc $hdc | Where-Object {
+        $_.transport -match '^(USB|TCP)$' -and $_.status -match '^(Ready|Connected)$'
+    })
+    $usbTargets = @($readyTargets | Where-Object { $_.transport -eq 'USB' })
+    $candidates = if ($usbTargets.Count -gt 0) { $usbTargets } else { $readyTargets }
+    if ($candidates.Count -eq 1) {
+        $Target = $candidates[0].key
+    } elseif ($candidates.Count -gt 1) {
+        $keys = ($candidates | ForEach-Object { $_.key }) -join ', '
+        throw "Multiple HarmonyOS PCs are connected ($keys). Pass -Target explicitly."
+    } else {
+        throw 'No ready USB or TCP HarmonyOS PC found. Connect the test PC or pass -Target explicitly.'
+    }
+}
+$transport = Get-PerfTargetTransport -Hdc $hdc -Target $Target
+if ($RequireUsb -and $transport -ne 'usb') {
+    throw "Target $Target uses $transport, not USB."
+}
+
+$probe = Invoke-PerfHdcShell -Hdc $hdc -Target $Target -Command 'echo HARMOTTY_PC_READY'
+if ($probe -notmatch 'HARMOTTY_PC_READY') { throw "HarmonyOS PC is not reachable: $Target" }
+$model = (Invoke-PerfHdcShell $hdc $Target 'param get const.product.model').Trim()
+$abi = (Invoke-PerfHdcShell $hdc $Target 'param get const.product.cpu.abilist').Trim()
+if ($abi -notmatch 'arm64-v8a') { throw "Target $Target is not an ARM64 HarmonyOS PC: $abi" }
+Write-Host "HarmonyOS PC: $model ($Target, $transport, $abi)" -ForegroundColor Cyan
+
+if (-not $SkipBuild) {
+    $buildArgs = @{ BuildMode = 'debug' }
+    if ($Clean) { $buildArgs['Clean'] = $true }
+    if ($ForceNative) { $buildArgs['ForceNative'] = $true }
+    & (Join-Path $PSScriptRoot 'build-all.ps1') @buildArgs
+    if ($LASTEXITCODE -ne 0) { throw 'ARM64 PC debug build failed' }
+}
+
+if ([string]::IsNullOrWhiteSpace($HapPath)) {
+    $HapPath = Join-Path $repoRoot 'entry\build\default\outputs\default\entry-default-signed.hap'
+}
+if (-not (Test-Path -LiteralPath $HapPath)) {
+    throw "Signed test HAP not found: $HapPath. Create ignored signing.local.json5 with the local test identity."
+}
+if ((Split-Path $HapPath -Leaf) -match 'unsigned') {
+    throw 'A physical HarmonyOS PC requires a signed HAP.'
+}
+
+$installOutput = (& $hdc -t $Target install -r $HapPath 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $installOutput -match '(?i)\[Fail\]|error') {
+    throw "HAP install failed: $installOutput"
+}
+Write-Host 'INSTALL SUCCESS' -ForegroundColor Green
+
+if (-not $NoLaunch) {
+    $launchOutput = Invoke-PerfHdcShell $hdc $Target 'aa start -a EntryAbility -b com.harmotty.app'
+    if ($launchOutput -match '(?i)\[Fail\]|error') { throw "App launch failed: $launchOutput" }
+    Start-Sleep -Milliseconds 800
+    $appPid = (Invoke-PerfHdcShell $hdc $Target 'pidof com.harmotty.app').Trim()
+    if ([string]::IsNullOrWhiteSpace($appPid)) { throw 'HarmoTTY process did not start' }
+    Write-Host "HarmoTTY started. PID=$appPid" -ForegroundColor Green
+}
+
+if ($FollowLogs) {
+    Write-Host 'Following HarmoTTY logs. Press Ctrl+C to stop.' -ForegroundColor Cyan
+    & $hdc -t $Target hilog | Select-String 'HarmoTTY|HTTY_SSH|EntryAbility'
+}

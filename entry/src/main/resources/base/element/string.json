@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "HarmoTTY entry module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Modern terminal emulator for HarmonyOS large-screen PC mode"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "HarmoTTY"
+    },
+    {
+      "name": "read_pasteboard_reason",
+      "value": "Used to paste clipboard content into the SSH terminal"
+    }
+  ]
+}

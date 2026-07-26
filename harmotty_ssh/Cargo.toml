@@ -1,0 +1,36 @@
+[package]
+name        = "harmotty_ssh"
+version     = "1.0.0"
+edition     = "2021"
+license     = "Apache-2.0"
+description = "SSH client native library for HarmoTTY terminal emulator"
+repository  = "https://github.com/wandcs/harmotty"
+authors     = ["HarmoTTY Contributors"]
+
+[workspace]
+members = ["harmotty-ssh-core"]
+default-members = ["."]
+resolver = "2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi-ohos = { version = "1.0", default-features = false, features = [
+    "napi8",
+    "async",
+    "tokio_rt",
+] }
+napi-derive-ohos = { version = "1.0" }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
+russh = { version = "0.62", default-features = false, features = ["ring"] }
+rand = { version = "0.10", features = ["sys_rng"] }
+once_cell = "1"
+zeroize = "1"
+harmotty-ssh-core = { path = "harmotty-ssh-core" }
+
+[build-dependencies]
+napi-build-ohos = { version = "1.0" }
+
+[profile.release]
+lto = true

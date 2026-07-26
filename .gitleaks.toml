@@ -1,0 +1,10 @@
+title = "HarmoTTY gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vendored xterm assets are pinned and verified by assets-manifest.json"
+paths = [
+  '''^entry/src/main/resources/rawfile/(?:xterm\.js|xterm\.css|addon-fit\.js|addon-webgl\.js)$'''
+]

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:;">
+  <link rel="stylesheet" href="xterm.css">
+  <style>
+    :root { --terminal-background: #1E1E2E; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    #terminal-container { width: 100%; height: 100%; }
+    html, body,
+    #terminal-container,
+    #terminal-container > .xterm,
+    .xterm .xterm-viewport {
+      background-color: var(--terminal-background);
+    }
+    #terminal-container > .xterm {
+      width: 100%;
+      height: 100%;
+      padding: 4px 6px;
+    }
+    .xterm .xterm-scrollable-element > .scrollbar {
+      background: transparent !important;
+    }
+    .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+      border: 2px solid transparent;
+      border-radius: 4px;
+      background-clip: content-box !important;
+    }
+    @font-face {
+      font-family: 'JetBrains Mono Nerd Font';
+      src: url('JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'JetBrains Mono Nerd Font';
+      src: url('JetBrainsMonoNerdFont-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal-container"></div>
+
+  <script src="xterm.js"></script>
+  <script src="addon-fit.js"></script>
+  <script src="addon-webgl.js"></script>
+  <script src="terminal-policy.js"></script>
+  <script>
+    var TERMINAL_SCROLLBACK_LINES = 10000;
+    var TERMINAL_SCROLLBAR_WIDTH = 8;
+    var nativePort = null;
+    var term = null;
+    var fitAddon = null;
+    var webglAddon = null;
+    var initialized = false;
+    var requestedRenderer = 'webgl';
+    var actualRenderer = 'dom';
+    var rendererFallbackReason = 'not-initialized';
+    var rendererContextLossCount = 0;
+    var resizeFrameScheduled = false;
+    var resizeForcePending = false;
+    var lastReportedCols = 0;
+    var lastReportedRows = 0;
+    var perfActive = false;
+    var perfCaseId = '';
+    var perfExpectedBytes = 0;
+    var perfReceivedBytes = 0;
+    var perfStartedAt = 0;
+    var perfParsedAt = 0;
+    var perfAwaitingPaint = false;
+    var perfPaintFrameScheduled = false;
+    var bellAttentionGate = HarmoTTYTerminalPolicy.createBellAttentionGate();
+    var acceleratedWheelDispatch = false;
+    var alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
+    var alternateWheelFrameScheduled = false;
+    var lastAlternateWheelEvent = null;
+    var BRIDGE_VERSION = 'H2';
+    var BRIDGE_NATIVE_TO_WEB = 'N2W';
+    var BRIDGE_WEB_TO_NATIVE = 'W2N';
+    var BRIDGE_DATA = 'DATA';
+    var BRIDGE_CONTROL = 'CONTROL';
+
+    function serializeBridgeMessage(direction, channel, kind, payload) {
+      return BRIDGE_VERSION + '|' + direction + '|' + channel + '|' + kind + '|' + (payload || '');
+    }
+
+    function sendBridgeData(kind, payload) {
+      if (nativePort) {
+        nativePort.postMessage(serializeBridgeMessage(BRIDGE_WEB_TO_NATIVE, BRIDGE_DATA, kind, payload));
+      }
+    }
+
+    function sendBridgeControl(kind, payload) {
+      if (nativePort) {
+        nativePort.postMessage(serializeBridgeMessage(BRIDGE_WEB_TO_NATIVE, BRIDGE_CONTROL, kind, payload));
+      }
+    }
+
+    function parseBridgeMessage(raw) {
+      if (typeof raw !== 'string' || raw.length === 0) return null;
+      var versionEnd = raw.indexOf('|');
+      var directionEnd = raw.indexOf('|', versionEnd + 1);
+      var channelEnd = raw.indexOf('|', directionEnd + 1);
+      var kindEnd = raw.indexOf('|', channelEnd + 1);
+      if (versionEnd < 0 || directionEnd < 0 || channelEnd < 0 || kindEnd < 0) return null;
+      if (raw.substring(0, versionEnd) !== BRIDGE_VERSION) return null;
+      var direction = raw.substring(versionEnd + 1, directionEnd);
+      var channel = raw.substring(directionEnd + 1, channelEnd);
+      var kind = raw.substring(channelEnd + 1, kindEnd);
+      if (direction !== BRIDGE_NATIVE_TO_WEB ||
+          (channel !== BRIDGE_DATA && channel !== BRIDGE_CONTROL) || kind.length === 0 ||
+          !isSupportedNativeMessage(channel, kind)) return null;
+      return { channel: channel, kind: kind, payload: raw.substring(kindEnd + 1) };
+    }
+
+    function parseTerminalPacket(raw) {
+      if (!(raw instanceof ArrayBuffer) || raw.byteLength < 12) return null;
+      var packet = new Uint8Array(raw);
+      if (packet[0] !== 0x48 || packet[1] !== 0x54 || packet[2] !== 0x42 || packet[3] !== 0x31) {
+        return null;
+      }
+      var header = new DataView(raw);
+      var sequence = header.getUint32(4, true);
+      var payloadLength = header.getUint32(8, true);
+      if (sequence === 0 || payloadLength === 0 || payloadLength !== raw.byteLength - 12) return null;
+      return {
+        sequence: sequence,
+        bytes: new Uint8Array(raw, 12, payloadLength)
+      };
+    }
+
+    function isSupportedNativeMessage(channel, kind) {
+      if (channel === BRIDGE_DATA) {
+        return kind === 'terminal';
+      }
+      return kind === 'theme' || kind === 'focus' || kind === 'blur' ||
+        kind === 'clearSelection' || kind === 'ping' ||
+        kind === 'fit' || kind === 'fontSize' || kind === 'copySelection' || kind === 'secondaryAction';
+    }
+
+    function reportRendererState() {
+      if (!nativePort) return;
+      sendBridgeControl('rendererState', JSON.stringify({
+        requested: requestedRenderer,
+        actual: actualRenderer,
+        fallbackReason: rendererFallbackReason,
+        contextLossCount: rendererContextLossCount
+      }));
+    }
+
+    function fallbackToDomRenderer(reason) {
+      if (reason === 'context-loss') {
+        rendererContextLossCount++;
+      }
+      if (webglAddon) {
+        try { webglAddon.dispose(); } catch (ex) {}
+        webglAddon = null;
+      }
+      actualRenderer = 'dom';
+      rendererFallbackReason = reason;
+      if (term) {
+        term.refresh(0, term.rows - 1);
+      }
+      reportRendererState();
+    }
+
+    function activateDefaultRenderer() {
+      try {
+        webglAddon = new WebglAddon.WebglAddon();
+        webglAddon.onContextLoss(function() {
+          fallbackToDomRenderer('context-loss');
+        });
+        term.loadAddon(webglAddon);
+        actualRenderer = 'webgl';
+        rendererFallbackReason = 'none';
+      } catch (ex) {
+        fallbackToDomRenderer('initialization-failed');
+      }
+    }
+
+    function reportPerfResult() {
+      if (!nativePort || !perfActive) return;
+      var paintedAt = performance.now();
+      var parseMs = perfParsedAt > 0 ? perfParsedAt - perfStartedAt : paintedAt - perfStartedAt;
+      var paintMs = paintedAt - perfStartedAt;
+      var expectedBytes = Math.max(1, perfExpectedBytes);
+      var metric = {
+        caseId: perfCaseId,
+        expectedBytes: perfExpectedBytes,
+        actualBytes: perfReceivedBytes,
+        completenessPercent: Math.round(perfReceivedBytes / expectedBytes * 100000) / 1000,
+        parseMs: Math.round(parseMs * 1000) / 1000,
+        parseMbps: Math.round((perfReceivedBytes * 8 / 1000000) /
+          (Math.max(parseMs, 0.001) / 1000) * 1000) / 1000,
+        paintMs: Math.round(paintMs * 1000) / 1000,
+        renderedMs: Math.round(paintMs * 1000) / 1000,
+        renderMbps: Math.round((perfReceivedBytes * 8 / 1000000) /
+          (Math.max(paintMs, 0.001) / 1000) * 1000) / 1000
+      };
+      sendBridgeControl('perfRender', JSON.stringify(metric));
+      perfActive = false;
+      perfAwaitingPaint = false;
+      perfPaintFrameScheduled = false;
+      perfCaseId = '';
+      perfExpectedBytes = 0;
+      perfReceivedBytes = 0;
+      perfStartedAt = 0;
+      perfParsedAt = 0;
+    }
+
+    function reportPerfAfterPaint() {
+      if (!perfActive || !perfAwaitingPaint || perfPaintFrameScheduled) return;
+      perfPaintFrameScheduled = true;
+      requestAnimationFrame(function() {
+        reportPerfResult();
+      });
+    }
+
+    var defaultTheme = {
+      background: '#1E1E2E',
+      foreground: '#CDD6F4',
+      cursor: '#F5E0DC',
+      cursorAccent: '#1E1E2E',
+      selectionBackground: '#585B70',
+      selectionForeground: '#CDD6F4',
+      selectionInactiveBackground: '#45475A',
+      black: '#45475A',
+      red: '#F38BA8',
+      green: '#A6E3A1',
+      yellow: '#F9E2AF',
+      blue: '#89B4FA',
+      magenta: '#F5C2E7',
+      cyan: '#94E2D5',
+      white: '#BAC2DE',
+      brightBlack: '#585B70',
+      brightRed: '#F38BA8',
+      brightGreen: '#A6E3A1',
+      brightYellow: '#F9E2AF',
+      brightBlue: '#89B4FA',
+      brightMagenta: '#F5C2E7',
+      brightCyan: '#94E2D5',
+      brightWhite: '#A6ADC8'
+    };
+
+    function applyTerminalTheme(themeObj) {
+      if (!themeObj || typeof themeObj.background !== 'string' || themeObj.background.length === 0) return;
+      themeObj.overviewRulerBorder = themeObj.background;
+      document.documentElement.style.setProperty('--terminal-background', themeObj.background);
+      if (term) {
+        term.options.theme = themeObj;
+      }
+    }
+
+    function performResize() {
+      resizeFrameScheduled = false;
+      if (!fitAddon || !term) return;
+      var force = resizeForcePending;
+      resizeForcePending = false;
+      fitAddon.fit();
+      var cols = term.cols;
+      var rows = term.rows;
+      if (nativePort && (force || cols !== lastReportedCols || rows !== lastReportedRows)) {
+        lastReportedCols = cols;
+        lastReportedRows = rows;
+        sendBridgeControl('resize', cols + ',' + rows);
+      }
+    }
+
+    function reportResize(force) {
+      resizeForcePending = resizeForcePending || force === true;
+      if (resizeFrameScheduled) return;
+      resizeFrameScheduled = true;
+      requestAnimationFrame(performResize);
+    }
+
+    function pasteFromSystemClipboard() {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        sendBridgeControl('clipboardPaste', 'unavailable');
+        return;
+      }
+      navigator.clipboard.readText().then(function(text) {
+        if (text.length > 0 && term) {
+          term.paste(text);
+        }
+        sendBridgeControl('clipboardPaste', 'ok,' + text.length);
+      }).catch(function() {
+        sendBridgeControl('clipboardPaste', 'failed');
+      });
+    }
+
+    function scheduleAlternateWheelFrame() {
+      if (alternateWheelFrameScheduled) return;
+      alternateWheelFrameScheduled = true;
+      requestAnimationFrame(pumpAlternateWheelFrame);
+    }
+
+    function emitAlternateWheelSteps(steps) {
+      if (!term || steps === 0 || !lastAlternateWheelEvent) return;
+      var count = Math.abs(steps);
+      var direction = steps < 0 ? 'A' : 'B';
+      if (term.modes.mouseTrackingMode === 'none') {
+        var sequence = '\x1b' + (term.modes.applicationCursorKeysMode ? 'O' : '[') + direction;
+        term.input(sequence.repeat(count), true);
+        return;
+      }
+      if (!term.element) return;
+      acceleratedWheelDispatch = true;
+      try {
+        for (var i = 0; i < count; i++) {
+          term.element.dispatchEvent(new WheelEvent('wheel', {
+            bubbles: true,
+            cancelable: true,
+            deltaY: steps < 0 ? -1 : 1,
+            deltaMode: WheelEvent.DOM_DELTA_LINE,
+            clientX: lastAlternateWheelEvent.clientX,
+            clientY: lastAlternateWheelEvent.clientY,
+            ctrlKey: lastAlternateWheelEvent.ctrlKey,
+            altKey: lastAlternateWheelEvent.altKey,
+            shiftKey: lastAlternateWheelEvent.shiftKey,
+            metaKey: lastAlternateWheelEvent.metaKey
+          }));
+        }
+      } finally {
+        acceleratedWheelDispatch = false;
+      }
+    }
+
+    function pumpAlternateWheelFrame() {
+      alternateWheelFrameScheduled = false;
+      if (!term || term.buffer.active.type !== 'alternate' || term.hasSelection()) {
+        alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
+        return;
+      }
+      emitAlternateWheelSteps(HarmoTTYTerminalPolicy.consumeWheelFrame(alternateWheelState, term.rows));
+      if (HarmoTTYTerminalPolicy.hasPendingWheelSteps(alternateWheelState)) {
+        scheduleAlternateWheelFrame();
+      }
+    }
+
+    function handleAlternateWheel(event) {
+      if (acceleratedWheelDispatch || !term) return;
+      if (term.buffer.active.type !== 'alternate' || term.hasSelection()) {
+        alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
+        return;
+      }
+      var rowsElement = document.querySelector('.xterm-rows');
+      var cellHeight = rowsElement && term.rows > 0 ? rowsElement.getBoundingClientRect().height / term.rows : 16;
+      HarmoTTYTerminalPolicy.enqueueWheel(alternateWheelState, event.deltaY, event.deltaMode,
+        cellHeight, term.rows, event.timeStamp);
+      lastAlternateWheelEvent = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey
+      };
+      event.preventDefault();
+      event.stopPropagation();
+      scheduleAlternateWheelFrame();
+    }
+
+    function initTerminal() {
+      if (initialized) return;
+      initialized = true;
+
+      applyTerminalTheme(defaultTheme);
+      term = new Terminal({
+        theme: defaultTheme,
+        fontSize: 14,
+        fontFamily: "'JetBrains Mono Nerd Font', 'HarmonyOS Sans Mono', monospace",
+        cursorBlink: true,
+        cursorStyle: 'bar',
+        scrollback: TERMINAL_SCROLLBACK_LINES,
+        overviewRuler: { width: TERMINAL_SCROLLBAR_WIDTH },
+        scrollSensitivity: 2,
+        smoothScrollDuration: 0
+      });
+
+      fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      var terminalContainer = document.getElementById('terminal-container');
+      term.open(terminalContainer);
+      terminalContainer.addEventListener('wheel', handleAlternateWheel, true);
+      activateDefaultRenderer();
+      fitAddon.fit();
+
+      term.write('\x1b[?25h');
+
+      term.onData(function(data) {
+        bellAttentionGate.clear();
+        sendBridgeData('terminal', data);
+      });
+
+      term.parser.registerOscHandler(52, function(payload) {
+        var decoded = HarmoTTYTerminalPolicy.decodeOsc52(payload);
+        if (decoded.accepted) {
+          sendBridgeControl('clipboardWrite', decoded.text);
+        }
+        return true;
+      });
+
+      term.attachCustomKeyEventHandler(function(event) {
+        if (event.type !== 'keydown' || (!event.ctrlKey && !event.metaKey) || event.altKey) {
+          return true;
+        }
+        if (event.key.toLowerCase() === 'v') {
+          return false;
+        }
+        if (event.key.toLowerCase() !== 'c') {
+          return true;
+        }
+        if (copyTerminalSelection()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return false;
+        }
+        if (event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          return false;
+        }
+        return true;
+      });
+
+      terminalContainer.addEventListener('contextmenu', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
+      term.onTitleChange(function(title) {
+        if (title.indexOf('HTTY_PERF_BEGIN__:') === 0) {
+          var beginParts = title.split(':');
+          if (beginParts.length === 3) {
+            perfActive = true;
+            perfCaseId = beginParts[1];
+            perfExpectedBytes = parseInt(beginParts[2], 10);
+            perfReceivedBytes = 0;
+            perfStartedAt = performance.now();
+            perfParsedAt = 0;
+            perfAwaitingPaint = false;
+            perfPaintFrameScheduled = false;
+          }
+          return;
+        }
+        if (title === 'HTTY_PERF_END__:' + perfCaseId) {
+          perfParsedAt = performance.now();
+          perfAwaitingPaint = true;
+          term.refresh(0, term.rows - 1);
+          return;
+        }
+      });
+
+      term.onBell(function() {
+        if (bellAttentionGate.trigger()) {
+          sendBridgeControl('bellAttention', '');
+        }
+      });
+
+      term.onRender(function() {
+        reportPerfAfterPaint();
+      });
+
+      window.addEventListener('resize', function() {
+        reportResize();
+      });
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(function() {
+          reportResize();
+        }).observe(terminalContainer);
+      }
+
+      if (nativePort) {
+        sendBridgeControl('ready', '');
+        reportRendererState();
+        setTimeout(function() { reportResize(true); }, 100);
+      }
+
+    }
+
+    function writeTerminalPacket(terminalPacket, onComplete) {
+      if (!terminalPacket || !term) {
+        onComplete();
+        return;
+      }
+      var terminalBytes = terminalPacket.bytes;
+      if (perfActive) {
+        var perfText = new TextDecoder('utf-8').decode(terminalBytes);
+        var endSequence = '\x1b]0;HTTY_PERF_END__:' + perfCaseId;
+        var endOffset = perfText.indexOf(endSequence);
+        var perfPayload = endOffset >= 0 ? perfText.substring(0, endOffset) : perfText;
+        perfReceivedBytes += HarmoTTYTerminalPolicy.countPerfPayloadBytes(perfPayload);
+      }
+      term.write(terminalBytes, function() {
+        sendBridgeControl('writeAck',
+          terminalPacket.sequence.toString() + ',' + terminalBytes.byteLength.toString());
+        onComplete();
+      });
+    }
+
+    window.addEventListener('message', function(event) {
+      if (event.data === 'initPort' && event.ports && event.ports.length > 0) {
+        nativePort = event.ports[0];
+
+        nativePort.onmessage = function(e) {
+          var terminalPacket = parseTerminalPacket(e.data);
+          if (terminalPacket) {
+            writeTerminalPacket(terminalPacket, function() {});
+            return;
+          }
+          var message = parseBridgeMessage(e.data);
+          if (!message) return;
+
+          switch(message.kind) {
+            case 'theme':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              if (term) {
+                try {
+                  var themeObj = JSON.parse(message.payload);
+                  applyTerminalTheme(themeObj);
+                } catch(ex) {}
+              }
+              break;
+            case 'focus':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              bellAttentionGate.clear();
+              if (term) { term.focus(); }
+              break;
+            case 'blur':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              if (term) { term.blur(); }
+              break;
+            case 'clearSelection':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              if (term) { term.clearSelection(); }
+              break;
+            case 'ping':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              sendBridgeControl('pong', 'heartbeat');
+              break;
+            case 'fit':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              reportResize(true);
+              break;
+            case 'fontSize':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              var nextFontSize = parseInt(message.payload, 10);
+              if (term && !isNaN(nextFontSize) && nextFontSize >= 8 && nextFontSize <= 48) {
+                term.options.fontSize = nextFontSize;
+                reportResize(true);
+              }
+              break;
+            case 'secondaryAction':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              harmottySecondaryAction();
+              break;
+            case 'copySelection':
+              if (message.channel !== BRIDGE_CONTROL) break;
+              copyTerminalSelection();
+              break;
+          }
+        };
+
+        if (!initialized) {
+          initTerminal();
+        } else {
+          sendBridgeControl('ready', '');
+          reportRendererState();
+          setTimeout(function() { reportResize(true); }, 100);
+        }
+      }
+    });
+
+    function copyTerminalSelection() {
+      if (!term) return false;
+      var selection = term.getSelection();
+      if (selection.length > 0) {
+        sendBridgeControl('copySelection', selection);
+        return true;
+      }
+      return false;
+    }
+
+    function harmottySecondaryAction() {
+      if (copyTerminalSelection()) return;
+      pasteFromSystemClipboard();
+    }
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directory: /harmotty_ssh
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /tools
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /tools/web-terminal
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+    open-pull-requests-limit: 5

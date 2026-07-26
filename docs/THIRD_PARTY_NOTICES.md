@@ -1,0 +1,106 @@
+# Third-Party Notices
+
+Audit date: 2026-07-26.
+
+HarmoTTY includes or depends on the software listed below. The authoritative
+inputs for this audit are the checked-in Cargo/OHPM/NPM lockfiles and the
+resources actually packaged in the ARM64 release HAP.
+
+## Packaged Web Terminal Resources
+
+| Packaged resource | Locked package | Upstream release | License | SHA-256 |
+|---|---|---|---|---|
+| `xterm.js`, `xterm.css` | `@xterm/xterm 6.0.0` | https://github.com/xtermjs/xterm.js/releases/tag/6.0.0 | MIT | `98D0973151AFF2991D335B1ADBBDAC2E14DA26341ABE329D677D4C0034402BDF` / `854A7C0FB70E8B1A083C16797AB827299FB18744F5AD34F227B48337E33293C6` |
+| `addon-fit.js` | `@xterm/addon-fit 0.11.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-fit | MIT | `4DF3789FA7BFF5D545BA38462A8CD2F7460BA971021BCE3F81C2870F937A201E` |
+| `addon-webgl.js` | `@xterm/addon-webgl 0.19.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-webgl | MIT | `E84BF980D7A5C3D0A69352A31F4C2D92B6EDC3ABEBC722D856C3872573FEA095` |
+
+The copied files match `tools/web-terminal/assets-manifest.json`. Source-map
+references are removed by `tools/web-terminal/build.mjs` before packaging.
+
+Copyright notices supplied by the locked packages:
+
+- xterm.js: Copyright (c) 2017-2019, The xterm.js authors; Copyright
+  (c) 2014-2016, SourceLair Private Company; Copyright (c) 2012-2013,
+  Christopher Jeffrey.
+- addon-fit: Copyright (c) 2019, The xterm.js authors.
+- addon-webgl: Copyright (c) 2018, The xterm.js authors.
+
+These resources use the MIT License:
+
+```text
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+## Packaged Fonts
+
+| Packaged resource | Embedded version metadata | Upstream release | License | SHA-256 |
+|---|---|---|---|---|
+| `JetBrainsMonoNerdFont-Regular.ttf` | JetBrains Mono `2.304`; Nerd Fonts `3.3.0` | https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.3.0 | OFL-1.1 | `C8AF9DFD91F01293A7E0FA6F3481C2827042C853D2D5A71DBF5F012FDEE6925F` |
+| `JetBrainsMonoNerdFont-Bold.ttf` | JetBrains Mono `2.304`; Nerd Fonts `3.3.0` | https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.3.0 | OFL-1.1 | `546D7F5E93B51397A84D019A56CF557B6B9631E94D29BDA92815A5D65170B8DA` |
+
+Both font files embed the JetBrains Mono copyright notice and identify SIL Open
+Font License 1.1. The full OFL text and the Nerd Fonts attribution note are in
+`docs/OFL-1.1.txt`.
+
+## Rust Dependencies (Cargo)
+
+`harmotty_ssh/Cargo.lock` resolves 145 registry packages for
+`aarch64-unknown-linux-ohos`; all 145 report a license expression or license
+file through Cargo metadata. The complete versioned inventory is in
+`docs/RUST_DEPENDENCIES.md`.
+
+The license families present are:
+
+- Apache-2.0;
+- MIT;
+- MIT OR Apache-2.0;
+- BSD-3-Clause;
+- ISC;
+- Apache-2.0 AND ISC (`ring`);
+- Unlicense OR MIT;
+- (MIT OR Apache-2.0) AND Unicode-3.0 (`unicode-ident`).
+
+The repository `LICENSE` contains the Apache-2.0 text. Release builds copy each
+available package-specific license, copyright, copying, notice, or unlicense
+file from the locked Cargo source into `licenses/rust/<package>-<version>/`.
+`licenses/rust/packages.json` maps every locked package to those files and
+records package metadata. For the nine packages whose published crate archive
+does not contain a license file, the index points to the shared MIT and/or
+Apache-2.0 text included at the top level.
+
+## ArkTS Dependencies (OHPM)
+
+The root `oh-package-lock.json5` contains two development-only dependencies;
+neither is included in the release HAP:
+
+| Package | Version | Role | License |
+|---|---|---|---|
+| `@ohos/hypium` | `1.0.25` | Test framework | Apache-2.0 |
+| `@ohos/hamock` | `1.0.0` | Mock framework | Apache-2.0 |
+
+`entry/oh-package-lock.json5` also records the local HarmoTTY native package at
+version `1.0.0`; it is project code under Apache-2.0, not a third-party package.
+
+## Distribution
+
+The source distribution keeps this notice, `docs/RUST_DEPENDENCIES.md`,
+`docs/OFL-1.1.txt`, and the project `LICENSE`. Release builds copy those four
+files plus the locked Rust packages' license files and generated package index
+into `build/outputs/release/licenses/`; that directory must accompany the HAP
+or be attached to the public release page.

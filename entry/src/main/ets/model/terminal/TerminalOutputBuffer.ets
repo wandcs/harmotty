@@ -1,0 +1,72 @@
+export class TerminalOutputBuffer {
+  private detachedChunks: Uint8Array[] = []
+  private detachedBytes: number = 0
+  private bridgeBackpressured: boolean = false
+  private detachedBackpressured: boolean = false
+  private attached: boolean = false
+  private readonly hiddenHighWaterBytes: number
+
+  constructor(hiddenHighWaterBytes: number = 768 * 1024) {
+    this.hiddenHighWaterBytes = hiddenHighWaterBytes
+  }
+
+  append(data: Uint8Array): void {
+    if (this.attached || data.byteLength === 0) {
+      return
+    }
+    this.detachedChunks.push(data)
+    this.detachedBytes += data.byteLength
+    if (this.detachedBytes >= this.hiddenHighWaterBytes) {
+      this.detachedBackpressured = true
+    }
+  }
+
+  markAttached(): void {
+    this.attached = true
+    this.detachedBytes = 0
+    this.detachedBackpressured = false
+  }
+
+  markDetached(): void {
+    if (!this.attached) {
+      return
+    }
+    this.attached = false
+    this.detachedChunks = []
+    this.detachedBytes = 0
+    this.detachedBackpressured = false
+    this.bridgeBackpressured = false
+  }
+
+  setBridgeBackpressured(paused: boolean): void {
+    this.bridgeBackpressured = paused
+  }
+
+  isOutputPaused(): boolean {
+    return this.bridgeBackpressured || this.detachedBackpressured
+  }
+
+  isBridgeBackpressured(): boolean {
+    return this.bridgeBackpressured
+  }
+
+  isDetachedBackpressured(): boolean {
+    return this.detachedBackpressured
+  }
+
+  takeDetachedChunks(): Uint8Array[] {
+    let chunks: Uint8Array[] = this.detachedChunks
+    this.detachedChunks = []
+    this.detachedBytes = 0
+    return chunks
+  }
+
+  getDetachedByteCount(): number {
+    return this.detachedBytes
+  }
+
+  releaseDisconnectedFlowControl(): void {
+    this.bridgeBackpressured = false
+    this.detachedBackpressured = false
+  }
+}

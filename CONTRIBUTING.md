@@ -1,0 +1,83 @@
+# Contributing to HarmoTTY
+
+Thank you for helping improve HarmoTTY. The project accepts issues and pull
+requests, but keeps a deliberately narrow product scope.
+
+## Before starting
+
+Read [the project principles](docs/project-principles.md). Reliability comes
+first, simplicity is the default, and usability work stays focused on the core
+remote-terminal path.
+
+- For a bug or documentation problem, open an issue with reproducible evidence.
+- For a feature or architectural change, open an issue before implementation.
+- Security vulnerabilities must use the private process in
+  [SECURITY.md](SECURITY.md), never a public issue.
+- Support requests belong under the boundaries in [SUPPORT.md](SUPPORT.md).
+
+Maintainers may close proposals that add permanent concepts, dependencies or
+maintenance cost without clear evidence from the core product path.
+
+## Development environment
+
+Windows with DevEco Studio is the supported application build environment.
+HarmoTTY currently targets ARM64 HarmonyOS PC only.
+
+Required tools:
+
+- DevEco Studio and HarmonyOS SDK API 6.1.1 (24)
+- Rust 1.96+ and the `aarch64-unknown-linux-ohos` target
+- Node.js for the Web terminal policy tests
+- PowerShell
+
+Useful commands:
+
+```powershell
+# Public checks that do not require DevEco or a device
+.\tools\check-public-source.ps1
+cargo fmt --check --manifest-path .\harmotty_ssh\Cargo.toml
+cargo test --locked --manifest-path .\harmotty_ssh\Cargo.toml -p harmotty-ssh-core
+node .\tools\web-terminal\test-terminal-policy.mjs
+
+# Full maintainer gate
+.\tools\verify-pc.ps1
+```
+
+Public CI checks source policy, Rust core behavior and Web terminal policy.
+DevEco compilation, signed HAP deployment and device-visible interaction remain
+maintainer gates because they require the HarmonyOS SDK, local signing material
+and a physical PC.
+
+## Change rules
+
+- Keep each change focused and explain the user-visible problem it solves.
+- Preserve the ownership model `App Shell → Tab → Pane → Session`.
+- Do not add x86_64 emulator support, mobile layouts, plugins or speculative
+  abstraction layers.
+- Add or update tests for state machines, protocols and pure logic.
+- Focus, keyboard, clipboard, window, persistence, terminal interaction and SSH
+  lifecycle changes need real-PC evidence.
+- Do not commit generated output, SDK files, packages, credentials, private
+  keys, device identifiers, host addresses or unredacted logs.
+
+ArkTS changes must follow the restrictions enforced by the project linter.
+Rust changes must pass `cargo fmt`; clippy warnings in the pure core should be
+fixed rather than suppressed without explanation.
+
+## Pull requests
+
+A pull request should include:
+
+1. The problem and its fit with the project principles.
+2. The implementation boundary and any new long-lived state or dependency.
+3. Automated test results.
+4. Real-PC evidence when the behavior is device-visible.
+5. Screenshots only when they materially help review, with personal data
+   redacted.
+
+Small, reviewable pull requests are preferred. There is no mechanical line
+limit, but unrelated refactoring should be split out.
+
+By submitting a contribution, you agree that it is licensed under the
+repository's Apache-2.0 license. The project does not currently require a
+separate Contributor License Agreement.

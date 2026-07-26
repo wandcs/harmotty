@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">HarmoTTY refined app icon</title>
+  <desc id="desc">A full-bleed HarmonyOS terminal icon layer with a grayscale status rail and a purple H followed by a white prompt chevron.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A1A1F"/>
+      <stop offset="0.52" stop-color="#151519"/>
+      <stop offset="1" stop-color="#101013"/>
+    </linearGradient>
+    <linearGradient id="rail" x1="176" y1="0" x2="848" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E2E2E5"/>
+      <stop offset="0.44" stop-color="#929399"/>
+      <stop offset="1" stop-color="#414249"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="366" x2="0" y2="716" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D5B6FA"/>
+      <stop offset="1" stop-color="#BF91EE"/>
+    </linearGradient>
+    <linearGradient id="prompt" x1="0" y1="413" x2="0" y2="669" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9E9EC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- HarmonyOS applies the launcher mask. Keep both icon layers square and full-bleed. -->
+  <g id="background">
+    <rect width="1024" height="1024" fill="url(#surface)"/>
+  </g>
+
+  <g id="foreground">
+    <rect x="176" y="176" width="672" height="44" rx="22" fill="url(#rail)"/>
+    <g fill="url(#accent)">
+      <rect x="196" y="366" width="68" height="350" rx="12"/>
+      <rect x="366" y="366" width="68" height="350" rx="12"/>
+      <rect x="246" y="510" width="138" height="64" rx="10"/>
+    </g>
+    <path d="M496 445L706 541L496 637" fill="none" stroke="url(#prompt)" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

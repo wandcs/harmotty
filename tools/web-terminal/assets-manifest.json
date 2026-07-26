@@ -1,0 +1,22 @@
+[
+  {
+    "file": "xterm.js",
+    "bytes": 488630,
+    "sha256": "98d0973151aff2991d335b1adbbdac2e14da26341abe329d677d4c0034402bdf"
+  },
+  {
+    "file": "xterm.css",
+    "bytes": 7112,
+    "sha256": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6"
+  },
+  {
+    "file": "addon-fit.js",
+    "bytes": 1484,
+    "sha256": "4df3789fa7bff5d545ba38462a8cd2f7460ba971021bce3f81c2870f937a201e"
+  },
+  {
+    "file": "addon-webgl.js",
+    "bytes": 247496,
+    "sha256": "e84bf980d7a5c3d0a69352a31f4c2d92b6edc3abebc722d856c3872573fea095"
+  }
+]

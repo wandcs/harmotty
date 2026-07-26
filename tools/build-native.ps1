@@ -1,0 +1,176 @@
+<#
+.SYNOPSIS
+  HarmoTTY native cross-compilation
+.DESCRIPTION
+  Build harmotty_ssh for the HarmonyOS PC ARM64 target.
+  Requires OHOS SDK/NDK from DevEco Studio.
+#>
+param(
+    [string]$DevEcoHome = $env:DEVECO_HOME,
+    [switch]$Force,
+    [switch]$SkipCopy
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path $PSScriptRoot -Parent
+
+# ── Detect DevEco Studio ──
+$deveco = ''
+$candidates = @(
+    $DevEcoHome,
+    $env:DEVECO_HOME,
+    'C:\Program Files\Huawei\DevEco Studio',
+    'D:\Program Files\Huawei\DevEco Studio'
+)
+foreach ($c in $candidates) {
+    if ($c -and (Test-Path -LiteralPath $c)) { $deveco = $c; break }
+}
+if ($deveco -eq '') {
+    Write-Host 'DevEco Studio not found. Set DEVECO_HOME.' -ForegroundColor Red
+    Write-Host 'Example: $env:DEVECO_HOME = ''C:\Program Files\Huawei\DevEco Studio''' -ForegroundColor Yellow
+    exit 1
+}
+
+    $sdkDir = Join-Path $deveco 'sdk'
+    if (Test-Path -LiteralPath 'C:\ohos-sdk') {
+        $sdkDir = 'C:\ohos-sdk'
+    }
+    $ndkDir = Join-Path $sdkDir 'default\openharmony'
+$llvmBin = Join-Path $ndkDir 'native\llvm\bin'
+$jbrBin  = Join-Path $deveco 'jbr\bin'
+
+# ── Self-check ──
+$required = @(
+    @{ Path = (Join-Path $llvmBin 'clang.exe');      Name = 'OHOS Clang' },
+    @{ Path = (Join-Path $llvmBin 'llvm-ar.exe');     Name = 'OHOS llvm-ar' },
+    @{ Path = (Join-Path $llvmBin 'llvm-readelf.exe'); Name = 'OHOS llvm-readelf' },
+    @{ Path = (Join-Path $jbrBin 'java.exe');         Name = 'JBR Java' }
+)
+foreach ($r in $required) {
+    if (-not (Test-Path -LiteralPath $r.Path)) {
+        Write-Host "ERROR: $($r.Name) not found at $($r.Path)" -ForegroundColor Red
+        exit 1
+    }
+}
+
+Write-Host "[build-native] DevEco: $deveco" -ForegroundColor Cyan
+
+# ── Cargo ──
+$cargo = (Get-Command cargo -ErrorAction SilentlyContinue)
+if (-not $cargo) {
+    $cb = Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'
+    if (Test-Path -LiteralPath $cb) { $cargo = $cb } else { throw 'cargo not found' }
+} else { $cargo = $cargo.Source }
+
+# ── Env ──
+$env:DEVECO_SDK_HOME = $sdkDir
+$env:OHOS_NDK_HOME = $ndkDir
+$env:JAVA_HOME = Join-Path $deveco 'jbr'
+$env:PATH = "$PSScriptRoot;$llvmBin;$jbrBin;$env:PATH"
+
+$cargoManifest = Join-Path $repoRoot 'harmotty_ssh\Cargo.toml'
+$rustSrcDir   = Join-Path $repoRoot 'harmotty_ssh\src'
+$buildScript  = Join-Path $repoRoot 'harmotty_ssh\build.rs'
+$coreManifest = Join-Path $repoRoot 'harmotty_ssh\harmotty-ssh-core\Cargo.toml'
+$coreSrcDir   = Join-Path $repoRoot 'harmotty_ssh\harmotty-ssh-core\src'
+$libsDir       = Join-Path $repoRoot 'entry\libs'
+$cargoLock     = Join-Path $repoRoot 'harmotty_ssh\Cargo.lock'
+$toolchainToml = Join-Path $repoRoot 'rust-toolchain.toml'
+$cargoConfig   = Join-Path $repoRoot '.cargo\config.toml'
+
+# ── Content hash check ──
+function Get-SourceHash {
+    $inputs = @()
+    foreach ($inputFile in @(
+        $cargoManifest,
+        $cargoLock,
+        $buildScript,
+        $coreManifest,
+        $toolchainToml,
+        $cargoConfig
+    )) {
+        if (Test-Path -LiteralPath $inputFile) {
+            $inputs += (Get-FileHash -LiteralPath $inputFile -Algorithm SHA256).Hash
+        }
+    }
+    foreach ($sourceDir in @($rustSrcDir, $coreSrcDir)) {
+        Get-ChildItem -LiteralPath $sourceDir -Recurse -Filter '*.rs' -ErrorAction SilentlyContinue |
+            Sort-Object FullName |
+            ForEach-Object {
+                $inputs += (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+            }
+    }
+    $combined = $inputs -join '|'
+    $hash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($combined))).Replace('-', '')
+    return $hash
+}
+
+function Test-Stale {
+    param($SoPath)
+    if ($Force) { return $true }
+    if (-not (Test-Path -LiteralPath $SoPath)) { return $true }
+    $hashFile = $SoPath + '.build-hash'
+    $currentHash = Get-SourceHash
+    if (-not (Test-Path -LiteralPath $hashFile)) { return $true }
+    $storedHash = (Get-Content -LiteralPath $hashFile -Raw).Trim()
+    return $currentHash -ne $storedHash
+}
+
+# ── Build ──
+$targets = @(
+    @{ Target = 'aarch64-unknown-linux-ohos'; Abi = 'arm64-v8a'; Machine = 'AArch64' }
+)
+
+foreach ($t in $targets) {
+    $target = $t.Target
+    $abi    = $t.Abi
+    $soPath = Join-Path $libsDir "$abi\libharmotty_ssh.so"
+
+    if (-not (Test-Stale $soPath)) {
+        Write-Host "[build-native] $abi up to date, skip" -ForegroundColor Green
+        continue
+    }
+    Write-Host "[build-native] Building $target ..." -ForegroundColor Yellow
+    $targetKey = $target.Replace('-', '_')
+    $wrapper = Join-Path $PSScriptRoot 'ohos-aarch64-clang.cmd'
+    Set-Item -Path "env:CC_$targetKey" -Value $wrapper
+    Set-Item -Path "env:AR_$targetKey" -Value (Join-Path $llvmBin 'llvm-ar.exe')
+    Remove-Item -Path "env:CFLAGS_$targetKey" -ErrorAction SilentlyContinue
+
+    Push-Location (Split-Path $cargoManifest -Parent)
+    try {
+        & $cargo build --manifest-path $cargoManifest --target $target --release --locked
+        if ($LASTEXITCODE -ne 0) { throw "Cargo build failed for $target" }
+    } finally {
+        Pop-Location
+    }
+}
+
+# ── Verify & copy ──
+if ($SkipCopy) {
+    Write-Host '[build-native] Skip copy' -ForegroundColor Yellow
+    exit 0
+}
+
+$readelf = Join-Path $llvmBin 'llvm-readelf.exe'
+foreach ($t in $targets) {
+    $source = Join-Path $repoRoot "harmotty_ssh\target\$($t.Target)\release\libharmotty_ssh.so"
+    $dest   = Join-Path $libsDir "$($t.Abi)\libharmotty_ssh.so"
+    if (-not (Test-Path -LiteralPath $source)) {
+        throw "$($t.Abi) .so is missing after the ARM64 build"
+    }
+    $header = & $readelf -h $source | Out-String
+    if (-not $header.Contains($t.Machine)) {
+        throw "ELF arch mismatch: $source"
+    }
+    $destDir = Split-Path $dest -Parent
+    if (-not (Test-Path -LiteralPath $destDir)) {
+        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    }
+    Copy-Item -LiteralPath $source -Destination $dest -Force
+    Get-SourceHash | Set-Content -LiteralPath ($dest + '.build-hash') -NoNewline
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $dest).Hash
+    Write-Host "[build-native] $($t.Abi) OK  SHA256=$hash" -ForegroundColor Green
+}
+
+Write-Host '[build-native] Done' -ForegroundColor Green
