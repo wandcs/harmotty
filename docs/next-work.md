@@ -19,6 +19,14 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
 记录在 `CHANGELOG.md` 的 `1.0.1 - In development` 下。`Unreleased` 保持为空，
 用于尚未归入目标版本的后续工作；1.1 功能规划不进入本补丁分支。
 
+## P0：1.0.1 终端字形正确性
+
+- [x] 将内嵌 JetBrains Mono Nerd Font 切换为相同 `3.3.0` 版本的单格 Mono
+  变体，修复 PUA 图标越过 xterm 单元格并与相邻文本重叠的问题。
+- [x] 为用户样例 `XXXXXXXXX` 建立字体轮廓与 advance
+  宽度回归测试；完整 PC 门禁通过，并在 ARM64 HarmonyOS PC 上由用户独立复现
+  和真机截图共同确认图标不再与相邻 `X` 重叠。
+
 ## P0：公开源码
 
 ### A. 提审证据和历史

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import './test-font-cell-width.mjs';
 import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 
 const policy = globalThis.HarmoTTYTerminalPolicy;
@@ -89,6 +90,14 @@ assert.equal(policy.centerGridLeadingPadding(4, 4, 934, 926), 4);
 assert.equal(policy.centerGridLeadingPadding(4, 4, 930, 926), 4);
 
 const terminalHtml = readFileSync(new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8');
+assert.match(terminalHtml,
+  /fontFamily:\s*"'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace"/,
+  'xterm must use the single-cell Nerd Font Mono variant before system fallbacks');
+assert.match(terminalHtml,
+  /url\('JetBrainsMonoNerdFontMono-Regular\.ttf'\)[\s\S]*url\('JetBrainsMonoNerdFontMono-Bold\.ttf'\)/,
+  'the embedded regular and bold faces must both use single-cell Nerd Font Mono assets');
+assert.doesNotMatch(terminalHtml, /JetBrainsMonoNerdFont-(?:Regular|Bold)\.ttf/,
+  'the double-width Nerd Font assets must not return to the terminal font face');
 assert.match(terminalHtml, /addEventListener\('wheel', handleAlternateWheel, true\)/,
   'alternate-buffer wheel handling must run during capture before xterm scrolls its inner viewport');
 assert.match(terminalHtml, /#terminal-container > \.xterm\s*\{[^}]*padding:\s*4px 2px 4px 10px;/s,

@@ -125,7 +125,7 @@ export class Spacing {
 }
 
 export class Typography {
-  fontFamily: string = 'JetBrains Mono Nerd Font'
+  fontFamily: string = 'JetBrains Mono Nerd Font Mono'
   fontFamilyFallback: string = 'HarmonyOS Sans Mono, monospace'
   terminalFontSize: number = 14
   terminalLineHeight: number = 1.2

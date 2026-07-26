@@ -11,6 +11,8 @@
 
 ### Fixed
 
+- Kept embedded Nerd Font icons inside their terminal cells so prompt and icon
+  glyphs no longer overlap adjacent text.
 - Restored the complete pure-core UTF-8 burst test fixture so Linux public CI
   compiles and runs the test suite.
 - Balanced terminal insets around full-screen TUIs by offsetting the scrollbar
