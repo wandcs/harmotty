@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.0.1] - In development
+
 ### Security
 
 - Updated `russh` to 0.62.4 to address three remote panic conditions reported
@@ -11,6 +13,8 @@
 
 - Restored the complete pure-core UTF-8 burst test fixture so Linux public CI
   compiles and runs the test suite.
+- Balanced terminal insets around full-screen TUIs by offsetting the scrollbar
+  gutter and centering unused cell-grid height without reducing rows or columns.
 
 ## [1.0.0] - 2026-07-26
 

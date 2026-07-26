@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "harmotty-ssh-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "rand",
  "russh",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "harmotty_ssh"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "harmotty-ssh-core",
  "napi-build-ohos",

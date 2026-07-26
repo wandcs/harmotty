@@ -13,7 +13,7 @@ param(
     [string]$BuildMode = 'debug',
     [switch]$Metadata,
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$ReleaseId = '1.0.0'
+    [string]$ReleaseId = '1.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
