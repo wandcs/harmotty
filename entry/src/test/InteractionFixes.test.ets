@@ -266,6 +266,23 @@ export default function interactionFixesTest() {
       expect(suffix).assertEqual('st')
     })
 
+    it('redrawsLocalCommandsWithoutAssumingChineseCharactersAreOneTerminalColumn', 0, () => {
+      let line: LocalCommandLine = new LocalCommandLine()
+      line.insert('中文')
+      expect(line.moveLeft()).assertEqual(true)
+      expect(line.renderForTerminal('ltty> '))
+        .assertEqual('\r\u001b[2Kltty> 中文\rltty> 中')
+      expect(line.backspace() !== null).assertEqual(true)
+      expect(line.renderForTerminal('ltty> '))
+        .assertEqual('\r\u001b[2Kltty> 文\rltty> ')
+    })
+
+    it('confirmsApplicationCloseOnlyForUnsuppressedActiveSessions', 0, () => {
+      expect(InteractionPolicy.shouldConfirmApplicationClose(false, false)).assertEqual(false)
+      expect(InteractionPolicy.shouldConfirmApplicationClose(true, false)).assertEqual(true)
+      expect(InteractionPolicy.shouldConfirmApplicationClose(true, true)).assertEqual(false)
+    })
+
     it('doesNotTreatTerminalQueryResponsesAsLocalCommandText', 0, () => {
       let actions: TerminalInputAction[] = TerminalInputParser.parse(
         '\u001b[?1;2c\u001b[6;1R\u001b[1;1R', true)

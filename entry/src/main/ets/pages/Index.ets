@@ -78,6 +78,7 @@ struct Index {
   aboutToDisappear(): void {
     ThemeManager.getInstance().removeThemeChange(this.themeChangeHandler)
     this.clearWarmTabEvictionTimer()
+    AppStorage.setOrCreate('hasActiveSshSession', false)
     for (let i = 0; i < this.paneRuntimes.length; i++) {
       this.paneRuntimes[i].viewModel.disconnect()
       this.paneRuntimes[i].detachSurface()
@@ -711,6 +712,7 @@ struct Index {
   private syncWorkspace(): void {
     this.tabs = this.appVm.getTabs().slice()
     this.activeTabIndex = this.appVm.getActiveTabIndex()
+    AppStorage.setOrCreate('hasActiveSshSession', this.workspaceHasActiveSession())
   }
 
   private focusPane(paneId: string, userInitiated: boolean): void {
@@ -801,16 +803,27 @@ struct Index {
   }
 
   private async terminateApplication(paneId: string): Promise<void> {
+    AppStorage.setOrCreate('skipNextTerminateConfirmation', true)
     try {
       let context = this.getUIContext().getHostContext() as common.UIAbilityContext
       await context.terminateSelf()
     } catch (e) {
+      AppStorage.setOrCreate('skipNextTerminateConfirmation', false)
       logger.error('Application termination failed: ' + e)
       let runtime: PaneRuntime | null = this.findPaneRuntime(paneId)
       if (runtime !== null) {
         runtime.viewModel.writeError('Unable to close the application: ' + e)
       }
     }
+  }
+
+  private workspaceHasActiveSession(): boolean {
+    for (let i = 0; i < this.tabs.length; i++) {
+      if (this.tabHasActiveSession(this.tabs[i])) {
+        return true
+      }
+    }
+    return false
   }
 
   private removePaneRuntimes(panes: PaneInfo[]): PaneRuntime[] {
