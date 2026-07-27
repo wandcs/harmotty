@@ -235,5 +235,9 @@ const chromeBar = readFileSync(
   new URL('../../entry/src/main/ets/view/components/ChromeBar.ets', import.meta.url), 'utf8');
 assert.match(chromeBar, /tabRenderKey[\s\S]*tabNeedsAttention\(tab\)/,
   'the tab render key must change when nested pane attention changes');
+assert.match(chromeBar, /\.constraintSize\(\{\s*maxWidth:\s*'70%'\s*\}\)/,
+  'the tab strip may use up to 70% of the available title-bar width');
+assert.doesNotMatch(chromeBar, /tabViewportWidth[\s\S]*Math\.min\([^)]*,\s*\d+\s*\)/,
+  'the tab strip must not keep a fixed viewport cap that hides tabs in a wide window');
 
 console.log('terminal policy tests passed');

@@ -11,6 +11,8 @@
 
 ### Fixed
 
+- Let the top tab strip grow to its 70% layout limit on wide windows instead
+  of hiding tabs after a fixed four-tab viewport.
 - Cleared a pane's persistent bell-attention border when the user types or
   pastes in that pane, without letting background output or automatic focus
   restoration acknowledge it.
