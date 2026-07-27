@@ -9,6 +9,13 @@
 - Updated `russh` to 0.62.4 to address three remote panic conditions reported
   against earlier 0.62.x releases.
 
+### Changed
+
+- Removed the standalone Copy action from the tool menu while keeping the
+  existing keyboard and selection-aware copy paths.
+- Made unknown commands at the disconnected `htty>` prompt point to both
+  `help` and the direct `ssh user@host` path.
+
 ### Fixed
 
 - Let the top tab strip use all remaining title-bar width after window controls,

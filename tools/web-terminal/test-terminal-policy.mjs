@@ -200,6 +200,9 @@ assert.doesNotMatch(sessionViewModel, /KIND_BELL_ATTENTION|case BridgeProtocol\.
 assert.match(sessionViewModel,
   /private onSshClose[\s\S]*?releaseDisconnectedFlowControl\(\)[\s\S]*?writeTerminal\([\s\S]*?writePrompt\(\)/,
   'disconnect cleanup must release output flow control before appending the local close message and prompt');
+assert.match(sessionViewModel,
+  /if \(parsed === null\) \{\s*this\.writeError\("Unknown command\. Type 'help' for commands, or use: ssh user@host"\)/,
+  'unknown idle commands must point to both local help and the direct SSH path');
 
 const terminalSurfaceController = readFileSync(
   new URL('../../entry/src/main/ets/model/terminal/TerminalSurfaceController.ets', import.meta.url), 'utf8');
@@ -217,6 +220,18 @@ const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
 assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
   'normal disconnect and failure must keep the current terminal surface mounted');
+assert.doesNotMatch(indexPage, /requestCopySelection|['"]Copy['"]/,
+  'the tool menu must not keep a standalone Copy action');
+assert.match(indexPage, /for \(let i = 0; i < 6; i\+\+\)/,
+  'keyboard menu selection must traverse the six remaining actions');
+assert.match(indexPage, /\(next \+ direction \+ 6\) % 6/,
+  'keyboard menu selection must wrap across the six remaining actions');
+assert.match(indexPage,
+  /selected === 3\) \{ this\.handleFontIncrease\(\)[\s\S]*selected === 4\) \{ this\.handleFontReset\(\)[\s\S]*selected === 5\) \{ this\.handleFontDecrease\(\)/,
+  'Enter dispatch must map the reindexed font actions in menu order');
+assert.match(indexPage,
+  /menuRow\(3, 'A⁺', 'Font Size \+'[\s\S]*menuRow\(4, 'Aa', 'Reset Font Size'[\s\S]*menuRow\(5, 'A⁻', 'Font Size -'/,
+  'the rendered menu must retain the three font actions at indices 3 through 5');
 
 const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');

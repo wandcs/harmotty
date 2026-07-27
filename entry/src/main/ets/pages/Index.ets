@@ -646,13 +646,6 @@ struct Index {
     }
   }
 
-  private requestCopySelection(): void {
-    let runtime: PaneRuntime | null = this.activePaneRuntime()
-    if (runtime !== null) {
-      runtime.surface.requestCopySelection()
-    }
-  }
-
   private handleFontIncrease(): void {
     this.fontSize = InteractionPolicy.clampFontSize(this.fontSize + 1)
     this.applyFontSize()
@@ -923,16 +916,15 @@ struct Index {
     if (selected === 0) { this.newTab(); return }
     if (selected === 1) { this.toggleSplit(); return }
     if (selected === 2) { this.requestCloseActivePane(); return }
-    if (selected === 3) { this.requestCopySelection(); return }
-    if (selected === 4) { this.handleFontIncrease(); return }
-    if (selected === 5) { this.handleFontReset(); return }
-    if (selected === 6) { this.handleFontDecrease(); return }
+    if (selected === 3) { this.handleFontIncrease(); return }
+    if (selected === 4) { this.handleFontReset(); return }
+    if (selected === 5) { this.handleFontDecrease(); return }
   }
 
   private moveMenuSelection(direction: number): void {
     let next: number = this.menuSelectedIndex
-    for (let i = 0; i < 7; i++) {
-      next = (next + direction + 7) % 7
+    for (let i = 0; i < 6; i++) {
+      next = (next + direction + 6) % 6
       if (this.isMenuItemEnabled(next)) {
         this.menuSelectedIndex = next
         return
@@ -953,12 +945,11 @@ struct Index {
       this.menuRow(0, '+', 'New Tab', 'Ctrl+Shift+T', true, () => { this.newTab() })
       this.menuRow(1, '⋕', 'Split Pane', 'Ctrl+Shift+D', !this.activeTabIsSplit(), () => { this.toggleSplit() })
       this.menuRow(2, '✕', 'Close Pane', 'Ctrl+Shift+W', this.activeTabIsSplit(), () => { this.requestCloseActivePane() })
-      this.menuRow(3, '⧉', 'Copy', '', true, () => { this.requestCopySelection() })
       this.menuDivider()
-      this.menuRow(4, 'A⁺', 'Font Size +', 'Ctrl+=', true, () => { this.handleFontIncrease() })
-      this.menuRow(5, 'Aa', 'Reset Font Size', this.fontSize.toString() + ' px · Ctrl+0', true,
+      this.menuRow(3, 'A⁺', 'Font Size +', 'Ctrl+=', true, () => { this.handleFontIncrease() })
+      this.menuRow(4, 'Aa', 'Reset Font Size', this.fontSize.toString() + ' px · Ctrl+0', true,
         () => { this.handleFontReset() })
-      this.menuRow(6, 'A⁻', 'Font Size -', 'Ctrl+-', true, () => { this.handleFontDecrease() })
+      this.menuRow(5, 'A⁻', 'Font Size -', 'Ctrl+-', true, () => { this.handleFontDecrease() })
     }
     .width(252)
     .backgroundColor(this.chromeColors.commandBarBackground)

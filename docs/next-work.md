@@ -2,7 +2,7 @@
 
 > 状态：唯一有效的项目 TODO
 >
-> 更新日期：2026-07-26
+> 更新日期：2026-07-27
 >
 > 上位规则：[`project-principles.md`](project-principles.md)
 
@@ -17,7 +17,8 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
 
 当前补丁开发目标为 `1.0.1`。版本元数据已前移到 `1.0.1` / `1000001`，待发布修复
 记录在 `CHANGELOG.md` 的 `1.0.1 - In development` 下。`Unreleased` 保持为空，
-用于尚未归入目标版本的后续工作；1.1 功能规划不进入本补丁分支。
+用于尚未归入目标版本的后续工作。工具菜单精简和未连接状态帮助提示已明确提前到
+`1.0.1`；其他 1.1 功能规划不进入本补丁分支。
 
 ## P0：1.0.1 终端字形正确性
 
@@ -35,6 +36,22 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
 - [x] 在 ARM64 HarmonyOS PC 上验证：BEL 后在对应 Pane 使用物理键盘输入会清除
   黄框；仅有远端输出、程序恢复焦点和其他 Pane 输入不会清除；确认后新的 BEL
   能再次显示黄框。
+
+## P0：1.0.1 工具菜单与未连接提示精简
+
+- [x] 删除工具菜单中的 **Copy**，保留 New Tab、Split Pane、Close Pane 和三项字号
+  操作；同步调整菜单上下循环、Enter 分派和动态禁用索引，不改动既有键盘与选择感知
+  复制路径。
+- [x] 将未连接 `htty>` 提示符的未知顶层命令反馈统一为
+  `Unknown command. Type 'help' for commands, or use: ssh user@host`；空输入、具体
+  Usage、帮助主题、命令历史和远端输入行为保持不变。
+- [x] 在 ARM64 HarmonyOS PC 上验证六项菜单顺序和鼠标操作：单 Pane 的 Close、
+  双 Pane 的 Split 均保持禁用且不关闭菜单；Split/Close 往返后 Web 终端数量正确，
+  菜单始终不包含 Copy。
+- [x] 在 ARM64 HarmonyOS PC 的未连接 Pane 验证：未知命令显示新的统一引导，空
+  Enter 只产生下一个提示符，已识别但缺参数的 `ssh` 仍显示具体错误。
+- [ ] 使用真机物理键盘验证菜单上下回绕、禁用项跳过和 Enter 分派，并回归键盘与
+  选择感知复制；连接受控 SSH 主机后确认远端未知命令不进入本地解析路径。
 
 ## P0：公开源码
 

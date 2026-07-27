@@ -61,6 +61,24 @@ export default function interactionFixesTest() {
       if (fullwidth instanceof KeyCommandResult) { expect(fullwidth.kind).assertEqual(KeyCommandKind.HELP) }
     })
 
+    it('keepsUnknownAndInvalidLocalCommandsDistinct', 0, () => {
+      let unknown: CommandParseResult | KeyCommandResult | null =
+        CommandParser.parseInput('not-a-command', new SshConfig())
+      let empty: CommandParseResult | KeyCommandResult | null =
+        CommandParser.parseInput('', new SshConfig())
+      let invalidSsh: CommandParseResult | KeyCommandResult | null =
+        CommandParser.parseInput('ssh', new SshConfig())
+      expect(unknown).assertEqual(null)
+      expect(empty instanceof CommandParseResult).assertEqual(true)
+      expect(invalidSsh instanceof CommandParseResult).assertEqual(true)
+      if (empty instanceof CommandParseResult) {
+        expect(empty.errorMessage).assertEqual('Usage: ssh user@host')
+      }
+      if (invalidSsh instanceof CommandParseResult) {
+        expect(invalidSsh.errorMessage).assertEqual('Username required')
+      }
+    })
+
     it('rejectsUnsupportedKeyTypesInsteadOfFallingBack', 0, () => {
       let result: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -t dsa')
       expect(result.errorMessage.length > 0).assertEqual(true)
