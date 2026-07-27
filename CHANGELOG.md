@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [1.0.1] - In development
+## [1.0.1] - 2026-07-28
 
 ### Security
 
