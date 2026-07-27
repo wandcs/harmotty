@@ -36,4 +36,9 @@ export class InteractionPolicy {
   static shouldDetachTabOnEviction(hasActiveSession: boolean): boolean {
     return !hasActiveSession
   }
+
+  static shouldConfirmApplicationClose(hasActiveSession: boolean,
+    confirmationSuppressed: boolean): boolean {
+    return hasActiveSession && !confirmationSuppressed
+  }
 }

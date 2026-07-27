@@ -3,6 +3,7 @@ import { window } from '@kit.ArkUI';
 import { ThemeManager } from '../view/theme/ThemeManager';
 import { Logger } from '../common/logger/Logger';
 import { UserPreferences } from '../model/settings/UserPreferences';
+import { InteractionPolicy } from '../model/ui/InteractionPolicy';
 import webview from '@ohos.web.webview';
 
 const logger: Logger = new Logger('EntryAbility')
@@ -26,6 +27,8 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate('pcTitleButtonReservedWidth', FALLBACK_TITLE_BUTTON_WIDTH)
     AppStorage.setOrCreate('mainWindowVisible', true)
     AppStorage.setOrCreate('terminalFontSize', UserPreferences.initialize(this.context))
+    AppStorage.setOrCreate('hasActiveSshSession', false)
+    AppStorage.setOrCreate('skipNextTerminateConfirmation', false)
     try {
       webview.WebviewController.setRenderProcessMode(webview.RenderProcessMode.SINGLE)
       webview.WebviewController.setWebDestroyMode(webview.WebDestroyMode.FAST_MODE)
@@ -101,6 +104,34 @@ export default class EntryAbility extends UIAbility {
   onBackground(): void {
     AppStorage.setOrCreate('mainWindowVisible', false)
     logger.info('Ability onBackground');
+  }
+
+  async onPrepareToTerminateAsync(): Promise<boolean> {
+    let hasActiveSession: boolean = AppStorage.get<boolean>('hasActiveSshSession') ?? false
+    let confirmationSuppressed: boolean =
+      AppStorage.get<boolean>('skipNextTerminateConfirmation') ?? false
+    AppStorage.setOrCreate('skipNextTerminateConfirmation', false)
+    if (!InteractionPolicy.shouldConfirmApplicationClose(hasActiveSession, confirmationSuppressed)) {
+      return false
+    }
+    if (this.mainWindow === null) {
+      logger.warn('Application close canceled because the main window is unavailable')
+      return true
+    }
+    try {
+      let result = await this.mainWindow.getUIContext().getPromptAction().showDialog({
+        title: 'Close active sessions?',
+        message: 'Closing LeanTTY will disconnect all active SSH sessions.',
+        buttons: [
+          { text: 'Cancel', color: '#CDD6F4' },
+          { text: 'Close LeanTTY', color: '#F38BA8' }
+        ]
+      })
+      return result.index !== 1
+    } catch (e) {
+      logger.error('Application close confirmation failed: ' + e)
+      return true
+    }
   }
 
   private validatePcWindowChrome(mainWindow: window.Window): void {

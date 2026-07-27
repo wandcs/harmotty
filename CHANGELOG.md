@@ -21,6 +21,11 @@
 
 ### Fixed
 
+- Redrew the disconnected `ltty>` command line after edits so deleting or
+  moving across Chinese wide characters no longer leaves stale terminal cells.
+- Asked for confirmation before closing LeanTTY while any SSH session is
+  active, while avoiding a duplicate prompt after confirming closure of the
+  final connected tab.
 - Let the top tab strip use all remaining title-bar width after window controls,
   fixed actions and drag space instead of imposing a fixed viewport cap.
 - Cleared a pane's persistent bell-attention border when the user types or

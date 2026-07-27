@@ -474,10 +474,8 @@ export class SessionViewModel {
       if (action.kind === TerminalInputActionKind.SUBMIT) {
         this.executeCommandBuffer()
       } else if (action.kind === TerminalInputActionKind.BACKSPACE) {
-        let suffix: string | null = this.commandLine.backspace()
-        if (suffix !== null) {
-          this.writeTerminal('\b' + suffix + ' ')
-          this.moveTerminalCursorLeft(suffix.length + 1)
+        if (this.commandLine.backspace() !== null) {
+          this.redrawLocalCommandLine()
         }
       } else if (action.kind === TerminalInputActionKind.TAB) {
         this.tabComplete()
@@ -487,16 +485,15 @@ export class SessionViewModel {
         this.navigateHistory(1)
       } else if (action.kind === TerminalInputActionKind.CURSOR_LEFT) {
         if (this.commandLine.moveLeft()) {
-          this.writeTerminal('\u001b[D')
+          this.redrawLocalCommandLine()
         }
       } else if (action.kind === TerminalInputActionKind.CURSOR_RIGHT) {
         if (this.commandLine.moveRight()) {
-          this.writeTerminal('\u001b[C')
+          this.redrawLocalCommandLine()
         }
       } else if (action.kind === TerminalInputActionKind.TEXT) {
-        let suffix: string = this.commandLine.insert(action.text)
-        this.writeTerminal(action.text + suffix)
-        this.moveTerminalCursorLeft(suffix.length)
+        this.commandLine.insert(action.text)
+        this.redrawLocalCommandLine()
       }
     }
   }
@@ -627,8 +624,8 @@ export class SessionViewModel {
     let matches: string[] = this.commandBarVm.tryTabComplete()
     if (matches.length === 1) {
       let completed: string = this.commandBarVm.applyCompletion(matches[0])
-      this.writeTerminal('\r\u001b[Kltty> ' + completed)
       this.commandLine.setText(completed)
+      this.redrawLocalCommandLine()
     } else if (matches.length > 1) {
       this.writeTerminal('\r\n' + matches.join('  ') + '\r\nltty> ' + this.commandLine.getText())
     }
@@ -637,16 +634,12 @@ export class SessionViewModel {
   private navigateHistory(direction: number): void {
     this.commandBarVm.setInputText(this.commandLine.getText())
     let newCmd: string = this.commandBarVm.navigateHistory(direction)
-    this.writeTerminal('\r\u001b[Kltty> ' + newCmd)
     this.commandLine.setText(newCmd)
+    this.redrawLocalCommandLine()
   }
 
-  private moveTerminalCursorLeft(columns: number): void {
-    if (columns === 1) {
-      this.writeTerminal('\u001b[D')
-    } else if (columns > 1) {
-      this.writeTerminal('\u001b[' + columns.toString() + 'D')
-    }
+  private redrawLocalCommandLine(): void {
+    this.writeTerminal(this.commandLine.renderForTerminal('ltty> '))
   }
 
   private notifyTitleChange(title: string): void {

@@ -52,4 +52,9 @@ export class LocalCommandLine {
     this.cursor++
     return true
   }
+
+  renderForTerminal(prompt: string): string {
+    let prefix: string = this.text.substring(0, this.cursor)
+    return '\r\u001b[2K' + prompt + this.text + '\r' + prompt + prefix
+  }
 }
