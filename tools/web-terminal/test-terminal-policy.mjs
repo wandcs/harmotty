@@ -93,6 +93,41 @@ assert.equal(policy.centerGridLeadingPadding(4, 4, 942, 926), 8);
 assert.equal(policy.centerGridLeadingPadding(4, 4, 934, 926), 4);
 assert.equal(policy.centerGridLeadingPadding(4, 4, 930, 926), 4);
 
+const exactCtrl = {
+  button: 0,
+  ctrlKey: true,
+  altKey: false,
+  shiftKey: false,
+  metaKey: false
+};
+const exactCtrlShift = {
+  ...exactCtrl,
+  shiftKey: true
+};
+assert.equal(policy.isLinkModifierActive(exactCtrl, 'none'), true);
+assert.equal(policy.isLinkModifierActive(exactCtrlShift, 'none'), false);
+assert.equal(policy.isLinkModifierActive({ ...exactCtrl, metaKey: true }, 'none'), false);
+assert.equal(policy.isLinkModifierActive(exactCtrlShift, 'sgr'), false,
+  'mouse encoding names must not be mistaken for xterm mouse tracking modes');
+for (const mouseTrackingMode of ['x10', 'vt200', 'drag', 'any']) {
+  assert.equal(policy.isLinkModifierActive(exactCtrl, mouseTrackingMode), false,
+    `Ctrl alone must remain owned by ${mouseTrackingMode} mouse reporting`);
+  assert.equal(policy.isLinkModifierActive(exactCtrlShift, mouseTrackingMode), true,
+    `Ctrl+Shift must activate links while Shift bypasses ${mouseTrackingMode} mouse reporting`);
+  assert.equal(policy.isLinkModifierActive(
+    { ...exactCtrlShift, altKey: true }, mouseTrackingMode), false);
+  assert.equal(policy.isLinkModifierActive(
+    { ...exactCtrlShift, metaKey: true }, mouseTrackingMode), false);
+  assert.equal(policy.shouldActivateLink(
+    exactCtrlShift, mouseTrackingMode, true, false), true);
+  assert.equal(policy.shouldActivateLink(
+    exactCtrlShift, mouseTrackingMode, true, true), false);
+}
+assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, false), true);
+assert.equal(policy.shouldActivateLink({ ...exactCtrl, button: 1 }, 'none', true, false), false);
+assert.equal(policy.shouldActivateLink(exactCtrl, 'none', false, false), false);
+assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, true), false);
+
 const terminalHtml = readFileSync(new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8');
 assert.match(terminalHtml,
   /fontFamily:\s*"'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace"/,
@@ -164,6 +199,40 @@ assert.match(terminalHtml, /term\.onTitleChange\s*\(/,
   'the local performance-marker parser must continue to observe title sequences');
 assert.doesNotMatch(terminalHtml, /sendBridgeControl\('title'/,
   'ordinary remote title changes must not cross the bridge when the product does not consume them');
+assert.match(terminalHtml, /new WebLinksAddon\.WebLinksAddon\(/,
+  'plain HTTP(S) text must use the xterm web-links provider');
+assert.match(terminalHtml, /linkHandler:\s*\{[\s\S]*?activate:/,
+  'OSC 8 links must use the same native-system activation path as plain links');
+assert.match(terminalHtml,
+  /shouldActivateLink\([\s\S]*?currentMouseTrackingMode\(\)[\s\S]*?sendBridgeControl\('openUrl', url\)/s,
+  'URL activation must use the tested modifier policy, primary click, same link, and no drag');
+assert.match(terminalHtml,
+  /ctrlKey:\s*linkModifierState\.ctrlKey,[\s\S]*?shiftKey:\s*linkModifierState\.shiftKey/,
+  'stationary link feedback must retain both Ctrl and Shift state for mouse-reporting mode changes');
+const linkActivationBody = terminalHtml.match(
+  /function activateTerminalLink\(event, url\)\s*\{([\s\S]*?)\n    \}/
+);
+assert.ok(linkActivationBody, 'the shared terminal link activation callback must exist');
+assert.doesNotMatch(linkActivationBody[1], /event\.stopPropagation\(\)/,
+  'link mouseup must reach xterm document listeners so text-selection drag state is released');
+assert.match(terminalHtml, /setCurrentLinkDecorations\(linkModifierActive\)/,
+  'pressing or releasing required modifiers while stationary must update the hovered link immediately');
+assert.match(terminalHtml, /id="link-preview"/,
+  'modifier-hover must expose the real target of an OSC 8 link before opening it');
+assert.doesNotMatch(terminalHtml, /window\.open|location\.(?:href|assign|replace)/,
+  'the terminal page must never bypass the typed native browser bridge');
+
+const xtermJs = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/xterm.js', import.meta.url), 'utf8');
+assert.match(xtermJs,
+  /get currentLink\(\)[\s\S]*?Object\.defineProperties\([^)]*decorations[\s\S]*?pointerCursor[\s\S]*?underline/,
+  'the pinned xterm build must retain the decoration adapter used for modifier-only link feedback');
+assert.match(xtermJs,
+  /shouldForceSelection\(e\)\{return [^}]*:e\.shiftKey\}/,
+  'the pinned xterm build must retain Shift as the local mouse-reporting bypass');
+assert.match(xtermJs,
+  /areMouseEventsActive&&!this\._selectionService\.shouldForceSelection\(e\)/,
+  'xterm must test the Shift bypass before forwarding mouse events to tmux or another TUI');
 
 const terminalBridge = readFileSync(
   new URL('../../entry/src/main/ets/model/bridge/TerminalBridge.ets', import.meta.url), 'utf8');
@@ -192,6 +261,8 @@ assert.doesNotMatch(bridgeProtocol, /replay/i,
   'historical replay must not remain in the bridge protocol allowlist');
 assert.doesNotMatch(bridgeProtocol, /releaseBuffers|KIND_RELEASE_BUFFERS/,
   'disconnect cleanup must not expose a bridge command that clears a live terminal surface');
+assert.match(bridgeProtocol, /KIND_OPEN_URL:\s*string = 'openUrl'/,
+  'browser requests must cross the typed web-to-native control allowlist');
 
 const sessionViewModel = readFileSync(
   new URL('../../entry/src/main/ets/viewmodel/SessionViewModel.ets', import.meta.url), 'utf8');
@@ -209,6 +280,9 @@ const terminalSurfaceController = readFileSync(
 assert.match(terminalSurfaceController,
   /msg\.kind === BridgeProtocol\.KIND_BELL_ATTENTION[\s\S]*onBellAttentionHandler/,
   'the terminal surface must consume bell attention before generic session message routing');
+assert.match(terminalSurfaceController,
+  /msg\.kind === BridgeProtocol\.KIND_OPEN_URL[\s\S]*onOpenUrlHandler/,
+  'the terminal surface must consume browser requests before generic SSH session routing');
 assert.doesNotMatch(terminalSurfaceController, /getHistoryChunks|queueReplay|replayedHistory/,
   'a new terminal surface must not receive already displayed terminal history');
 assert.match(terminalSurfaceController, /takeDetachedChunks/,
@@ -220,6 +294,10 @@ const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
 assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
   'normal disconnect and failure must keep the current terminal surface mounted');
+assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
+  'each terminal surface must route URL requests through its owning pane');
+assert.match(indexPage, /BrowserLauncher\.open\(/,
+  'the ArkUI shell must hand validated HTTP(S) links to the HarmonyOS system browser');
 assert.doesNotMatch(indexPage, /requestCopySelection|['"]Copy['"]/,
   'the tool menu must not keep a standalone Copy action');
 assert.match(indexPage, /for \(let i = 0; i < 6; i\+\+\)/,

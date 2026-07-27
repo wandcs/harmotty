@@ -29,6 +29,10 @@
   compiles and runs the test suite.
 - Balanced terminal insets around full-screen TUIs by offsetting the scrollbar
   gutter and centering unused cell-grid height without reducing rows or columns.
+- Routed HTTP(S) and OSC 8 terminal links through the HarmonyOS system browser
+  with `Ctrl+Click` normally and `Ctrl+Shift+Click` while tmux or another TUI
+  owns mouse reporting, without stealing ordinary TUI mouse input or leaving
+  xterm in text-selection drag mode after the browser handoff.
 
 ## [1.0.0] - 2026-07-26
 

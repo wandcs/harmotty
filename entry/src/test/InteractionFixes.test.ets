@@ -13,6 +13,7 @@ import {
 } from '../main/ets/model/terminal/TerminalInputParser'
 import { LocalCommandLine } from '../main/ets/model/terminal/LocalCommandLine'
 import { SessionViewModel } from '../main/ets/viewmodel/SessionViewModel'
+import { BrowserLauncher } from '../main/ets/model/browser/BrowserLauncher'
 
 export default function interactionFixesTest() {
   describe('InteractionFixes', () => {
@@ -158,6 +159,32 @@ export default function interactionFixesTest() {
         .assertEqual('H2|W2N|CONTROL|copySelection|copied text')
       expect(BridgeProtocol.copySelectionResult('').serialize())
         .assertEqual('H2|W2N|CONTROL|copySelection|')
+    })
+
+    it('acceptsOnlyWebToNativeUrlOpenControls', 0, () => {
+      let openUrl: BridgeMessage | null =
+        BridgeProtocol.parse('H2|W2N|CONTROL|openUrl|https://example.com/path?q=1')
+      expect(openUrl !== null).assertEqual(true)
+      if (openUrl !== null) {
+        expect(openUrl.kind).assertEqual(BridgeProtocol.KIND_OPEN_URL)
+        expect(openUrl.payload).assertEqual('https://example.com/path?q=1')
+      }
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|openUrl|https://example.com')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|DATA|openUrl|https://example.com')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|openUrl|')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|openUrl|' +
+        'x'.repeat(BridgeProtocol.MAX_URL_PAYLOAD_LENGTH + 1))).assertEqual(null)
+    })
+
+    it('allowsOnlyNormalizedCredentialFreeHttpUrls', 0, () => {
+      expect(BrowserLauncher.normalizeHttpUrl('https://example.com/path?q=1'))
+        .assertEqual('https://example.com/path?q=1')
+      expect(BrowserLauncher.normalizeHttpUrl('HTTP://EXAMPLE.COM'))
+        .assertEqual('http://EXAMPLE.COM')
+      expect(BrowserLauncher.normalizeHttpUrl('ftp://example.com')).assertEqual(null)
+      expect(BrowserLauncher.normalizeHttpUrl('https://user:secret@example.com')).assertEqual(null)
+      expect(BrowserLauncher.normalizeHttpUrl(' https://example.com')).assertEqual(null)
+      expect(BrowserLauncher.normalizeHttpUrl('https://example.com/\nnext')).assertEqual(null)
     })
 
     it('encodesTerminalFocusAndBlurAsSeparateBridgeMessages', 0, () => {

@@ -53,6 +53,22 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
 - [ ] 使用真机物理键盘验证菜单上下回绕、禁用项跳过和 Enter 分派，并回归键盘与
   选择感知复制；连接受控 SSH 主机后确认远端未知命令不进入本地解析路径。
 
+## P0：1.0.1 终端 URL 点击
+
+- [x] 第一阶段：在终端鼠标上报关闭时，普通 HTTP(S) 文本和 OSC 8 链接平时不
+  改变指针或增加链接装饰；按住且仅按住 `Ctrl` 后立即显示手形指针、下划线和真实
+  目标，`Ctrl+左键单击` 经 Native 校验后交给 HarmonyOS 系统浏览器。普通单击、
+  拖动、其他修饰键、非 HTTP(S) 和失效 Pane 都不得打开，也不得向 SSH 写入字节。
+- [ ] 在 ARM64 HarmonyOS PC 上验证第一阶段：Shell 中普通 URL 与 OSC 8、按键前后
+  即时反馈、单/双 Pane 来源、浏览器往返焦点、失败提示，以及 WebGL/DOM fallback。
+- [x] 第二阶段：tmux/TUI 鼠标上报开启时，普通点击和 `Ctrl+左键单击` 仍归远端
+  应用，`Shift` 保留为 xterm 本地选择绕过键；按住且仅按住 `Ctrl+Shift` 后显示
+  链接反馈，`Ctrl+Shift+左键单击` 打开链接，拖动不得打开或写入 SSH 鼠标字节。
+- [x] 在 ARM64 HarmonyOS PC 的 `set -g mouse on` tmux 中验证第二阶段：普通点击、
+  `Ctrl+点击`、Pane/边框/滚轮仍由 tmux 处理，`Shift+拖动` 可本地选择，
+  `Ctrl+Shift+点击` 打开普通 URL 与可用 OSC 8 链接，拖动不误开，浏览器往返后
+  不残留选择拖动状态，并覆盖单/双 Pane。
+
 ## P0：公开源码
 
 ### A. 提审证据和历史

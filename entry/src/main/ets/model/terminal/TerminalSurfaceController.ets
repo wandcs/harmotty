@@ -15,6 +15,7 @@ export class TerminalSurfaceController {
   private onCopyResultHandler: ((success: boolean) => void) | null = null
   private onBellAttentionHandler: (() => void) | null = null
   private onAttentionAcknowledgedHandler: (() => void) | null = null
+  private onOpenUrlHandler: ((url: string) => void) | null = null
   private logger: Logger = new Logger('TerminalSurfaceController')
   private textEncoder: util.TextEncoder = new util.TextEncoder()
 
@@ -40,6 +41,10 @@ export class TerminalSurfaceController {
 
   setOnAttentionAcknowledged(handler: () => void): void {
     this.onAttentionAcknowledgedHandler = handler
+  }
+
+  setOnOpenUrl(handler: (url: string) => void): void {
+    this.onOpenUrlHandler = handler
   }
 
   attach(ctrl: webview.WebviewController): void {
@@ -202,6 +207,13 @@ export class TerminalSurfaceController {
           this.onCopyResultHandler(success)
         }
       })
+      return
+    }
+    if (msg.direction === BridgeProtocol.DIRECTION_WEB_TO_NATIVE &&
+      msg.channel === BridgeProtocol.CHANNEL_CONTROL && msg.kind === BridgeProtocol.KIND_OPEN_URL) {
+      if (this.onOpenUrlHandler !== null) {
+        this.onOpenUrlHandler(msg.payload)
+      }
       return
     }
     if (this.onMessageHandler !== null) {

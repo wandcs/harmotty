@@ -12,6 +12,7 @@ import { common } from '@kit.AbilityKit'
 import { InteractionPolicy } from '../model/ui/InteractionPolicy'
 import { UserPreferences } from '../model/settings/UserPreferences'
 import { TerminalSurfaceController } from '../model/terminal/TerminalSurfaceController'
+import { BrowserLauncher } from '../model/browser/BrowserLauncher'
 
 const logger: Logger = new Logger('IndexPage')
 const WARM_TAB_RETENTION_MS: number = 30000
@@ -357,13 +358,16 @@ struct Index {
     }
     let runtime: PaneRuntime = new PaneRuntime(pane.id, vm)
     runtime.surface.setOnCopyResult((success: boolean) => {
-      this.showCopyFeedback(success ? 'Copied' : 'Copy failed')
+      this.showTransientFeedback(success ? 'Copied' : 'Copy failed')
     })
     runtime.surface.setOnBellAttention(() => {
       this.markPaneAttention(pane.id)
     })
     runtime.surface.setOnAttentionAcknowledged(() => {
       this.clearPaneAttention(pane.id)
+    })
+    runtime.surface.setOnOpenUrl((url: string) => {
+      this.openUrlForPane(pane.id, runtime.generation, url)
     })
     this.paneRuntimes = this.paneRuntimes.concat([runtime])
   }
@@ -638,11 +642,31 @@ struct Index {
     this.syncWorkspace()
   }
 
-  private showCopyFeedback(message: string): void {
+  private showTransientFeedback(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: message, duration: 1200 })
     } catch (e) {
       logger.warn('Copy feedback failed: ' + e)
+    }
+  }
+
+  private async openUrlForPane(paneId: string, generation: number, url: string): Promise<void> {
+    let runtime: PaneRuntime | null = this.findPaneRuntime(paneId)
+    if (runtime === null || runtime.generation !== generation || !this.isPaneInActiveTab(paneId)) {
+      return
+    }
+    if (!this.isPaneFocused(paneId)) {
+      this.focusPane(paneId, true)
+    }
+    try {
+      let context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      let opened: boolean = await BrowserLauncher.open(context, url)
+      if (!opened) {
+        this.showTransientFeedback('Unable to open link')
+      }
+    } catch (e) {
+      logger.warn('Open link failed')
+      this.showTransientFeedback('Unable to open link')
     }
   }
 

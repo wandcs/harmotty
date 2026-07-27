@@ -148,6 +148,32 @@
     return leading + Math.max(0, unusedSize) / 2;
   }
 
+  function isLinkModifierActive(event, mouseTrackingMode) {
+    if (!event ||
+        event.ctrlKey !== true ||
+        event.altKey === true ||
+        event.metaKey === true) {
+      return false;
+    }
+    if (mouseTrackingMode === 'none') {
+      return event.shiftKey !== true;
+    }
+    var mouseReportingActive =
+      mouseTrackingMode === 'x10' ||
+      mouseTrackingMode === 'vt200' ||
+      mouseTrackingMode === 'drag' ||
+      mouseTrackingMode === 'any';
+    return mouseReportingActive && event.shiftKey === true;
+  }
+
+  function shouldActivateLink(event, mouseTrackingMode, sameLink, dragged) {
+    return !!event &&
+      event.button === 0 &&
+      sameLink === true &&
+      dragged !== true &&
+      isLinkModifierActive(event, mouseTrackingMode);
+  }
+
   global.HarmoTTYTerminalPolicy = {
     MAX_CLIPBOARD_BYTES: MAX_CLIPBOARD_BYTES,
     MAX_CLIPBOARD_BASE64_LENGTH: MAX_CLIPBOARD_BASE64_LENGTH,
@@ -159,6 +185,8 @@
     consumeWheelFrame: consumeWheelFrame,
     hasPendingWheelSteps: hasPendingWheelSteps,
     pendingWheelLines: pendingWheelLines,
-    centerGridLeadingPadding: centerGridLeadingPadding
+    centerGridLeadingPadding: centerGridLeadingPadding,
+    isLinkModifierActive: isLinkModifierActive,
+    shouldActivateLink: shouldActivateLink
   };
 })(globalThis);

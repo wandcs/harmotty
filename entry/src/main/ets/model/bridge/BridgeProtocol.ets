@@ -44,6 +44,8 @@ export class BridgeProtocol {
   static readonly KIND_CLIPBOARD_PASTE: string = 'clipboardPaste'
   static readonly KIND_PERF_RENDER: string = 'perfRender'
   static readonly KIND_RENDERER_STATE: string = 'rendererState'
+  static readonly KIND_OPEN_URL: string = 'openUrl'
+  static readonly MAX_URL_PAYLOAD_LENGTH: number = 4096
 
   static parse(raw: string): BridgeMessage | null {
     let versionEnd: number = raw.indexOf('|')
@@ -66,6 +68,10 @@ export class BridgeProtocol {
     let payload: string = raw.substring(kindEnd + 1)
     if ((kind === BridgeProtocol.KIND_BELL_ATTENTION ||
       kind === BridgeProtocol.KIND_ATTENTION_ACKNOWLEDGED) && payload.length > 0) {
+      return null
+    }
+    if (kind === BridgeProtocol.KIND_OPEN_URL &&
+      (payload.length === 0 || payload.length > BridgeProtocol.MAX_URL_PAYLOAD_LENGTH)) {
       return null
     }
     return new BridgeMessage(direction, channel, kind, payload)
@@ -174,6 +180,7 @@ export class BridgeProtocol {
       kind === BridgeProtocol.KIND_PONG ||
       kind === BridgeProtocol.KIND_CLIPBOARD_PASTE ||
       kind === BridgeProtocol.KIND_PERF_RENDER ||
-      kind === BridgeProtocol.KIND_RENDERER_STATE
+      kind === BridgeProtocol.KIND_RENDERER_STATE ||
+      kind === BridgeProtocol.KIND_OPEN_URL
   }
 }
