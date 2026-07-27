@@ -13,10 +13,10 @@ Version 1.0.0 was rejected by Huawei AppGallery Connect because the former
 application name contained an unauthorized trademark; it was never published.
 LeanTTY 1.0.1 is the first public release candidate.
 
-The source mapping between the submitted 1.0.0 build and this public baseline is
-documented in the archived
-[source provenance](docs/archive/source-provenance.md). No signing credential or
-generated application package is stored in Git.
+The immutable `v1.0.0` tag records the public rejection baseline. Exact
+submitted-source mapping, artifact hashes and signing verification remain in
+the private release evidence archive. No signing credential or generated
+application package is stored in Git.
 
 ## Features
 
