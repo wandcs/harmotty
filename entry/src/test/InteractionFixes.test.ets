@@ -124,7 +124,7 @@ export default function interactionFixesTest() {
       expect(text.includes('ForwardAgent yes')).assertEqual(true)
       expect(text.includes('Host prod production # shared')).assertEqual(true)
       expect(text.includes('ProxyJump bastion')).assertEqual(true)
-      expect(text.includes('# >>> HarmoTTY managed hosts >>>')).assertEqual(true)
+      expect(text.includes('# >>> LeanTTY managed hosts >>>')).assertEqual(true)
       expect(text.includes('Host prod\n  HostName new.example.com\n  User deploy\n  Port 2222')).assertEqual(true)
     })
 
@@ -274,20 +274,20 @@ export default function interactionFixesTest() {
 
     it('buildsKeypushMarkerAndShellCommandWithoutEchoFalsePositive', 0, () => {
       let generatedMarker: string = SessionViewModel.buildKeypushMarker()
-      expect(generatedMarker.startsWith('__HTTY_KEYPUSH_')).assertEqual(true)
-      expect(generatedMarker.length > '__HTTY_KEYPUSH_'.length).assertEqual(true)
+      expect(generatedMarker.startsWith('__LTTY_KEYPUSH_')).assertEqual(true)
+      expect(generatedMarker.length > '__LTTY_KEYPUSH_'.length).assertEqual(true)
 
-      let marker: string = '__HTTY_KEYPUSH_99'
+      let marker: string = '__LTTY_KEYPUSH_99'
       let cmd: string = SessionViewModel.buildKeypushShellCommand('ssh-ed25519 AAAAC test', marker)
       expect(cmd.indexOf(marker + ':') < 0).assertEqual(true)
-      let markerPrint: string = "printf '\\n%s:%s\\n' '" + marker + "' \"$htty_status\""
+      let markerPrint: string = "printf '\\n%s:%s\\n' '" + marker + "' \"$command_status\""
       expect(cmd.indexOf(markerPrint) >= 0).assertEqual(true)
-      let echoLine: string = "printf '\\n%s:%s\\n' '" + marker + "' '$htty_status'\n"
+      let echoLine: string = "printf '\\n%s:%s\\n' '" + marker + "' '$command_status'\n"
       expect(SessionViewModel.parseKeypushMarker(echoLine, marker)).assertEqual(null)
     })
 
     it('parsesOnlyCompleteNumericKeypushStatusLines', 0, () => {
-      let marker: string = '__HTTY_KEYPUSH_100'
+      let marker: string = '__LTTY_KEYPUSH_100'
       expect(SessionViewModel.parseKeypushMarker('other\n' + marker + ':0\nmore', marker)).assertEqual(0)
       expect(SessionViewModel.parseKeypushMarker(marker + ':-1\n', marker)).assertEqual(-1)
       expect(SessionViewModel.parseKeypushMarker('missing marker', marker)).assertEqual(null)

@@ -1,12 +1,12 @@
 {
   "name": "entry",
   "version": "1.0.1",
-  "description": "HarmoTTY entry module",
+  "description": "LeanTTY entry module",
   "main": "",
-  "author": "HarmoTTY Contributors",
+  "author": "LeanTTY Contributors",
   "license": "Apache-2.0",
-  "repository": "https://github.com/wandcs/harmotty",
+  "repository": "https://github.com/wandcs/leantty",
   "dependencies": {
-    "libharmotty_ssh.so": "file:./src/main/cpp/types/libharmotty_ssh"
+    "libleantty_ssh.so": "file:./src/main/cpp/types/libleantty_ssh"
   }
 }

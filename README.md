@@ -1,6 +1,6 @@
-# HarmoTTY
+# LeanTTY
 
-HarmoTTY is a keyboard-first, zero-configuration remote terminal for ARM64
+LeanTTY is a keyboard-first, zero-configuration remote terminal for ARM64
 HarmonyOS PC, inspired by [Ghostty](https://ghostty.org).
 
 The project aims to be reliable, quiet and native to HarmonyOS PC. Ghostty is a
@@ -9,13 +9,14 @@ decisions follow the [project principles](docs/project-principles.md).
 
 ## Status
 
-Version 1.0.0 has been submitted to Huawei AppGallery Connect and is under
-review. This repository is the public source baseline; AppGallery availability
-will be announced only after approval.
+Version 1.0.0 was rejected by Huawei AppGallery Connect because the former
+application name contained an unauthorized trademark; it was never published.
+LeanTTY 1.0.1 is the first public release candidate.
 
 The source mapping between the submitted 1.0.0 build and this public baseline is
-documented in [source provenance](docs/source-provenance.md). No signing
-credential or generated application package is stored in Git.
+documented in the archived
+[source provenance](docs/archive/source-provenance.md). No signing credential or
+generated application package is stored in Git.
 
 ## Features
 
@@ -38,7 +39,7 @@ credential or generated application package is stored in Git.
 
 ## Product scope
 
-HarmoTTY currently targets only ARM64 HarmonyOS PC with keyboard and mouse. It
+LeanTTY currently targets only ARM64 HarmonyOS PC with keyboard and mouse. It
 is an SSH terminal, not a local shell, Linux environment, file manager or
 general remote-administration suite.
 
@@ -99,7 +100,7 @@ are documented in:
 
 ## License
 
-HarmoTTY is licensed under Apache-2.0. See [LICENSE](LICENSE).
+LeanTTY is licensed under Apache-2.0. See [LICENSE](LICENSE).
 
 Third-party components remain under their own licenses; see
 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).

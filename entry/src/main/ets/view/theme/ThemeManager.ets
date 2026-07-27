@@ -7,7 +7,7 @@ export enum ColorMode {
   SYSTEM = 2
 }
 
-export class HarmottyTheme {
+export class AppTheme {
   colorMode: ColorMode
   terminal: TerminalThemeState
   terminalColors: TerminalColors | TerminalColorsLatte
@@ -48,7 +48,7 @@ export class HarmottyTheme {
 
 export class ThemeManager {
   private static instance: ThemeManager | null = null
-  private currentTheme: HarmottyTheme
+  private currentTheme: AppTheme
   private listeners: (() => void)[]
   private preferredMode: ColorMode
   private systemIsDark: boolean
@@ -56,7 +56,7 @@ export class ThemeManager {
   private constructor() {
     this.preferredMode = ColorMode.DARK
     this.systemIsDark = true
-    this.currentTheme = new HarmottyTheme(ColorMode.DARK)
+    this.currentTheme = new AppTheme(ColorMode.DARK)
     this.listeners = []
   }
 
@@ -67,7 +67,7 @@ export class ThemeManager {
     return ThemeManager.instance
   }
 
-  getTheme(): HarmottyTheme {
+  getTheme(): AppTheme {
     return this.currentTheme
   }
 
@@ -88,7 +88,7 @@ export class ThemeManager {
     if (this.preferredMode === ColorMode.SYSTEM) {
       effectiveMode = this.systemIsDark ? ColorMode.DARK : ColorMode.LIGHT
     }
-    this.currentTheme = new HarmottyTheme(effectiveMode)
+    this.currentTheme = new AppTheme(effectiveMode)
     this.notifyListeners()
   }
 

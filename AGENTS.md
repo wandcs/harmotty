@@ -1,4 +1,4 @@
-# HarmoTTY contributor-agent instructions
+# LeanTTY contributor-agent instructions
 
 ## Foundational rules
 
@@ -14,7 +14,7 @@
 
 ## Platform scope
 
-HarmoTTY targets only a physical ARM64 HarmonyOS PC. Do not add or validate an
+LeanTTY targets only a physical ARM64 HarmonyOS PC. Do not add or validate an
 x86_64 emulator target unless the product scope is explicitly changed.
 
 ## PowerShell

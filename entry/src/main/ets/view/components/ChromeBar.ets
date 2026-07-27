@@ -110,7 +110,7 @@ export struct ChromeBar {
 
 @Component
 struct ChromeTab {
-  @Prop title: string = 'htty'
+  @Prop title: string = 'ltty'
   @Prop isActive: boolean = false
   @Prop sessionState: SshSessionState = SshSessionState.IDLE
   @Prop hasAttention: boolean = false

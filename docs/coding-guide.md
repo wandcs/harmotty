@@ -1,4 +1,4 @@
-# HarmoTTY coding guide
+# LeanTTY coding guide
 
 This guide describes the stable implementation boundaries and verification
 rules for the current ARM64 HarmonyOS PC product.
@@ -50,8 +50,8 @@ core state machine.
 | `entry/src/main/ets/` | ArkUI application, state and platform integration |
 | `entry/src/main/resources/` | HarmonyOS resources and ArkWeb terminal assets |
 | `entry/src/test/` | Trusted ArkTS logic tests |
-| `harmotty_ssh/` | napi-ohos binding and SSH transport |
-| `harmotty_ssh/harmotty-ssh-core/` | Host-testable pure Rust policies |
+| `leantty_ssh/` | napi-ohos binding and SSH transport |
+| `leantty_ssh/leantty-ssh-core/` | Host-testable pure Rust policies |
 | `tools/web-terminal/` | xterm source assembly and policy tests |
 | `tools/` | ARM64 build, deployment and verification scripts |
 | `docs/` | Product principles, current work and stable manuals |
@@ -78,7 +78,7 @@ not source and must remain untracked.
 - Keep transport concerns below the N-API boundary.
 - Never log passwords, passphrases, private keys or unredacted host material.
 - Preserve deterministic cancellation and disconnect behavior.
-- Keep pure policy in `harmotty-ssh-core` when it can be tested without
+- Keep pure policy in `leantty-ssh-core` when it can be tested without
   HarmonyOS or N-API.
 - Run formatting on the whole workspace and clippy/tests on the pure core.
 
@@ -88,11 +88,16 @@ Public checks:
 
 ```powershell
 .\tools\check-public-source.ps1
-cargo fmt --check --manifest-path .\harmotty_ssh\Cargo.toml
-cargo clippy --locked --manifest-path .\harmotty_ssh\Cargo.toml -p harmotty-ssh-core --all-targets -- -D warnings
-cargo test --locked --manifest-path .\harmotty_ssh\Cargo.toml -p harmotty-ssh-core
+cargo fmt --check --manifest-path .\leantty_ssh\Cargo.toml
+cargo clippy --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
+cargo test --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core
 node .\tools\web-terminal\test-terminal-policy.mjs
 ```
+
+The pinned Rust channel is Windows-specific. On a Windows host without MinGW
+GCC, run the pure-core test from a WSL shell at the mounted checkout with
+`cargo +stable test`; keep OHOS N-API and HAP verification on the Windows
+DevEco toolchain.
 
 Maintainer application gate:
 

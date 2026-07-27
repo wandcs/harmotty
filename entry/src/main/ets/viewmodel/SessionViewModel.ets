@@ -126,11 +126,11 @@ export class SessionViewModel {
   }
 
   writePrompt(): void {
-    this.writeTerminal('\u001b[0m\r\nhtty> ')
+    this.writeTerminal('\u001b[0m\r\nltty> ')
   }
 
   writeError(msg: string): void {
-    this.writeTerminal('\u001b[0m\r\n\u001b[31m' + msg + '\u001b[0m\r\nhtty> ')
+    this.writeTerminal('\u001b[0m\r\n\u001b[31m' + msg + '\u001b[0m\r\nltty> ')
   }
 
   async connect(host: string, port: number, username: string): Promise<void> {
@@ -350,7 +350,7 @@ export class SessionViewModel {
     for (let i = 0; i < data.length; i++) {
       let ch: string = data.charAt(i)
       if (ch === '\r' || ch === '\n') {
-        if (this.perfInputBuffer.startsWith('echo HTTY_PERF_PING_')) {
+        if (this.perfInputBuffer.startsWith('echo LTTY_PERF_PING_')) {
           this.perfPingId = this.perfInputBuffer.substring(5)
           this.perfPingStartedMs = Date.now()
           this.perfOutputTail = ''
@@ -627,17 +627,17 @@ export class SessionViewModel {
     let matches: string[] = this.commandBarVm.tryTabComplete()
     if (matches.length === 1) {
       let completed: string = this.commandBarVm.applyCompletion(matches[0])
-      this.writeTerminal('\r\u001b[Khtty> ' + completed)
+      this.writeTerminal('\r\u001b[Kltty> ' + completed)
       this.commandLine.setText(completed)
     } else if (matches.length > 1) {
-      this.writeTerminal('\r\n' + matches.join('  ') + '\r\nhtty> ' + this.commandLine.getText())
+      this.writeTerminal('\r\n' + matches.join('  ') + '\r\nltty> ' + this.commandLine.getText())
     }
   }
 
   private navigateHistory(direction: number): void {
     this.commandBarVm.setInputText(this.commandLine.getText())
     let newCmd: string = this.commandBarVm.navigateHistory(direction)
-    this.writeTerminal('\r\u001b[Khtty> ' + newCmd)
+    this.writeTerminal('\r\u001b[Kltty> ' + newCmd)
     this.commandLine.setText(newCmd)
   }
 
@@ -702,7 +702,7 @@ export class SessionViewModel {
   }
 
   static buildKeypushMarker(): string {
-    return '__HTTY_KEYPUSH_' + Date.now().toString()
+    return '__LTTY_KEYPUSH_' + Date.now().toString()
   }
 
   static buildKeypushShellCommand(publicKey: string, marker: string): string {
@@ -710,7 +710,7 @@ export class SessionViewModel {
     return "mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && " +
       "(grep -qxF -- '" + safeKey + "' ~/.ssh/authorized_keys || printf '%s\\n' '" + safeKey +
       "' >> ~/.ssh/authorized_keys); " +
-      "htty_status=$?; printf '\\n%s:%s\\n' '" + marker + "' \"$htty_status\"\n"
+      "command_status=$?; printf '\\n%s:%s\\n' '" + marker + "' \"$command_status\"\n"
   }
 
   private executeKeypushCommand(): void {
@@ -780,7 +780,7 @@ export class SessionViewModel {
     this.releaseDisconnectedFlowControl()
     if (status === 0) {
       this.writeTerminal('\r\nKey installed. Verify with: ssh ' + username + '@' + hostname +
-        ' -i ' + keyPath + '\r\nhtty> ')
+        ' -i ' + keyPath + '\r\nltty> ')
     } else if (status < 0) {
       this.writeError('Key installation timed out before the server confirmed completion.')
     } else {

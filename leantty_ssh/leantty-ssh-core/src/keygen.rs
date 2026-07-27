@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn uses_requested_name_and_refuses_overwrite() {
-        let dir = std::env::temp_dir().join(format!("harmotty-keygen-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("leantty-keygen-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let dir_text = dir.to_string_lossy().to_string();
 
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn inspects_generated_private_key() {
-        let dir = std::env::temp_dir().join(format!("harmotty-inspect-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("leantty-inspect-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let dir_text = dir.to_string_lossy().to_string();
         let generated =

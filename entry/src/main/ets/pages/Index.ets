@@ -2,7 +2,7 @@ import { AppViewModel } from '../viewmodel/AppViewModel'
 import { PaneInfo, TabInfo } from '../common/types/TerminalTypes'
 import { SessionViewModel, TerminalMode } from '../viewmodel/SessionViewModel'
 import { SshSessionState } from '../common/types/TerminalTypes'
-import { ThemeManager, HarmottyTheme } from '../view/theme/ThemeManager'
+import { ThemeManager, AppTheme } from '../view/theme/ThemeManager'
 import { ChromeColors } from '../view/theme/ThemeConstants'
 import { Logger } from '../common/logger/Logger'
 import { ChromeBar } from '../view/components/ChromeBar'
@@ -67,7 +67,7 @@ struct Index {
 
   aboutToAppear(): void {
     this.fontSize = InteractionPolicy.clampFontSize(this.fontSize)
-    let tab: TabInfo = this.appVm.addTab('htty')
+    let tab: TabInfo = this.appVm.addTab('ltty')
     this.addPaneRuntime(tab.panes[0])
     this.syncWorkspace()
     this.applyTheme()
@@ -309,7 +309,7 @@ struct Index {
   }
 
   private applyTheme(): void {
-    let theme: HarmottyTheme = ThemeManager.getInstance().getTheme()
+    let theme: AppTheme = ThemeManager.getInstance().getTheme()
     this.chromeColors = theme.chrome
     this.terminalBg = theme.background()
     let themeJson: string = theme.terminal.toJsInitObject()
@@ -326,7 +326,7 @@ struct Index {
     if (this.appVm.getTabs().length > 0) {
       this.deactivateActiveTab('')
     }
-    let tab: TabInfo = this.appVm.addTab('htty')
+    let tab: TabInfo = this.appVm.addTab('ltty')
     this.addPaneRuntime(tab.panes[0])
     this.syncWorkspace()
     this.restoreActivePaneFocus()

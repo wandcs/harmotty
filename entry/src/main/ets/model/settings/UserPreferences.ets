@@ -4,7 +4,7 @@ import { Logger } from '../../common/logger/Logger'
 import { InteractionPolicy } from '../ui/InteractionPolicy'
 
 const logger: Logger = new Logger('UserPreferences')
-const PREFERENCES_NAME: string = 'harmotty_settings'
+const PREFERENCES_NAME: string = 'leantty_settings'
 const TERMINAL_FONT_SIZE_KEY: string = 'terminal_font_size'
 
 export class UserPreferences {

@@ -17,7 +17,7 @@ const HELP_TEXT: string =
   '  ssh-keygen -y|-l -f identity             Show public key or fingerprint\r\n' +
   '  ssh-copy-id -i name [-p port] user@host   Install a public key\r\n' +
   '\r\n' +
-  'HarmoTTY key store\r\n' +
+  'LeanTTY key store\r\n' +
   '  key list                                  List verified key pairs\r\n' +
   '  key import <path> [name]                  Import and verify a private key\r\n' +
   '  key rm <name>                             Delete a verified key pair\r\n' +
@@ -30,19 +30,19 @@ const HELP_TEXT: string =
   '\r\n' +
   '  help [command], <command> --help, ?        Show help\r\n' +
   '  exit                                      Close this pane\r\n' +
-  'htty> '
+  'ltty> '
 
 const SSH_HELP: string = '\r\nUsage: ssh [-p port] [-i identity] user@host\r\n' +
-  '       ssh [-p port] [-i identity] <host>\r\n\r\nHost settings come from ~/.ssh/config; command options take precedence.\r\nhtty> '
+  '       ssh [-p port] [-i identity] <host>\r\n\r\nHost settings come from ~/.ssh/config; command options take precedence.\r\nltty> '
 const KEYGEN_HELP: string = '\r\nUsage: ssh-keygen -t ed25519|rsa [-f name] [-C comment]\r\n' +
   '       ssh-keygen -y -f identity\r\n       ssh-keygen -l -f identity[.pub]\r\n\r\n' +
-  'Creates or inspects keys in HarmoTTY ~/.ssh.\r\nhtty> '
+  'Creates or inspects keys in LeanTTY ~/.ssh.\r\nltty> '
 const COPY_ID_HELP: string = '\r\nUsage: ssh-copy-id -i name [-p port] user@host\r\n\r\n' +
-  'Installs the public key once; an existing identical line is not duplicated.\r\nhtty> '
+  'Installs the public key once; an existing identical line is not duplicated.\r\nltty> '
 const KEY_HELP: string = '\r\nUsage: key list | key import <path> [name] | key rm <name>\r\n\r\n' +
-  'Only verified private/public key pairs are listed or removable.\r\nhtty> '
+  'Only verified private/public key pairs are listed or removable.\r\nltty> '
 const HOST_HELP: string = '\r\nUsage: host add|set <name> user@host[:port]\r\n' +
-  '       host rm <name>\r\n       host list\r\n\r\nLegacy alias commands remain temporarily supported.\r\nhtty> '
+  '       host rm <name>\r\n       host list\r\n\r\nLegacy alias commands remain temporarily supported.\r\nltty> '
 
 export interface KeyCommandContext {
   context: common.Context
@@ -90,7 +90,7 @@ export class KeyCommandService {
   private static executeKeys(ctx: KeyCommandContext): void {
     let keys: KeyPairInfo[] = SshKeyManager.listKeys(ctx.context)
     if (keys.length === 0) {
-      ctx.writeOutput('\r\nNo keys found. Use ssh-keygen to create one.\r\nhtty> ')
+      ctx.writeOutput('\r\nNo keys found. Use ssh-keygen to create one.\r\nltty> ')
       return
     }
     ctx.writeOutput('\r\n  NAME          TYPE      FINGERPRINT\r\n')
@@ -100,7 +100,7 @@ export class KeyCommandService {
       let algo: string = keys[i].algorithm === 0 ? 'ed25519' : 'rsa'
       ctx.writeOutput('  ' + name.padEnd(14, ' ') + algo.padEnd(10, ' ') + keys[i].fingerprint + '\r\n')
     }
-    ctx.writeOutput('htty> ')
+    ctx.writeOutput('ltty> ')
   }
 
   private static async executeKeygen(result: KeyCommandResult, ctx: KeyCommandContext): Promise<void> {
@@ -111,7 +111,7 @@ export class KeyCommandService {
       ctx.writeOutput('\r\nGenerated: ' + name + '\r\n')
       ctx.writeOutput('Fingerprint: ' + genResult.privateKey.fingerprint + '\r\n')
       ctx.writeOutput('Public key:\r\n' + genResult.privateKey.publicKeyText + '\r\n')
-      ctx.writeOutput('Use "key list" to view stored key fingerprints.\r\nhtty> ')
+      ctx.writeOutput('Use "key list" to view stored key fingerprints.\r\nltty> ')
       logger.info('Key generated: ' + genResult.privateKey.fingerprint)
     } catch (e) {
       ctx.writeError('Key generation failed: ' + e)
@@ -123,7 +123,7 @@ export class KeyCommandService {
       let key: KeyPairInfo = await SshKeyManager.importKey(ctx.context, result.sourcePath, result.keyName)
       ctx.writeOutput('\r\nImported: ' + key.filePath + '\r\n')
       ctx.writeOutput('Fingerprint: ' + key.fingerprint + '\r\n')
-      ctx.writeOutput('htty> ')
+      ctx.writeOutput('ltty> ')
     } catch (e) {
       ctx.writeError('Key import failed: ' + e)
     }
@@ -142,7 +142,7 @@ export class KeyCommandService {
     if (pubText.length === 0) {
       pubText = SshKeyManager.readPublicKeyText(ctx.context, result.keyName)
     }
-    ctx.writeOutput('\r\n' + pubText + '\r\nhtty> ')
+    ctx.writeOutput('\r\n' + pubText + '\r\nltty> ')
   }
 
   private static executeKeyinfo(result: KeyCommandResult, ctx: KeyCommandContext): void {
@@ -153,7 +153,7 @@ export class KeyCommandService {
     }
     let name: string = KeyCommandService.fileName(key.filePath)
     let algo: string = key.algorithm === 0 ? 'ED25519' : 'RSA'
-    ctx.writeOutput('\r\n' + key.fingerprint + ' ' + name + ' (' + algo + ')\r\nhtty> ')
+    ctx.writeOutput('\r\n' + key.fingerprint + ' ' + name + ' (' + algo + ')\r\nltty> ')
   }
 
   private static executeKeyrm(result: KeyCommandResult, ctx: KeyCommandContext): void {
@@ -165,8 +165,8 @@ export class KeyCommandService {
     let keyName: string = result.keyName
     ctx.confirmKeyDelete(keyName, key.fingerprint, () => {
       SshKeyManager.deleteKey(ctx.context, keyName)
-      ctx.writeOutput('\r\nDeleted: ' + keyName + '\r\nhtty> ')
-    }, () => { ctx.writeOutput('htty> ') })
+      ctx.writeOutput('\r\nDeleted: ' + keyName + '\r\nltty> ')
+    }, () => { ctx.writeOutput('ltty> ') })
   }
 
   private static executeAliasAdd(result: KeyCommandResult, ctx: KeyCommandContext): void {
@@ -193,7 +193,7 @@ export class KeyCommandService {
     config.saveConfig(ctx.context)
     let info: string = result.keyName + ' -> ' + result.sshUser + '@' + result.sshHost
     if (result.sshPort !== 22) { info += ':' + result.sshPort.toString() }
-    ctx.writeOutput('\r\nHost ' + (updated ? 'updated: ' : 'added: ') + info + '\r\nhtty> ')
+    ctx.writeOutput('\r\nHost ' + (updated ? 'updated: ' : 'added: ') + info + '\r\nltty> ')
     logger.info('Host added: ' + info)
   }
 
@@ -204,14 +204,14 @@ export class KeyCommandService {
     if (host.user.length > 0) { ctx.writeOutput('user ' + host.user + '\r\n') }
     ctx.writeOutput('port ' + host.port.toString() + '\r\n')
     if (host.identityFile.length > 0) { ctx.writeOutput('identityfile ' + host.identityFile + '\r\n') }
-    ctx.writeOutput('htty> ')
+    ctx.writeOutput('ltty> ')
   }
 
   private static executeAliasRm(result: KeyCommandResult, ctx: KeyCommandContext): void {
     let config: SshConfig = ctx.sshConfig
     if (config.removeAlias(result.keyName)) {
       config.saveConfig(ctx.context)
-      ctx.writeOutput('\r\nHost removed: ' + result.keyName + '\r\nhtty> ')
+      ctx.writeOutput('\r\nHost removed: ' + result.keyName + '\r\nltty> ')
     } else {
       ctx.writeError('Host not found: ' + result.keyName)
     }
@@ -220,7 +220,7 @@ export class KeyCommandService {
   private static executeAliasList(ctx: KeyCommandContext): void {
     let hosts = ctx.sshConfig.getHosts()
     if (hosts.length === 0) {
-      ctx.writeOutput('\r\nNo hosts configured. Use host add to create one.\r\nhtty> ')
+      ctx.writeOutput('\r\nNo hosts configured. Use host add to create one.\r\nltty> ')
       return
     }
     ctx.writeOutput('\r\n  HOST        USER@HOST\r\n')
@@ -231,7 +231,7 @@ export class KeyCommandService {
       if (h.port !== 22) { target += ':' + h.port.toString() }
       ctx.writeOutput('  ' + h.alias.padEnd(12, ' ') + target + '\r\n')
     }
-    ctx.writeOutput('htty> ')
+    ctx.writeOutput('ltty> ')
   }
 
   static executeKeypush(result: KeyCommandResult, ctx: KeyCommandContext): void {

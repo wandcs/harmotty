@@ -30,7 +30,7 @@ export struct TerminalPane {
         src: $rawfile('terminal.html'),
         controller: this.webCtrl,
         renderMode: RenderMode.ASYNC_RENDER,
-        sharedRenderProcessToken: 'harmotty-terminal'
+        sharedRenderProcessToken: 'leantty-terminal'
       })
         .width('100%')
         .height('100%')

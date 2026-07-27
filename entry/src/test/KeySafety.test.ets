@@ -5,7 +5,7 @@ export default function keySafetyTest() {
   describe('KeySafety', () => {
     it('rejectsSshControlFilesAsKeyNames', 0, () => {
       expect(SshKeyManager.validateKeyName('config') !== null).assertEqual(true)
-      expect(SshKeyManager.validateKeyName('config.harmotty.bak') !== null).assertEqual(true)
+      expect(SshKeyManager.validateKeyName('config.leantty.bak') !== null).assertEqual(true)
       expect(SshKeyManager.validateKeyName('known_hosts') !== null).assertEqual(true)
       expect(SshKeyManager.validateKeyName('known_hosts.old') !== null).assertEqual(true)
       expect(SshKeyManager.validateKeyName('authorized_keys') !== null).assertEqual(true)

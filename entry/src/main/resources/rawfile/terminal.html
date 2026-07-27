@@ -104,9 +104,9 @@
     var perfParsedAt = 0;
     var perfAwaitingPaint = false;
     var perfPaintFrameScheduled = false;
-    var bellAttentionGate = HarmoTTYTerminalPolicy.createBellAttentionGate();
+    var bellAttentionGate = LeanTTYTerminalPolicy.createBellAttentionGate();
     var acceleratedWheelDispatch = false;
-    var alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
+    var alternateWheelState = LeanTTYTerminalPolicy.createWheelState();
     var alternateWheelFrameScheduled = false;
     var lastAlternateWheelEvent = null;
     var hoveredLinkUrl = '';
@@ -187,7 +187,7 @@
     }
 
     function refreshLinkVisualState() {
-      var linkModifierActive = HarmoTTYTerminalPolicy.isLinkModifierActive({
+      var linkModifierActive = LeanTTYTerminalPolicy.isLinkModifierActive({
         ctrlKey: linkModifierState.ctrlKey,
         altKey: linkModifierState.altKey,
         shiftKey: linkModifierState.shiftKey,
@@ -223,7 +223,7 @@
     function beginLinkClick(event) {
       pendingLinkClick = null;
       if (hoveredLinkUrl.length === 0 ||
-          !HarmoTTYTerminalPolicy.isLinkModifierActive(event, currentMouseTrackingMode()) ||
+          !LeanTTYTerminalPolicy.isLinkModifierActive(event, currentMouseTrackingMode()) ||
           event.button !== 0) {
         return;
       }
@@ -247,7 +247,7 @@
     function activateTerminalLink(event, url) {
       var sameLink = pendingLinkClick !== null && pendingLinkClick.url === url;
       var dragged = pendingLinkClick !== null && pendingLinkClick.dragged;
-      if (HarmoTTYTerminalPolicy.shouldActivateLink(
+      if (LeanTTYTerminalPolicy.shouldActivateLink(
         event, currentMouseTrackingMode(), sameLink, dragged)) {
         event.preventDefault();
         sendBridgeControl('openUrl', url);
@@ -428,7 +428,7 @@
         10
       );
       var gridHeight = screenElement.getBoundingClientRect().height;
-      var centeredTopPadding = HarmoTTYTerminalPolicy.centerGridLeadingPadding(
+      var centeredTopPadding = LeanTTYTerminalPolicy.centerGridLeadingPadding(
         TERMINAL_BASE_PADDING_TOP,
         TERMINAL_BASE_PADDING_BOTTOM,
         containerHeight,
@@ -516,11 +516,11 @@
     function pumpAlternateWheelFrame() {
       alternateWheelFrameScheduled = false;
       if (!term || term.buffer.active.type !== 'alternate' || term.hasSelection()) {
-        alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
+        alternateWheelState = LeanTTYTerminalPolicy.createWheelState();
         return;
       }
-      emitAlternateWheelSteps(HarmoTTYTerminalPolicy.consumeWheelFrame(alternateWheelState, term.rows));
-      if (HarmoTTYTerminalPolicy.hasPendingWheelSteps(alternateWheelState)) {
+      emitAlternateWheelSteps(LeanTTYTerminalPolicy.consumeWheelFrame(alternateWheelState, term.rows));
+      if (LeanTTYTerminalPolicy.hasPendingWheelSteps(alternateWheelState)) {
         scheduleAlternateWheelFrame();
       }
     }
@@ -528,12 +528,12 @@
     function handleAlternateWheel(event) {
       if (acceleratedWheelDispatch || !term) return;
       if (term.buffer.active.type !== 'alternate' || term.hasSelection()) {
-        alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
+        alternateWheelState = LeanTTYTerminalPolicy.createWheelState();
         return;
       }
       var rowsElement = document.querySelector('.xterm-rows');
       var cellHeight = rowsElement && term.rows > 0 ? rowsElement.getBoundingClientRect().height / term.rows : 16;
-      HarmoTTYTerminalPolicy.enqueueWheel(alternateWheelState, event.deltaY, event.deltaMode,
+      LeanTTYTerminalPolicy.enqueueWheel(alternateWheelState, event.deltaY, event.deltaMode,
         cellHeight, term.rows, event.timeStamp);
       lastAlternateWheelEvent = {
         clientX: event.clientX,
@@ -615,7 +615,7 @@
       }
 
       term.parser.registerOscHandler(52, function(payload) {
-        var decoded = HarmoTTYTerminalPolicy.decodeOsc52(payload);
+        var decoded = LeanTTYTerminalPolicy.decodeOsc52(payload);
         if (decoded.accepted) {
           sendBridgeControl('clipboardWrite', decoded.text);
         }
@@ -651,7 +651,7 @@
       });
 
       term.onTitleChange(function(title) {
-        if (title.indexOf('HTTY_PERF_BEGIN__:') === 0) {
+        if (title.indexOf('LTTY_PERF_BEGIN__:') === 0) {
           var beginParts = title.split(':');
           if (beginParts.length === 3) {
             perfActive = true;
@@ -665,7 +665,7 @@
           }
           return;
         }
-        if (title === 'HTTY_PERF_END__:' + perfCaseId) {
+        if (title === 'LTTY_PERF_END__:' + perfCaseId) {
           perfParsedAt = performance.now();
           perfAwaitingPaint = true;
           term.refresh(0, term.rows - 1);
@@ -709,10 +709,10 @@
       var terminalBytes = terminalPacket.bytes;
       if (perfActive) {
         var perfText = new TextDecoder('utf-8').decode(terminalBytes);
-        var endSequence = '\x1b]0;HTTY_PERF_END__:' + perfCaseId;
+        var endSequence = '\x1b]0;LTTY_PERF_END__:' + perfCaseId;
         var endOffset = perfText.indexOf(endSequence);
         var perfPayload = endOffset >= 0 ? perfText.substring(0, endOffset) : perfText;
-        perfReceivedBytes += HarmoTTYTerminalPolicy.countPerfPayloadBytes(perfPayload);
+        perfReceivedBytes += LeanTTYTerminalPolicy.countPerfPayloadBytes(perfPayload);
       }
       term.write(terminalBytes, function() {
         sendBridgeControl('writeAck',
@@ -775,7 +775,7 @@
               break;
             case 'secondaryAction':
               if (message.channel !== BRIDGE_CONTROL) break;
-              harmottySecondaryAction();
+              handleSecondaryAction();
               break;
             case 'copySelection':
               if (message.channel !== BRIDGE_CONTROL) break;
@@ -804,7 +804,7 @@
       return false;
     }
 
-    function harmottySecondaryAction() {
+    function handleSecondaryAction() {
       if (copyTerminalSelection()) return;
       pasteFromSystemClipboard();
     }

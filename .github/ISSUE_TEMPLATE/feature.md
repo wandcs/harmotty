@@ -19,7 +19,7 @@ that it is more than a hypothetical convenience?
 ## Existing alternatives
 
 Can OpenSSH configuration, HarmonyOS, the remote shell or another existing
-HarmoTTY path solve it?
+LeanTTY path solve it?
 
 ## Smallest solution
 

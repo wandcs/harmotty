@@ -51,7 +51,7 @@ export class AppViewModel {
     if (tabIndex < 0 || this.tabs[tabIndex].panes.length >= 2) {
       return null
     }
-    let pane: PaneInfo = this.createPane('htty')
+    let pane: PaneInfo = this.createPane('ltty')
     this.tabs[tabIndex].panes = this.tabs[tabIndex].panes.concat([pane])
     this.tabs[tabIndex].activePaneId = pane.id
     this.tabs = this.tabs.slice()

@@ -1,4 +1,4 @@
-title = "HarmoTTY gitleaks configuration"
+title = "LeanTTY gitleaks configuration"
 
 [extend]
 useDefault = true

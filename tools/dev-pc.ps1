@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Incrementally build, install, and launch HarmoTTY on a HarmonyOS PC.
+  Incrementally build, install, and launch LeanTTY on a HarmonyOS PC.
 .DESCRIPTION
   This is the default high-frequency development command. It builds only the
   ARM64 debug target, uses the locally configured test signature, replaces the
@@ -42,8 +42,8 @@ if ($RequireUsb -and $transport -ne 'usb') {
     throw "Target $Target uses $transport, not USB."
 }
 
-$probe = Invoke-HdcShell -Hdc $hdc -Target $Target -Command 'echo HARMOTTY_PC_READY'
-if ($probe -notmatch 'HARMOTTY_PC_READY') { throw "HarmonyOS PC is not reachable: $Target" }
+$probe = Invoke-HdcShell -Hdc $hdc -Target $Target -Command 'echo LEANTTY_PC_READY'
+if ($probe -notmatch 'LEANTTY_PC_READY') { throw "HarmonyOS PC is not reachable: $Target" }
 $model = (Invoke-HdcShell $hdc $Target 'param get const.product.model').Trim()
 $abi = (Invoke-HdcShell $hdc $Target 'param get const.product.cpu.abilist').Trim()
 if ($abi -notmatch 'arm64-v8a') { throw "Target $Target is not an ARM64 HarmonyOS PC: $abi" }
@@ -74,15 +74,15 @@ if ($LASTEXITCODE -ne 0 -or $installOutput -match '(?i)\[Fail\]|error') {
 Write-Host 'INSTALL SUCCESS' -ForegroundColor Green
 
 if (-not $NoLaunch) {
-    $launchOutput = Invoke-HdcShell $hdc $Target 'aa start -a EntryAbility -b com.harmotty.app'
+    $launchOutput = Invoke-HdcShell $hdc $Target 'aa start -a EntryAbility -b com.leantty.app'
     if ($launchOutput -match '(?i)\[Fail\]|error') { throw "App launch failed: $launchOutput" }
     Start-Sleep -Milliseconds 800
-    $appPid = (Invoke-HdcShell $hdc $Target 'pidof com.harmotty.app').Trim()
-    if ([string]::IsNullOrWhiteSpace($appPid)) { throw 'HarmoTTY process did not start' }
-    Write-Host "HarmoTTY started. PID=$appPid" -ForegroundColor Green
+    $appPid = (Invoke-HdcShell $hdc $Target 'pidof com.leantty.app').Trim()
+    if ([string]::IsNullOrWhiteSpace($appPid)) { throw 'LeanTTY process did not start' }
+    Write-Host "LeanTTY started. PID=$appPid" -ForegroundColor Green
 }
 
 if ($FollowLogs) {
-    Write-Host 'Following HarmoTTY logs. Press Ctrl+C to stop.' -ForegroundColor Cyan
-    & $hdc -t $Target hilog | Select-String 'HarmoTTY|HTTY_SSH|EntryAbility'
+    Write-Host 'Following LeanTTY logs. Press Ctrl+C to stop.' -ForegroundColor Cyan
+    & $hdc -t $Target hilog | Select-String 'LeanTTY|LTTY_SSH|EntryAbility'
 }

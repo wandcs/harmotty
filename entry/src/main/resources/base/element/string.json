@@ -2,7 +2,7 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "HarmoTTY entry module"
+      "value": "LeanTTY entry module"
     },
     {
       "name": "EntryAbility_desc",
@@ -10,7 +10,7 @@
     },
     {
       "name": "EntryAbility_label",
-      "value": "HarmoTTY"
+      "value": "LeanTTY"
     },
     {
       "name": "read_pasteboard_reason",

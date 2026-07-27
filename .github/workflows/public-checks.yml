@@ -57,8 +57,8 @@ jobs:
       - name: Install Rust components
         run: rustup component add rustfmt clippy
       - name: Check formatting
-        run: cargo fmt --manifest-path harmotty_ssh/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path leantty_ssh/Cargo.toml --all -- --check
       - name: Lint pure core
-        run: cargo clippy --locked --manifest-path harmotty_ssh/Cargo.toml -p harmotty-ssh-core --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path leantty_ssh/Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
       - name: Test pure core
-        run: cargo test --locked --manifest-path harmotty_ssh/Cargo.toml -p harmotty-ssh-core
+        run: cargo test --locked --manifest-path leantty_ssh/Cargo.toml -p leantty-ssh-core

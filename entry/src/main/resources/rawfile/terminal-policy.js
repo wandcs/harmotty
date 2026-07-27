@@ -174,7 +174,7 @@
       isLinkModifierActive(event, mouseTrackingMode);
   }
 
-  global.HarmoTTYTerminalPolicy = {
+  global.LeanTTYTerminalPolicy = {
     MAX_CLIPBOARD_BYTES: MAX_CLIPBOARD_BYTES,
     MAX_CLIPBOARD_BASE64_LENGTH: MAX_CLIPBOARD_BASE64_LENGTH,
     decodeOsc52: decodeOsc52,

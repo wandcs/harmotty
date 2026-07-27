@@ -11,9 +11,12 @@
 
 ### Changed
 
+- Renamed the application from HarmoTTY to LeanTTY and replaced the application
+  identity, icon, bundle name, package names, local prompt and release artifact
+  names with the LeanTTY identity.
 - Removed the standalone Copy action from the tool menu while keeping the
   existing keyboard and selection-aware copy paths.
-- Made unknown commands at the disconnected `htty>` prompt point to both
+- Made unknown commands at the disconnected `ltty>` prompt point to both
   `help` and the direct `ssh user@host` path.
 
 ### Fixed
@@ -36,7 +39,11 @@
 
 ## [1.0.0] - 2026-07-26
 
-First stable release for ARM64 HarmonyOS PC.
+**AppGallery submission rejected; not published.**
+
+First stable submission candidate for ARM64 HarmonyOS PC. The application
+package and signed `v1.0.0` tag remain immutable rejection evidence; no user
+received this version.
 
 ### Security
 - SSH host key verification against known_hosts

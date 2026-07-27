@@ -1,6 +1,6 @@
-# Contributing to HarmoTTY
+# Contributing to LeanTTY
 
-Thank you for helping improve HarmoTTY. The project accepts issues and pull
+Thank you for helping improve LeanTTY. The project accepts issues and pull
 requests, but keeps a deliberately narrow product scope.
 
 ## Before starting
@@ -21,7 +21,7 @@ maintenance cost without clear evidence from the core product path.
 ## Development environment
 
 Windows with DevEco Studio is the supported application build environment.
-HarmoTTY currently targets ARM64 HarmonyOS PC only.
+LeanTTY currently targets ARM64 HarmonyOS PC only.
 
 Required tools:
 
@@ -35,12 +35,20 @@ Useful commands:
 ```powershell
 # Public checks that do not require DevEco or a device
 .\tools\check-public-source.ps1
-cargo fmt --check --manifest-path .\harmotty_ssh\Cargo.toml
-cargo test --locked --manifest-path .\harmotty_ssh\Cargo.toml -p harmotty-ssh-core
+cargo fmt --check --manifest-path .\leantty_ssh\Cargo.toml
+cargo test --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core
 node .\tools\web-terminal\test-terminal-policy.mjs
 
 # Full maintainer gate
 .\tools\verify-pc.ps1
+```
+
+The repository pins a Windows GNU Rust toolchain for the HarmonyOS build. If
+MinGW GCC is not installed on Windows, run the pure-core test from a WSL shell
+opened at the mounted checkout:
+
+```bash
+cargo +stable test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
 ```
 
 Public CI checks source policy, Rust core behavior and Web terminal policy.

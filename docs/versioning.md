@@ -1,6 +1,6 @@
 # Versioning Policy
 
-HarmoTTY uses `MAJOR.MINOR.PATCH`, with
+LeanTTY uses `MAJOR.MINOR.PATCH`, with
 [Semantic Versioning 2.0.0](https://semver.org/) as the baseline. Version
 levels describe compatibility and user-visible impact, not implementation
 effort or the number of changed files.
@@ -34,7 +34,7 @@ justify a PATCH release.
 
 ## Compatibility Contract
 
-For HarmoTTY, compatibility is evaluated against the user-facing and published
+For LeanTTY, compatibility is evaluated against the user-facing and published
 contract:
 
 - supported product and platform scope;
@@ -83,9 +83,9 @@ includes reliability, security, performance and compatibility corrections, as
 well as dependency updates made solely to correct such problems. A security
 fix that breaks the compatibility contract still requires a MAJOR release.
 
-Dependency upgrades are classified by their effect on HarmoTTY, not by the
+Dependency upgrades are classified by their effect on LeanTTY, not by the
 dependency's own version number. A major xterm or russh upgrade does not by
-itself require a HarmoTTY MAJOR release.
+itself require a LeanTTY MAJOR release.
 
 ## Pre-release Identifiers
 
@@ -103,9 +103,10 @@ Pre-release versions have lower precedence than the matching stable version.
 Build metadata such as `1.1.0-rc.1+sha.abcdef0` may identify a build, but it
 does not change version precedence.
 
-HarmoTTY published `1.0.0` directly without a public release-candidate version.
-This does not prevent later releases from using pre-release identifiers when
-they are useful.
+The former product identity submitted `1.0.0` directly to AppGallery without a public
+release-candidate version. The submission was rejected and never published to
+users. This does not prevent later releases from using pre-release identifiers
+when they are useful.
 
 ## Historical Development Versions
 
@@ -120,12 +121,17 @@ changes.
 | `0.4.0` | Tab system, themes, UI components |
 | `0.5.0` | Split pane, Toolbar, interaction stabilization |
 | `0.9.0` | Feature complete, stabilization |
-| `1.0.0` | First stable release |
+| `1.0.0` | First stable AppGallery submission; rejected and not published |
+
+Because `1.0.0` was never distributed, `1.0.1` may replace the application
+identity once without preserving the rejected Bundle, preferences or SSH file
+markers. This exception does not establish a general right to break
+compatibility after LeanTTY is published.
 
 ## Release Rules
 
 - A release package must be built from an exact commit already pushed to
-  `wandcs/harmotty`; local-only source is never a release input.
+  `wandcs/leantty`; local-only source is never a release input.
 - Any code, dependency, resource, version or packaging change requires a new
   pushed commit and a new clean build from the isolated release checkout.
 - Once a version is released, its source and artifacts must not be replaced.
@@ -136,7 +142,7 @@ changes.
 
 ## Development and Branch Workflow
 
-HarmoTTY uses a protected-main, short-lived-branch workflow. `main` is the
+LeanTTY uses a protected-main, short-lived-branch workflow. `main` is the
 single integration branch for the next planned stable release and should remain
 tested and releasable.
 
@@ -228,10 +234,10 @@ tagged version as `Released`.
 | Component | Config File | Current |
 |---|---|---|
 | App (HAP) | `AppScope/app.json5` | `1.0.1` |
-| Native crate | `harmotty_ssh/Cargo.toml` | `1.0.1` |
-| Core crate | `harmotty_ssh/harmotty-ssh-core/Cargo.toml` | `1.0.1` |
+| Native crate | `leantty_ssh/Cargo.toml` | `1.0.1` |
+| Core crate | `leantty_ssh/leantty-ssh-core/Cargo.toml` | `1.0.1` |
 | OHPM | `entry/oh-package.json5` | `1.0.1` |
-| Native OHPM | `entry/src/main/cpp/types/libharmotty_ssh/oh-package.json5` | `1.0.1` |
+| Native OHPM | `entry/src/main/cpp/types/libleantty_ssh/oh-package.json5` | `1.0.1` |
 | Root OHPM | `oh-package.json5` | `1.0.1` |
 | Release artifact default | `tools/build-all.ps1` | `1.0.1` |
 

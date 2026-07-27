@@ -14,7 +14,7 @@
 /build_log*.txt
 /build_logs/
 *.build-hash
-/entry/libs/arm64-v8a/libharmotty_ssh.so
+/entry/libs/arm64-v8a/libleantty_ssh.so
 build-manifest.json
 *.so.bak
 **/__pycache__/
