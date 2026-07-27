@@ -17,9 +17,9 @@
 | 文档 | 用途 |
 |---|---|
 | [`dev-environment.md`](dev-environment.md) | 工具链、SDK、依赖和目标环境 |
-| [`release-process.md`](release-process.md) | 发布构建、签名、manifest 和校验程序 |
+| [`release-process.md`](release-process.md) | 发布分支、构建、签名、提审、tag 和校验程序 |
 | [`open-source-publication.md`](open-source-publication.md) | 私有审计归档、干净公开基线和 GitHub 协作执行方案 |
-| [`versioning.md`](versioning.md) | 版本号规则与版本来源 |
+| [`versioning.md`](versioning.md) | 版本号、分支、Unreleased 和商店审核规则 |
 | [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | 静态资源、Rust 和 ArkTS 依赖声明 |
 
 `OFL-1.1.txt` 是字体许可证正文，`assets/icon.svg` 是图标源文件，必须保留。

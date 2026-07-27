@@ -36,6 +36,7 @@ export class BridgeProtocol {
   static readonly KIND_READY: string = 'ready'
   static readonly KIND_RESIZE: string = 'resize'
   static readonly KIND_BELL_ATTENTION: string = 'bellAttention'
+  static readonly KIND_ATTENTION_ACKNOWLEDGED: string = 'attentionAcknowledged'
   static readonly KIND_COPY_SELECTION: string = 'copySelection'
   static readonly KIND_CLIPBOARD_WRITE: string = 'clipboardWrite'
   static readonly KIND_WRITE_ACK: string = 'writeAck'
@@ -43,6 +44,8 @@ export class BridgeProtocol {
   static readonly KIND_CLIPBOARD_PASTE: string = 'clipboardPaste'
   static readonly KIND_PERF_RENDER: string = 'perfRender'
   static readonly KIND_RENDERER_STATE: string = 'rendererState'
+  static readonly KIND_OPEN_URL: string = 'openUrl'
+  static readonly MAX_URL_PAYLOAD_LENGTH: number = 4096
 
   static parse(raw: string): BridgeMessage | null {
     let versionEnd: number = raw.indexOf('|')
@@ -63,7 +66,12 @@ export class BridgeProtocol {
       return null
     }
     let payload: string = raw.substring(kindEnd + 1)
-    if (kind === BridgeProtocol.KIND_BELL_ATTENTION && payload.length > 0) {
+    if ((kind === BridgeProtocol.KIND_BELL_ATTENTION ||
+      kind === BridgeProtocol.KIND_ATTENTION_ACKNOWLEDGED) && payload.length > 0) {
+      return null
+    }
+    if (kind === BridgeProtocol.KIND_OPEN_URL &&
+      (payload.length === 0 || payload.length > BridgeProtocol.MAX_URL_PAYLOAD_LENGTH)) {
       return null
     }
     return new BridgeMessage(direction, channel, kind, payload)
@@ -165,12 +173,14 @@ export class BridgeProtocol {
     return kind === BridgeProtocol.KIND_READY ||
       kind === BridgeProtocol.KIND_RESIZE ||
       kind === BridgeProtocol.KIND_BELL_ATTENTION ||
+      kind === BridgeProtocol.KIND_ATTENTION_ACKNOWLEDGED ||
       kind === BridgeProtocol.KIND_COPY_SELECTION ||
       kind === BridgeProtocol.KIND_CLIPBOARD_WRITE ||
       kind === BridgeProtocol.KIND_WRITE_ACK ||
       kind === BridgeProtocol.KIND_PONG ||
       kind === BridgeProtocol.KIND_CLIPBOARD_PASTE ||
       kind === BridgeProtocol.KIND_PERF_RENDER ||
-      kind === BridgeProtocol.KIND_RENDERER_STATE
+      kind === BridgeProtocol.KIND_RENDERER_STATE ||
+      kind === BridgeProtocol.KIND_OPEN_URL
   }
 }

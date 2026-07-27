@@ -581,7 +581,7 @@ export class SessionViewModel {
     this.commandBarVm.addToHistory(cmd)
     let parsed: CommandParseResult | KeyCommandResult | null = CommandParser.parseInput(cmd, this.commandBarVm.getSshConfig())
     if (parsed === null) {
-      this.writeError('Unknown command. Type: ssh user@host')
+      this.writeError("Unknown command. Type 'help' for commands, or use: ssh user@host")
       return
     }
     if (parsed instanceof KeyCommandResult) {

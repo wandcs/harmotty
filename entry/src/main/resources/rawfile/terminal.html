@@ -9,7 +9,7 @@
     :root { --terminal-background: #1E1E2E; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; }
-    #terminal-container { width: 100%; height: 100%; }
+    #terminal-container { width: 100%; height: 100%; position: relative; }
     html, body,
     #terminal-container,
     #terminal-container > .xterm,
@@ -19,7 +19,7 @@
     #terminal-container > .xterm {
       width: 100%;
       height: 100%;
-      padding: 4px 6px;
+      padding: 4px 2px 4px 10px;
     }
     .xterm .xterm-scrollable-element > .scrollbar {
       background: transparent !important;
@@ -29,34 +29,64 @@
       border-radius: 4px;
       background-clip: content-box !important;
     }
+    #terminal-container:not(.link-modifier-active) > .xterm.xterm-cursor-pointer {
+      cursor: text;
+    }
+    #terminal-container:not(.link-modifier-active) > .xterm.enable-mouse-events.xterm-cursor-pointer {
+      cursor: default;
+    }
+    #link-preview {
+      display: none;
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 20;
+      max-width: calc(100% - 24px);
+      padding: 4px 8px;
+      overflow: hidden;
+      color: #CDD6F4;
+      background: rgba(17, 17, 27, 0.94);
+      border: 1px solid rgba(205, 214, 244, 0.28);
+      border-radius: 4px;
+      font: 12px 'HarmonyOS Sans', sans-serif;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+    }
     @font-face {
-      font-family: 'JetBrains Mono Nerd Font';
-      src: url('JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
+      font-family: 'JetBrains Mono Nerd Font Mono';
+      src: url('JetBrainsMonoNerdFontMono-Regular.ttf') format('truetype');
       font-weight: 400;
       font-style: normal;
     }
     @font-face {
-      font-family: 'JetBrains Mono Nerd Font';
-      src: url('JetBrainsMonoNerdFont-Bold.ttf') format('truetype');
+      font-family: 'JetBrains Mono Nerd Font Mono';
+      src: url('JetBrainsMonoNerdFontMono-Bold.ttf') format('truetype');
       font-weight: 700;
       font-style: normal;
     }
   </style>
 </head>
 <body>
-  <div id="terminal-container"></div>
+  <div id="terminal-container">
+    <div id="link-preview" class="xterm-hover"></div>
+  </div>
 
   <script src="xterm.js"></script>
   <script src="addon-fit.js"></script>
+  <script src="addon-web-links.js"></script>
   <script src="addon-webgl.js"></script>
   <script src="terminal-policy.js"></script>
   <script>
     var TERMINAL_SCROLLBACK_LINES = 10000;
     var TERMINAL_SCROLLBAR_WIDTH = 8;
+    var TERMINAL_BASE_PADDING_TOP = 4;
+    var TERMINAL_BASE_PADDING_BOTTOM = 4;
     var nativePort = null;
     var term = null;
     var fitAddon = null;
     var webglAddon = null;
+    var webLinksAddon = null;
     var initialized = false;
     var requestedRenderer = 'webgl';
     var actualRenderer = 'dom';
@@ -79,6 +109,15 @@
     var alternateWheelState = HarmoTTYTerminalPolicy.createWheelState();
     var alternateWheelFrameScheduled = false;
     var lastAlternateWheelEvent = null;
+    var hoveredLinkUrl = '';
+    var linkModifierState = {
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false
+    };
+    var pendingLinkClick = null;
+    var LINK_DRAG_TOLERANCE_PIXELS = 4;
     var BRIDGE_VERSION = 'H2';
     var BRIDGE_NATIVE_TO_WEB = 'N2W';
     var BRIDGE_WEB_TO_NATIVE = 'W2N';
@@ -99,6 +138,121 @@
       if (nativePort) {
         nativePort.postMessage(serializeBridgeMessage(BRIDGE_WEB_TO_NATIVE, BRIDGE_CONTROL, kind, payload));
       }
+    }
+
+    function acknowledgeBellAttention() {
+      if (bellAttentionGate.acknowledge()) {
+        sendBridgeControl('attentionAcknowledged', '');
+      }
+    }
+
+    function currentMouseTrackingMode() {
+      return term ? term.modes.mouseTrackingMode : 'none';
+    }
+
+    function currentLinkDecorations() {
+      try {
+        var linkifier = term && term._core && term._core.linkifier;
+        var currentLink = linkifier && linkifier.currentLink;
+        return currentLink && currentLink.link ? currentLink.link.decorations : null;
+      } catch (ex) {
+        return null;
+      }
+    }
+
+    function updateLinkPreview(active) {
+      var preview = document.getElementById('link-preview');
+      if (!preview) return;
+      if (!active || hoveredLinkUrl.length === 0) {
+        preview.style.display = 'none';
+        preview.textContent = '';
+        return;
+      }
+      preview.textContent = hoveredLinkUrl;
+      preview.style.display = 'block';
+    }
+
+    function setCurrentLinkDecorations(linkModifierActive) {
+      var decorations = currentLinkDecorations();
+      if (decorations) {
+        decorations.underline = linkModifierActive;
+        decorations.pointerCursor = linkModifierActive;
+      }
+      var container = document.getElementById('terminal-container');
+      if (container) {
+        container.classList.toggle('link-modifier-active',
+          linkModifierActive && hoveredLinkUrl.length > 0);
+      }
+      updateLinkPreview(linkModifierActive);
+    }
+
+    function refreshLinkVisualState() {
+      var linkModifierActive = HarmoTTYTerminalPolicy.isLinkModifierActive({
+        ctrlKey: linkModifierState.ctrlKey,
+        altKey: linkModifierState.altKey,
+        shiftKey: linkModifierState.shiftKey,
+        metaKey: linkModifierState.metaKey
+      }, currentMouseTrackingMode());
+      setCurrentLinkDecorations(linkModifierActive);
+    }
+
+    function updateLinkModifierState(event) {
+      linkModifierState.ctrlKey = event.ctrlKey === true;
+      linkModifierState.altKey = event.altKey === true;
+      linkModifierState.shiftKey = event.shiftKey === true;
+      linkModifierState.metaKey = event.metaKey === true;
+    }
+
+    function handleLinkKeyEvent(event) {
+      updateLinkModifierState(event);
+      refreshLinkVisualState();
+    }
+
+    function handleLinkHover(event, url) {
+      hoveredLinkUrl = url;
+      updateLinkModifierState(event);
+      Promise.resolve().then(refreshLinkVisualState);
+    }
+
+    function handleLinkLeave() {
+      hoveredLinkUrl = '';
+      pendingLinkClick = null;
+      setCurrentLinkDecorations(false);
+    }
+
+    function beginLinkClick(event) {
+      pendingLinkClick = null;
+      if (hoveredLinkUrl.length === 0 ||
+          !HarmoTTYTerminalPolicy.isLinkModifierActive(event, currentMouseTrackingMode()) ||
+          event.button !== 0) {
+        return;
+      }
+      pendingLinkClick = {
+        url: hoveredLinkUrl,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        dragged: false
+      };
+    }
+
+    function trackLinkDrag(event) {
+      if (!pendingLinkClick || pendingLinkClick.dragged) return;
+      var deltaX = event.clientX - pendingLinkClick.clientX;
+      var deltaY = event.clientY - pendingLinkClick.clientY;
+      pendingLinkClick.dragged =
+        deltaX * deltaX + deltaY * deltaY >
+        LINK_DRAG_TOLERANCE_PIXELS * LINK_DRAG_TOLERANCE_PIXELS;
+    }
+
+    function activateTerminalLink(event, url) {
+      var sameLink = pendingLinkClick !== null && pendingLinkClick.url === url;
+      var dragged = pendingLinkClick !== null && pendingLinkClick.dragged;
+      if (HarmoTTYTerminalPolicy.shouldActivateLink(
+        event, currentMouseTrackingMode(), sameLink, dragged)) {
+        event.preventDefault();
+        sendBridgeControl('openUrl', url);
+      }
+      pendingLinkClick = null;
     }
 
     function parseBridgeMessage(raw) {
@@ -256,12 +410,40 @@
       }
     }
 
+    function fitAndCenterTerminalGrid() {
+      if (!fitAddon || !term) return;
+      var terminalElement = term.element;
+      if (!terminalElement || !terminalElement.parentElement) {
+        fitAddon.fit();
+        return;
+      }
+
+      terminalElement.style.paddingTop = TERMINAL_BASE_PADDING_TOP + 'px';
+      fitAddon.fit();
+
+      var screenElement = terminalElement.querySelector('.xterm-screen');
+      if (!screenElement) return;
+      var containerHeight = parseInt(
+        window.getComputedStyle(terminalElement.parentElement).height,
+        10
+      );
+      var gridHeight = screenElement.getBoundingClientRect().height;
+      var centeredTopPadding = HarmoTTYTerminalPolicy.centerGridLeadingPadding(
+        TERMINAL_BASE_PADDING_TOP,
+        TERMINAL_BASE_PADDING_BOTTOM,
+        containerHeight,
+        gridHeight
+      );
+      terminalElement.style.paddingTop = centeredTopPadding + 'px';
+      fitAddon.fit();
+    }
+
     function performResize() {
       resizeFrameScheduled = false;
       if (!fitAddon || !term) return;
       var force = resizeForcePending;
       resizeForcePending = false;
-      fitAddon.fit();
+      fitAndCenterTerminalGrid();
       var cols = term.cols;
       var rows = term.rows;
       if (nativePort && (force || cols !== lastReportedCols || rows !== lastReportedRows)) {
@@ -285,6 +467,7 @@
       }
       navigator.clipboard.readText().then(function(text) {
         if (text.length > 0 && term) {
+          acknowledgeBellAttention();
           term.paste(text);
         }
         sendBridgeControl('clipboardPaste', 'ok,' + text.length);
@@ -373,29 +556,63 @@
       term = new Terminal({
         theme: defaultTheme,
         fontSize: 14,
-        fontFamily: "'JetBrains Mono Nerd Font', 'HarmonyOS Sans Mono', monospace",
+        fontFamily: "'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace",
         cursorBlink: true,
         cursorStyle: 'bar',
         scrollback: TERMINAL_SCROLLBACK_LINES,
         overviewRuler: { width: TERMINAL_SCROLLBAR_WIDTH },
         scrollSensitivity: 2,
-        smoothScrollDuration: 0
+        smoothScrollDuration: 0,
+        linkHandler: {
+          activate: activateTerminalLink,
+          hover: handleLinkHover,
+          leave: handleLinkLeave,
+          allowNonHttpProtocols: false
+        }
       });
 
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
       var terminalContainer = document.getElementById('terminal-container');
       term.open(terminalContainer);
+      webLinksAddon = new WebLinksAddon.WebLinksAddon(activateTerminalLink, {
+        hover: handleLinkHover,
+        leave: handleLinkLeave
+      });
+      term.loadAddon(webLinksAddon);
       terminalContainer.addEventListener('wheel', handleAlternateWheel, true);
+      terminalContainer.addEventListener('mousedown', beginLinkClick, true);
+      terminalContainer.addEventListener('mousemove', trackLinkDrag, true);
+      terminalContainer.addEventListener('mouseup', function() {
+        pendingLinkClick = null;
+      });
+      window.addEventListener('keydown', handleLinkKeyEvent, true);
+      window.addEventListener('keyup', handleLinkKeyEvent, true);
+      window.addEventListener('blur', function() {
+        linkModifierState.ctrlKey = false;
+        linkModifierState.altKey = false;
+        linkModifierState.shiftKey = false;
+        linkModifierState.metaKey = false;
+        pendingLinkClick = null;
+        refreshLinkVisualState();
+      });
       activateDefaultRenderer();
-      fitAddon.fit();
+      fitAndCenterTerminalGrid();
 
       term.write('\x1b[?25h');
 
       term.onData(function(data) {
-        bellAttentionGate.clear();
         sendBridgeData('terminal', data);
       });
+
+      term.onKey(function() {
+        acknowledgeBellAttention();
+      });
+      if (term.textarea) {
+        term.textarea.addEventListener('compositionstart', acknowledgeBellAttention);
+        term.textarea.addEventListener('input', acknowledgeBellAttention, true);
+        term.textarea.addEventListener('paste', acknowledgeBellAttention);
+      }
 
       term.parser.registerOscHandler(52, function(payload) {
         var decoded = HarmoTTYTerminalPolicy.decodeOsc52(payload);
@@ -464,6 +681,7 @@
 
       term.onRender(function() {
         reportPerfAfterPaint();
+        refreshLinkVisualState();
       });
 
       window.addEventListener('resize', function() {
@@ -528,7 +746,7 @@
               break;
             case 'focus':
               if (message.channel !== BRIDGE_CONTROL) break;
-              bellAttentionGate.clear();
+              bellAttentionGate.rearmDelivery();
               if (term) { term.focus(); }
               break;
             case 'blur':

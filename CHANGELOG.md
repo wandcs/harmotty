@@ -2,15 +2,37 @@
 
 ## [Unreleased]
 
+## [1.0.1] - In development
+
 ### Security
 
 - Updated `russh` to 0.62.4 to address three remote panic conditions reported
   against earlier 0.62.x releases.
 
+### Changed
+
+- Removed the standalone Copy action from the tool menu while keeping the
+  existing keyboard and selection-aware copy paths.
+- Made unknown commands at the disconnected `htty>` prompt point to both
+  `help` and the direct `ssh user@host` path.
+
 ### Fixed
 
+- Let the top tab strip use all remaining title-bar width after window controls,
+  fixed actions and drag space instead of imposing a fixed viewport cap.
+- Cleared a pane's persistent bell-attention border when the user types or
+  pastes in that pane, without letting background output or automatic focus
+  restoration acknowledge it.
+- Kept embedded Nerd Font icons inside their terminal cells so prompt and icon
+  glyphs no longer overlap adjacent text.
 - Restored the complete pure-core UTF-8 burst test fixture so Linux public CI
   compiles and runs the test suite.
+- Balanced terminal insets around full-screen TUIs by offsetting the scrollbar
+  gutter and centering unused cell-grid height without reducing rows or columns.
+- Routed HTTP(S) and OSC 8 terminal links through the HarmonyOS system browser
+  with `Ctrl+Click` normally and `Ctrl+Shift+Click` while tmux or another TUI
+  owns mouse reporting, without stealing ordinary TUI mouse input or leaving
+  xterm in text-selection drag mode after the browser handoff.
 
 ## [1.0.0] - 2026-07-26
 

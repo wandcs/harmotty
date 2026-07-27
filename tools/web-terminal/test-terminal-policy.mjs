@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import './test-font-cell-width.mjs';
 import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 
 const policy = globalThis.HarmoTTYTerminalPolicy;
@@ -40,8 +41,12 @@ for (let bellIndex = 0; bellIndex < 61271; bellIndex++) {
 }
 assert.equal(bellAttentionCount, 1);
 assert.equal(bellAttention.isPending(), true);
-assert.equal(bellAttention.clear(), true);
-assert.equal(bellAttention.clear(), false);
+assert.equal(bellAttention.rearmDelivery(), true);
+assert.equal(bellAttention.isPending(), true);
+assert.equal(bellAttention.trigger(), true);
+assert.equal(bellAttention.acknowledge(), true);
+assert.equal(bellAttention.acknowledge(), false);
+assert.equal(bellAttention.isPending(), false);
 assert.equal(bellAttention.trigger(), true);
 
 assert.equal(policy.countPerfPayloadBytes('XXX'), 3);
@@ -84,11 +89,63 @@ const mouseWheel = policy.createWheelState();
 policy.enqueueWheel(mouseWheel, 3, 1, 16, 40, 0);
 assert.equal(policy.pendingWheelLines(mouseWheel), 3);
 
+assert.equal(policy.centerGridLeadingPadding(4, 4, 942, 926), 8);
+assert.equal(policy.centerGridLeadingPadding(4, 4, 934, 926), 4);
+assert.equal(policy.centerGridLeadingPadding(4, 4, 930, 926), 4);
+
+const exactCtrl = {
+  button: 0,
+  ctrlKey: true,
+  altKey: false,
+  shiftKey: false,
+  metaKey: false
+};
+const exactCtrlShift = {
+  ...exactCtrl,
+  shiftKey: true
+};
+assert.equal(policy.isLinkModifierActive(exactCtrl, 'none'), true);
+assert.equal(policy.isLinkModifierActive(exactCtrlShift, 'none'), false);
+assert.equal(policy.isLinkModifierActive({ ...exactCtrl, metaKey: true }, 'none'), false);
+assert.equal(policy.isLinkModifierActive(exactCtrlShift, 'sgr'), false,
+  'mouse encoding names must not be mistaken for xterm mouse tracking modes');
+for (const mouseTrackingMode of ['x10', 'vt200', 'drag', 'any']) {
+  assert.equal(policy.isLinkModifierActive(exactCtrl, mouseTrackingMode), false,
+    `Ctrl alone must remain owned by ${mouseTrackingMode} mouse reporting`);
+  assert.equal(policy.isLinkModifierActive(exactCtrlShift, mouseTrackingMode), true,
+    `Ctrl+Shift must activate links while Shift bypasses ${mouseTrackingMode} mouse reporting`);
+  assert.equal(policy.isLinkModifierActive(
+    { ...exactCtrlShift, altKey: true }, mouseTrackingMode), false);
+  assert.equal(policy.isLinkModifierActive(
+    { ...exactCtrlShift, metaKey: true }, mouseTrackingMode), false);
+  assert.equal(policy.shouldActivateLink(
+    exactCtrlShift, mouseTrackingMode, true, false), true);
+  assert.equal(policy.shouldActivateLink(
+    exactCtrlShift, mouseTrackingMode, true, true), false);
+}
+assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, false), true);
+assert.equal(policy.shouldActivateLink({ ...exactCtrl, button: 1 }, 'none', true, false), false);
+assert.equal(policy.shouldActivateLink(exactCtrl, 'none', false, false), false);
+assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, true), false);
+
 const terminalHtml = readFileSync(new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8');
+assert.match(terminalHtml,
+  /fontFamily:\s*"'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace"/,
+  'xterm must use the single-cell Nerd Font Mono variant before system fallbacks');
+assert.match(terminalHtml,
+  /url\('JetBrainsMonoNerdFontMono-Regular\.ttf'\)[\s\S]*url\('JetBrainsMonoNerdFontMono-Bold\.ttf'\)/,
+  'the embedded regular and bold faces must both use single-cell Nerd Font Mono assets');
+assert.doesNotMatch(terminalHtml, /JetBrainsMonoNerdFont-(?:Regular|Bold)\.ttf/,
+  'the double-width Nerd Font assets must not return to the terminal font face');
 assert.match(terminalHtml, /addEventListener\('wheel', handleAlternateWheel, true\)/,
   'alternate-buffer wheel handling must run during capture before xterm scrolls its inner viewport');
-assert.match(terminalHtml, /#terminal-container > \.xterm\s*\{[^}]*padding:\s*4px 6px;/s,
-  'terminal cells must keep compact vertical and horizontal padding from pane edges');
+assert.match(terminalHtml, /#terminal-container > \.xterm\s*\{[^}]*padding:\s*4px 2px 4px 10px;/s,
+  'terminal padding must offset the scrollbar gutter without changing the total horizontal inset');
+assert.match(terminalHtml, /function fitAndCenterTerminalGrid\(\)/,
+  'terminal fitting must redistribute unused cell-grid height instead of leaving it all below the grid');
+assert.match(terminalHtml,
+  /centerGridLeadingPadding\(\s*TERMINAL_BASE_PADDING_TOP,\s*TERMINAL_BASE_PADDING_BOTTOM,/s,
+  'terminal fitting must center rows with the tested layout policy');
 assert.match(terminalHtml, /var TERMINAL_SCROLLBAR_WIDTH = 8;/,
   'the auto-hiding scrollbar must reserve less than one default terminal cell');
 assert.match(terminalHtml, /overviewRuler:\s*\{\s*width:\s*TERMINAL_SCROLLBAR_WIDTH\s*\}/,
@@ -119,6 +176,21 @@ assert.doesNotMatch(terminalHtml, /releaseBuffers|term\.clear\(\)|term\.reset\(\
 assert.match(terminalHtml, /term\.onBell\s*\(/,
   'xterm must remain the semantic source for terminal bell events');
 assert.match(terminalHtml,
+  /term\.onKey\s*\(function\(\)\s*\{\s*acknowledgeBellAttention\(\);/s,
+  'the first real keyboard input after BEL must acknowledge the owning pane');
+assert.match(terminalHtml,
+  /term\.textarea\.addEventListener\('compositionstart', acknowledgeBellAttention\);[\s\S]*term\.textarea\.addEventListener\('input', acknowledgeBellAttention, true\);[\s\S]*term\.textarea\.addEventListener\('paste', acknowledgeBellAttention\);/s,
+  'IME composition, ArkWeb text input, and browser paste must acknowledge the owning pane');
+assert.match(terminalHtml,
+  /if \(text\.length > 0 && term\) \{\s*acknowledgeBellAttention\(\);\s*term\.paste\(text\);/s,
+  'a user paste after BEL must acknowledge the owning pane');
+assert.doesNotMatch(terminalHtml,
+  /term\.onData\s*\(function\(data\)\s*\{[^}]*acknowledgeBellAttention/s,
+  'terminal-generated query responses must not acknowledge pane attention');
+assert.match(terminalHtml,
+  /case 'focus':[\s\S]*?bellAttentionGate\.rearmDelivery\(\);[\s\S]*?term\.focus\(\);/s,
+  'programmatic focus must rearm BEL delivery without acknowledging pane attention');
+assert.match(terminalHtml,
   /term\.onBell\s*\(function\(\)\s*\{\s*if\s*\(bellAttentionGate\.trigger\(\)\)\s*\{\s*sendBridgeControl\('bellAttention', ''\)/s,
   'a BEL flood must cross the bridge only after the source-side attention gate accepts it');
 assert.doesNotMatch(terminalHtml, /term\.onBell\s*\(function\(\)\s*\{\s*sendBridgeControl\('bellAttention'/s,
@@ -127,6 +199,40 @@ assert.match(terminalHtml, /term\.onTitleChange\s*\(/,
   'the local performance-marker parser must continue to observe title sequences');
 assert.doesNotMatch(terminalHtml, /sendBridgeControl\('title'/,
   'ordinary remote title changes must not cross the bridge when the product does not consume them');
+assert.match(terminalHtml, /new WebLinksAddon\.WebLinksAddon\(/,
+  'plain HTTP(S) text must use the xterm web-links provider');
+assert.match(terminalHtml, /linkHandler:\s*\{[\s\S]*?activate:/,
+  'OSC 8 links must use the same native-system activation path as plain links');
+assert.match(terminalHtml,
+  /shouldActivateLink\([\s\S]*?currentMouseTrackingMode\(\)[\s\S]*?sendBridgeControl\('openUrl', url\)/s,
+  'URL activation must use the tested modifier policy, primary click, same link, and no drag');
+assert.match(terminalHtml,
+  /ctrlKey:\s*linkModifierState\.ctrlKey,[\s\S]*?shiftKey:\s*linkModifierState\.shiftKey/,
+  'stationary link feedback must retain both Ctrl and Shift state for mouse-reporting mode changes');
+const linkActivationBody = terminalHtml.match(
+  /function activateTerminalLink\(event, url\)\s*\{([\s\S]*?)\n    \}/
+);
+assert.ok(linkActivationBody, 'the shared terminal link activation callback must exist');
+assert.doesNotMatch(linkActivationBody[1], /event\.stopPropagation\(\)/,
+  'link mouseup must reach xterm document listeners so text-selection drag state is released');
+assert.match(terminalHtml, /setCurrentLinkDecorations\(linkModifierActive\)/,
+  'pressing or releasing required modifiers while stationary must update the hovered link immediately');
+assert.match(terminalHtml, /id="link-preview"/,
+  'modifier-hover must expose the real target of an OSC 8 link before opening it');
+assert.doesNotMatch(terminalHtml, /window\.open|location\.(?:href|assign|replace)/,
+  'the terminal page must never bypass the typed native browser bridge');
+
+const xtermJs = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/xterm.js', import.meta.url), 'utf8');
+assert.match(xtermJs,
+  /get currentLink\(\)[\s\S]*?Object\.defineProperties\([^)]*decorations[\s\S]*?pointerCursor[\s\S]*?underline/,
+  'the pinned xterm build must retain the decoration adapter used for modifier-only link feedback');
+assert.match(xtermJs,
+  /shouldForceSelection\(e\)\{return [^}]*:e\.shiftKey\}/,
+  'the pinned xterm build must retain Shift as the local mouse-reporting bypass');
+assert.match(xtermJs,
+  /areMouseEventsActive&&!this\._selectionService\.shouldForceSelection\(e\)/,
+  'xterm must test the Shift bypass before forwarding mouse events to tmux or another TUI');
 
 const terminalBridge = readFileSync(
   new URL('../../entry/src/main/ets/model/bridge/TerminalBridge.ets', import.meta.url), 'utf8');
@@ -155,6 +261,8 @@ assert.doesNotMatch(bridgeProtocol, /replay/i,
   'historical replay must not remain in the bridge protocol allowlist');
 assert.doesNotMatch(bridgeProtocol, /releaseBuffers|KIND_RELEASE_BUFFERS/,
   'disconnect cleanup must not expose a bridge command that clears a live terminal surface');
+assert.match(bridgeProtocol, /KIND_OPEN_URL:\s*string = 'openUrl'/,
+  'browser requests must cross the typed web-to-native control allowlist');
 
 const sessionViewModel = readFileSync(
   new URL('../../entry/src/main/ets/viewmodel/SessionViewModel.ets', import.meta.url), 'utf8');
@@ -163,12 +271,18 @@ assert.doesNotMatch(sessionViewModel, /KIND_BELL_ATTENTION|case BridgeProtocol\.
 assert.match(sessionViewModel,
   /private onSshClose[\s\S]*?releaseDisconnectedFlowControl\(\)[\s\S]*?writeTerminal\([\s\S]*?writePrompt\(\)/,
   'disconnect cleanup must release output flow control before appending the local close message and prompt');
+assert.match(sessionViewModel,
+  /if \(parsed === null\) \{\s*this\.writeError\("Unknown command\. Type 'help' for commands, or use: ssh user@host"\)/,
+  'unknown idle commands must point to both local help and the direct SSH path');
 
 const terminalSurfaceController = readFileSync(
   new URL('../../entry/src/main/ets/model/terminal/TerminalSurfaceController.ets', import.meta.url), 'utf8');
 assert.match(terminalSurfaceController,
   /msg\.kind === BridgeProtocol\.KIND_BELL_ATTENTION[\s\S]*onBellAttentionHandler/,
   'the terminal surface must consume bell attention before generic session message routing');
+assert.match(terminalSurfaceController,
+  /msg\.kind === BridgeProtocol\.KIND_OPEN_URL[\s\S]*onOpenUrlHandler/,
+  'the terminal surface must consume browser requests before generic SSH session routing');
 assert.doesNotMatch(terminalSurfaceController, /getHistoryChunks|queueReplay|replayedHistory/,
   'a new terminal surface must not receive already displayed terminal history');
 assert.match(terminalSurfaceController, /takeDetachedChunks/,
@@ -180,6 +294,22 @@ const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
 assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
   'normal disconnect and failure must keep the current terminal surface mounted');
+assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
+  'each terminal surface must route URL requests through its owning pane');
+assert.match(indexPage, /BrowserLauncher\.open\(/,
+  'the ArkUI shell must hand validated HTTP(S) links to the HarmonyOS system browser');
+assert.doesNotMatch(indexPage, /requestCopySelection|['"]Copy['"]/,
+  'the tool menu must not keep a standalone Copy action');
+assert.match(indexPage, /for \(let i = 0; i < 6; i\+\+\)/,
+  'keyboard menu selection must traverse the six remaining actions');
+assert.match(indexPage, /\(next \+ direction \+ 6\) % 6/,
+  'keyboard menu selection must wrap across the six remaining actions');
+assert.match(indexPage,
+  /selected === 3\) \{ this\.handleFontIncrease\(\)[\s\S]*selected === 4\) \{ this\.handleFontReset\(\)[\s\S]*selected === 5\) \{ this\.handleFontDecrease\(\)/,
+  'Enter dispatch must map the reindexed font actions in menu order');
+assert.match(indexPage,
+  /menuRow\(3, 'A⁺', 'Font Size \+'[\s\S]*menuRow\(4, 'Aa', 'Reset Font Size'[\s\S]*menuRow\(5, 'A⁻', 'Font Size -'/,
+  'the rendered menu must retain the three font actions at indices 3 through 5');
 
 const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');
@@ -198,5 +328,12 @@ const chromeBar = readFileSync(
   new URL('../../entry/src/main/ets/view/components/ChromeBar.ets', import.meta.url), 'utf8');
 assert.match(chromeBar, /tabRenderKey[\s\S]*tabNeedsAttention\(tab\)/,
   'the tab render key must change when nested pane attention changes');
+assert.match(chromeBar,
+  /\.constraintSize\(\{\s*maxWidth:\s*'calc\(100% - 172vp\)'\s*\}\)/,
+  'the tab strip must use parent layout space left after fixed controls and drag space');
+assert.doesNotMatch(chromeBar, /maxWidth:\s*'\d+%'/,
+  'the tab strip must not be capped at a fixed percentage of wide windows');
+assert.doesNotMatch(chromeBar, /chromeBarWidth|\.onAreaChange\(/,
+  'the tab strip must not create a self-measurement feedback loop');
 
 console.log('terminal policy tests passed');

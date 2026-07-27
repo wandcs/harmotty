@@ -12,6 +12,7 @@ import { common } from '@kit.AbilityKit'
 import { InteractionPolicy } from '../model/ui/InteractionPolicy'
 import { UserPreferences } from '../model/settings/UserPreferences'
 import { TerminalSurfaceController } from '../model/terminal/TerminalSurfaceController'
+import { BrowserLauncher } from '../model/browser/BrowserLauncher'
 
 const logger: Logger = new Logger('IndexPage')
 const WARM_TAB_RETENTION_MS: number = 30000
@@ -125,8 +126,8 @@ struct Index {
               onPaneKeyEvent: (event: KeyEvent) => {
                 return this.handleKeyEvent(event)
               },
-              onPaneFocus: () => {
-                this.focusPane(runtime.id)
+              onPaneFocus: (userInitiated: boolean) => {
+                this.focusPane(runtime.id, userInitiated)
               },
               onSecondaryClick: () => {
                 logger.info('Secondary click pane=' + runtime.id)
@@ -357,10 +358,16 @@ struct Index {
     }
     let runtime: PaneRuntime = new PaneRuntime(pane.id, vm)
     runtime.surface.setOnCopyResult((success: boolean) => {
-      this.showCopyFeedback(success ? 'Copied' : 'Copy failed')
+      this.showTransientFeedback(success ? 'Copied' : 'Copy failed')
     })
     runtime.surface.setOnBellAttention(() => {
       this.markPaneAttention(pane.id)
+    })
+    runtime.surface.setOnAttentionAcknowledged(() => {
+      this.clearPaneAttention(pane.id)
+    })
+    runtime.surface.setOnOpenUrl((url: string) => {
+      this.openUrlForPane(pane.id, runtime.generation, url)
     })
     this.paneRuntimes = this.paneRuntimes.concat([runtime])
   }
@@ -380,12 +387,15 @@ struct Index {
       return
     }
     if (index === this.activeTabIndex) {
+      this.appVm.clearPaneAttention(this.tabs[index].activePaneId)
+      this.syncWorkspace()
       this.restoreActivePaneFocus()
       return
     }
     let targetTabId: string = this.tabs[index].id
     this.deactivateActiveTab(targetTabId)
     this.appVm.setActiveTab(index)
+    this.appVm.clearPaneAttention(this.tabs[index].activePaneId)
     this.syncWorkspace()
     this.restoreActivePaneFocus()
   }
@@ -548,7 +558,6 @@ struct Index {
     if (event.type !== KeyType.Down) {
       return false
     }
-    this.clearActivePaneAttention()
     let ctrlKey: boolean = false
     let shiftKey: boolean = false
     if (event.getModifierKeyState) {
@@ -624,16 +633,16 @@ struct Index {
     this.syncWorkspace()
   }
 
-  private clearActivePaneAttention(): void {
-    let pane: PaneInfo | null = this.appVm.getActivePane()
+  private clearPaneAttention(paneId: string): void {
+    let pane: PaneInfo | null = this.appVm.getPane(paneId)
     if (pane === null || !pane.needsAttention) {
       return
     }
-    this.appVm.clearPaneAttention(pane.id)
+    this.appVm.clearPaneAttention(paneId)
     this.syncWorkspace()
   }
 
-  private showCopyFeedback(message: string): void {
+  private showTransientFeedback(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: message, duration: 1200 })
     } catch (e) {
@@ -641,10 +650,23 @@ struct Index {
     }
   }
 
-  private requestCopySelection(): void {
-    let runtime: PaneRuntime | null = this.activePaneRuntime()
-    if (runtime !== null) {
-      runtime.surface.requestCopySelection()
+  private async openUrlForPane(paneId: string, generation: number, url: string): Promise<void> {
+    let runtime: PaneRuntime | null = this.findPaneRuntime(paneId)
+    if (runtime === null || runtime.generation !== generation || !this.isPaneInActiveTab(paneId)) {
+      return
+    }
+    if (!this.isPaneFocused(paneId)) {
+      this.focusPane(paneId, true)
+    }
+    try {
+      let context = this.getUIContext().getHostContext() as common.UIAbilityContext
+      let opened: boolean = await BrowserLauncher.open(context, url)
+      if (!opened) {
+        this.showTransientFeedback('Unable to open link')
+      }
+    } catch (e) {
+      logger.warn('Open link failed')
+      this.showTransientFeedback('Unable to open link')
     }
   }
 
@@ -691,12 +713,15 @@ struct Index {
     this.activeTabIndex = this.appVm.getActiveTabIndex()
   }
 
-  private focusPane(paneId: string): void {
+  private focusPane(paneId: string, userInitiated: boolean): void {
     let tab: TabInfo | null = this.activeTab()
     if (tab === null) {
       return
     }
     this.appVm.setActivePane(tab.id, paneId)
+    if (userInitiated) {
+      this.appVm.clearPaneAttention(paneId)
+    }
     this.syncWorkspace()
     this.restoreActivePaneFocus()
   }
@@ -915,16 +940,15 @@ struct Index {
     if (selected === 0) { this.newTab(); return }
     if (selected === 1) { this.toggleSplit(); return }
     if (selected === 2) { this.requestCloseActivePane(); return }
-    if (selected === 3) { this.requestCopySelection(); return }
-    if (selected === 4) { this.handleFontIncrease(); return }
-    if (selected === 5) { this.handleFontReset(); return }
-    if (selected === 6) { this.handleFontDecrease(); return }
+    if (selected === 3) { this.handleFontIncrease(); return }
+    if (selected === 4) { this.handleFontReset(); return }
+    if (selected === 5) { this.handleFontDecrease(); return }
   }
 
   private moveMenuSelection(direction: number): void {
     let next: number = this.menuSelectedIndex
-    for (let i = 0; i < 7; i++) {
-      next = (next + direction + 7) % 7
+    for (let i = 0; i < 6; i++) {
+      next = (next + direction + 6) % 6
       if (this.isMenuItemEnabled(next)) {
         this.menuSelectedIndex = next
         return
@@ -945,12 +969,11 @@ struct Index {
       this.menuRow(0, '+', 'New Tab', 'Ctrl+Shift+T', true, () => { this.newTab() })
       this.menuRow(1, '⋕', 'Split Pane', 'Ctrl+Shift+D', !this.activeTabIsSplit(), () => { this.toggleSplit() })
       this.menuRow(2, '✕', 'Close Pane', 'Ctrl+Shift+W', this.activeTabIsSplit(), () => { this.requestCloseActivePane() })
-      this.menuRow(3, '⧉', 'Copy', '', true, () => { this.requestCopySelection() })
       this.menuDivider()
-      this.menuRow(4, 'A⁺', 'Font Size +', 'Ctrl+=', true, () => { this.handleFontIncrease() })
-      this.menuRow(5, 'Aa', 'Reset Font Size', this.fontSize.toString() + ' px · Ctrl+0', true,
+      this.menuRow(3, 'A⁺', 'Font Size +', 'Ctrl+=', true, () => { this.handleFontIncrease() })
+      this.menuRow(4, 'Aa', 'Reset Font Size', this.fontSize.toString() + ' px · Ctrl+0', true,
         () => { this.handleFontReset() })
-      this.menuRow(6, 'A⁻', 'Font Size -', 'Ctrl+-', true, () => { this.handleFontDecrease() })
+      this.menuRow(5, 'A⁻', 'Font Size -', 'Ctrl+-', true, () => { this.handleFontDecrease() })
     }
     .width(252)
     .backgroundColor(this.chromeColors.commandBarBackground)

@@ -5,6 +5,8 @@
 - Read and follow `docs/project-principles.md` before product, architecture,
   feature or refactoring work.
 - Use `docs/next-work.md` as the only source of outstanding project work.
+- Follow `docs/versioning.md` and `docs/release-process.md` for branch scope,
+  changelog entries, version preparation, AppGallery review, tags and releases.
 - Files under `docs/archive/` are historical and do not authorize new work.
 - Do not add concepts, dependencies or abstraction layers without passing the
   decision rules in the project principles.
@@ -44,6 +46,13 @@ added to the repository.
 
 Use the authenticated GitHub CLI for repository, issue, pull request, release
 and account operations. Confirm the active account before a write operation.
+Develop changes on focused short-lived branches and merge them through pull
+requests. Record pending user-visible changes under `CHANGELOG.md` →
+`Unreleased` or the selected version's `In development` section as defined by
+the versioning policy. Create the immutable signed version tag only after
+production verification and before AppGallery submission. Never move or reuse
+a pushed tag. Publish the matching GitHub Release only after AppGallery reports
+the version as `Released`.
 
 ## Editing and filesystem safety
 

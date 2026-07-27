@@ -33,7 +33,7 @@ export struct ChromeBar {
   }
 
   private tabViewportWidth(): number {
-    return Math.min(12 + this.tabs.length * 176, 716)
+    return 12 + this.tabs.length * 176
   }
 
   private tabState(tab: TabInfo): SshSessionState {
@@ -80,7 +80,7 @@ export struct ChromeBar {
       .scrollable(ScrollDirection.Horizontal)
       .scrollBar(BarState.Off)
       .width(this.tabViewportWidth())
-      .constraintSize({ maxWidth: '70%' })
+      .constraintSize({ maxWidth: 'calc(100% - 172vp)' })
       .height(40)
 
       ChromeButton({

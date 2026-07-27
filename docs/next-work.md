@@ -2,7 +2,7 @@
 
 > 状态：唯一有效的项目 TODO
 >
-> 更新日期：2026-07-26
+> 更新日期：2026-07-27
 >
 > 上位规则：[`project-principles.md`](project-principles.md)
 
@@ -12,7 +12,62 @@ HarmoTTY 1.0.0 已提交 Huawei AppGallery Connect 审核。提审源码、产�
 签名校验和完整私有 Git 历史已在仓库外冻结并完成恢复验证。
 
 “建立可信公开源码基线”已完成。公开没有改变 1.0.0 提审产物；公开后的产品开发
-从本仓库继续。AppGallery Connect 审核状态仍为审核中。
+从本仓库继续。签名标签 `v1.0.0` 已固定到首次公开根提交；AppGallery Connect
+审核状态仍为审核中，审核通过前不创建对应的 GitHub Release。
+
+当前补丁开发目标为 `1.0.1`。版本元数据已前移到 `1.0.1` / `1000001`，待发布修复
+记录在 `CHANGELOG.md` 的 `1.0.1 - In development` 下。`Unreleased` 保持为空，
+用于尚未归入目标版本的后续工作。工具菜单精简和未连接状态帮助提示已明确提前到
+`1.0.1`；其他 1.1 功能规划不进入本补丁分支。
+
+## P0：1.0.1 终端字形正确性
+
+- [x] 将内嵌 JetBrains Mono Nerd Font 切换为相同 `3.3.0` 版本的单格 Mono
+  变体，修复 PUA 图标越过 xterm 单元格并与相邻文本重叠的问题。
+- [x] 为用户样例 `XXXXXXXXX` 建立字体轮廓与 advance
+  宽度回归测试；完整 PC 门禁通过，并在 ARM64 HarmonyOS PC 上由用户独立复现
+  和真机截图共同确认图标不再与相邻 `X` 重叠。
+
+## P0：1.0.1 Bell 注意状态确认
+
+- [x] 保持 `PaneInfo.needsAttention` 为黄框的唯一权威状态，由对应 xterm 的真实
+  键盘输入或用户粘贴发送一次性确认事件；程序自动恢复焦点不再静默清除状态，
+  其他 Pane 的操作也不会串清黄框。
+- [x] 在 ARM64 HarmonyOS PC 上验证：BEL 后在对应 Pane 使用物理键盘输入会清除
+  黄框；仅有远端输出、程序恢复焦点和其他 Pane 输入不会清除；确认后新的 BEL
+  能再次显示黄框。
+
+## P0：1.0.1 工具菜单与未连接提示精简
+
+- [x] 删除工具菜单中的 **Copy**，保留 New Tab、Split Pane、Close Pane 和三项字号
+  操作；同步调整菜单上下循环、Enter 分派和动态禁用索引，不改动既有键盘与选择感知
+  复制路径。
+- [x] 将未连接 `htty>` 提示符的未知顶层命令反馈统一为
+  `Unknown command. Type 'help' for commands, or use: ssh user@host`；空输入、具体
+  Usage、帮助主题、命令历史和远端输入行为保持不变。
+- [x] 在 ARM64 HarmonyOS PC 上验证六项菜单顺序和鼠标操作：单 Pane 的 Close、
+  双 Pane 的 Split 均保持禁用且不关闭菜单；Split/Close 往返后 Web 终端数量正确，
+  菜单始终不包含 Copy。
+- [x] 在 ARM64 HarmonyOS PC 的未连接 Pane 验证：未知命令显示新的统一引导，空
+  Enter 只产生下一个提示符，已识别但缺参数的 `ssh` 仍显示具体错误。
+- [ ] 使用真机物理键盘验证菜单上下回绕、禁用项跳过和 Enter 分派，并回归键盘与
+  选择感知复制；连接受控 SSH 主机后确认远端未知命令不进入本地解析路径。
+
+## P0：1.0.1 终端 URL 点击
+
+- [x] 第一阶段：在终端鼠标上报关闭时，普通 HTTP(S) 文本和 OSC 8 链接平时不
+  改变指针或增加链接装饰；按住且仅按住 `Ctrl` 后立即显示手形指针、下划线和真实
+  目标，`Ctrl+左键单击` 经 Native 校验后交给 HarmonyOS 系统浏览器。普通单击、
+  拖动、其他修饰键、非 HTTP(S) 和失效 Pane 都不得打开，也不得向 SSH 写入字节。
+- [ ] 在 ARM64 HarmonyOS PC 上验证第一阶段：Shell 中普通 URL 与 OSC 8、按键前后
+  即时反馈、单/双 Pane 来源、浏览器往返焦点、失败提示，以及 WebGL/DOM fallback。
+- [x] 第二阶段：tmux/TUI 鼠标上报开启时，普通点击和 `Ctrl+左键单击` 仍归远端
+  应用，`Shift` 保留为 xterm 本地选择绕过键；按住且仅按住 `Ctrl+Shift` 后显示
+  链接反馈，`Ctrl+Shift+左键单击` 打开链接，拖动不得打开或写入 SSH 鼠标字节。
+- [x] 在 ARM64 HarmonyOS PC 的 `set -g mouse on` tmux 中验证第二阶段：普通点击、
+  `Ctrl+点击`、Pane/边框/滚轮仍由 tmux 处理，`Shift+拖动` 可本地选择，
+  `Ctrl+Shift+点击` 打开普通 URL 与可用 OSC 8 链接，拖动不误开，浏览器往返后
+  不残留选择拖动状态，并覆盖单/双 Pane。
 
 ## P0：公开源码
 

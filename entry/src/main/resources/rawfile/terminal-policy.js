@@ -42,19 +42,27 @@
   }
 
   function createBellAttentionGate() {
-    var pending = false;
+    var deliveryPending = false;
+    var acknowledgementPending = false;
     return {
       trigger: function() {
-        if (pending) return false;
-        pending = true;
+        acknowledgementPending = true;
+        if (deliveryPending) return false;
+        deliveryPending = true;
         return true;
       },
-      clear: function() {
-        if (!pending) return false;
-        pending = false;
+      acknowledge: function() {
+        if (!acknowledgementPending) return false;
+        acknowledgementPending = false;
+        deliveryPending = false;
         return true;
       },
-      isPending: function() { return pending; }
+      rearmDelivery: function() {
+        if (!deliveryPending) return false;
+        deliveryPending = false;
+        return true;
+      },
+      isPending: function() { return acknowledgementPending; }
     };
   }
 
@@ -125,6 +133,47 @@
     return state ? state.pendingLines : 0;
   }
 
+  function centerGridLeadingPadding(baseLeadingPadding, baseTrailingPadding, containerSize, gridSize) {
+    var leading = typeof baseLeadingPadding === 'number' && isFinite(baseLeadingPadding)
+      ? Math.max(0, baseLeadingPadding)
+      : 0;
+    var trailing = typeof baseTrailingPadding === 'number' && isFinite(baseTrailingPadding)
+      ? Math.max(0, baseTrailingPadding)
+      : 0;
+    if (typeof containerSize !== 'number' || !isFinite(containerSize) ||
+        typeof gridSize !== 'number' || !isFinite(gridSize)) {
+      return leading;
+    }
+    var unusedSize = containerSize - leading - trailing - Math.max(0, gridSize);
+    return leading + Math.max(0, unusedSize) / 2;
+  }
+
+  function isLinkModifierActive(event, mouseTrackingMode) {
+    if (!event ||
+        event.ctrlKey !== true ||
+        event.altKey === true ||
+        event.metaKey === true) {
+      return false;
+    }
+    if (mouseTrackingMode === 'none') {
+      return event.shiftKey !== true;
+    }
+    var mouseReportingActive =
+      mouseTrackingMode === 'x10' ||
+      mouseTrackingMode === 'vt200' ||
+      mouseTrackingMode === 'drag' ||
+      mouseTrackingMode === 'any';
+    return mouseReportingActive && event.shiftKey === true;
+  }
+
+  function shouldActivateLink(event, mouseTrackingMode, sameLink, dragged) {
+    return !!event &&
+      event.button === 0 &&
+      sameLink === true &&
+      dragged !== true &&
+      isLinkModifierActive(event, mouseTrackingMode);
+  }
+
   global.HarmoTTYTerminalPolicy = {
     MAX_CLIPBOARD_BYTES: MAX_CLIPBOARD_BYTES,
     MAX_CLIPBOARD_BASE64_LENGTH: MAX_CLIPBOARD_BASE64_LENGTH,
@@ -135,6 +184,9 @@
     enqueueWheel: enqueueWheel,
     consumeWheelFrame: consumeWheelFrame,
     hasPendingWheelSteps: hasPendingWheelSteps,
-    pendingWheelLines: pendingWheelLines
+    pendingWheelLines: pendingWheelLines,
+    centerGridLeadingPadding: centerGridLeadingPadding,
+    isLinkModifierActive: isLinkModifierActive,
+    shouldActivateLink: shouldActivateLink
   };
 })(globalThis);

@@ -28,6 +28,14 @@ credential or generated application package is stored in Git.
 - Rust/russh transport through napi-ohos
 - xterm.js rendering in ArkWeb
 
+## Terminal interaction
+
+- Hold `Ctrl` and left-click an HTTP(S) or OSC 8 link to open it in the system
+  browser.
+- When tmux or another TUI has enabled mouse reporting, use
+  `Ctrl+Shift+Left Click` instead.
+- Hold `Shift` and drag to bypass TUI mouse reporting for local text selection.
+
 ## Product scope
 
 HarmoTTY currently targets only ARM64 HarmonyOS PC with keyboard and mouse. It

@@ -12,6 +12,7 @@ resources actually packaged in the ARM64 release HAP.
 |---|---|---|---|---|
 | `xterm.js`, `xterm.css` | `@xterm/xterm 6.0.0` | https://github.com/xtermjs/xterm.js/releases/tag/6.0.0 | MIT | `98D0973151AFF2991D335B1ADBBDAC2E14DA26341ABE329D677D4C0034402BDF` / `854A7C0FB70E8B1A083C16797AB827299FB18744F5AD34F227B48337E33293C6` |
 | `addon-fit.js` | `@xterm/addon-fit 0.11.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-fit | MIT | `4DF3789FA7BFF5D545BA38462A8CD2F7460BA971021BCE3F81C2870F937A201E` |
+| `addon-web-links.js` | `@xterm/addon-web-links 0.12.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-web-links | MIT | `E34337F790D1CC817312A1AC1C00C473A7C504F471A70086DB57CA9CD0335CA9` |
 | `addon-webgl.js` | `@xterm/addon-webgl 0.19.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-webgl | MIT | `E84BF980D7A5C3D0A69352A31F4C2D92B6EDC3ABEBC722D856C3872573FEA095` |
 
 The copied files match `tools/web-terminal/assets-manifest.json`. Source-map
@@ -23,6 +24,7 @@ Copyright notices supplied by the locked packages:
   (c) 2014-2016, SourceLair Private Company; Copyright (c) 2012-2013,
   Christopher Jeffrey.
 - addon-fit: Copyright (c) 2019, The xterm.js authors.
+- addon-web-links: Copyright (c) 2017, The xterm.js authors.
 - addon-webgl: Copyright (c) 2018, The xterm.js authors.
 
 These resources use the MIT License:
@@ -51,8 +53,8 @@ THE SOFTWARE.
 
 | Packaged resource | Embedded version metadata | Upstream release | License | SHA-256 |
 |---|---|---|---|---|
-| `JetBrainsMonoNerdFont-Regular.ttf` | JetBrains Mono `2.304`; Nerd Fonts `3.3.0` | https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.3.0 | OFL-1.1 | `C8AF9DFD91F01293A7E0FA6F3481C2827042C853D2D5A71DBF5F012FDEE6925F` |
-| `JetBrainsMonoNerdFont-Bold.ttf` | JetBrains Mono `2.304`; Nerd Fonts `3.3.0` | https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.3.0 | OFL-1.1 | `546D7F5E93B51397A84D019A56CF557B6B9631E94D29BDA92815A5D65170B8DA` |
+| `JetBrainsMonoNerdFontMono-Regular.ttf` | JetBrains Mono `2.304`; Nerd Fonts `3.3.0` | https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.3.0 | OFL-1.1 | `9E4DAD8C34FB31045D53790A936A0AFC3AAE3FB830E874FAADF3670662B04853` |
+| `JetBrainsMonoNerdFontMono-Bold.ttf` | JetBrains Mono `2.304`; Nerd Fonts `3.3.0` | https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.3.0 | OFL-1.1 | `174B245DB4097E08B372D8800EBFE4FD324FB81B2C9223DA7B9EC16EEB7DB901` |
 
 Both font files embed the JetBrains Mono copyright notice and identify SIL Open
 Font License 1.1. The full OFL text and the Nerd Fonts attribution note are in
