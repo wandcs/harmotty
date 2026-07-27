@@ -80,7 +80,7 @@ export struct ChromeBar {
       .scrollable(ScrollDirection.Horizontal)
       .scrollBar(BarState.Off)
       .width(this.tabViewportWidth())
-      .constraintSize({ maxWidth: '70%' })
+      .constraintSize({ maxWidth: 'calc(100% - 172vp)' })
       .height(40)
 
       ChromeButton({
