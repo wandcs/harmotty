@@ -1,11 +1,11 @@
 [package]
-name        = "harmotty-ssh-core"
+name        = "leantty-ssh-core"
 version     = "1.0.1"
 edition     = "2021"
 license     = "Apache-2.0"
-description = "Pure Rust SSH client core for HarmoTTY"
-repository  = "https://github.com/wandcs/harmotty"
-authors     = ["HarmoTTY Contributors"]
+description = "Pure Rust SSH client core for LeanTTY"
+repository  = "https://github.com/wandcs/leantty"
+authors     = ["LeanTTY Contributors"]
 
 [dependencies]
 russh = { version = "0.62", default-features = false, features = ["ring"] }

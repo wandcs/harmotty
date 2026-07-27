@@ -17,7 +17,7 @@ const TARGETS = [
     size: 1024,
   },
   {
-    out: path.resolve(__dirname, "..", "AppScope", "resources", "base", "media", "harmotty_icon.png"),
+    out: path.resolve(__dirname, "..", "AppScope", "resources", "base", "media", "leantty_icon.png"),
     layer: "full",
     size: 1024,
   },
@@ -32,7 +32,7 @@ const TARGETS = [
     size: 1024,
   },
   {
-    out: path.resolve(__dirname, "..", "entry", "src", "main", "resources", "base", "media", "harmotty_icon.png"),
+    out: path.resolve(__dirname, "..", "entry", "src", "main", "resources", "base", "media", "leantty_icon.png"),
     layer: "full",
     size: 1024,
   },

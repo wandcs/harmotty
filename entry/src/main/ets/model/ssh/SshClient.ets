@@ -1,6 +1,6 @@
 import { SshErrorCode, SshError, SshConnectOptions } from '../../common/types/SshTypes'
 import { Logger } from '../../common/logger/Logger'
-import harmotty_ssh from 'libharmotty_ssh.so'
+import sshNative from 'libleantty_ssh.so'
 
 export { SshErrorCode, SshError, SshConnectOptions } from '../../common/types/SshTypes'
 
@@ -30,7 +30,7 @@ export class SshClient {
     }
 
     try {
-      let id: string = harmotty_ssh.sshConnect(
+      let id: string = sshNative.sshConnect(
         options.host,
         options.port,
         options.username,
@@ -68,7 +68,7 @@ export class SshClient {
       return false
     }
     try {
-      harmotty_ssh.sshAuthPassword(this.sessionId, password)
+      sshNative.sshAuthPassword(this.sessionId, password)
       this.logger.info('Auth password sent')
       return true
     } catch (e) {
@@ -84,7 +84,7 @@ export class SshClient {
       return false
     }
     try {
-      harmotty_ssh.sshAuthPrivateKey(this.sessionId, keyPath, passphrase)
+      sshNative.sshAuthPrivateKey(this.sessionId, keyPath, passphrase)
       this.waitingAuth = true
       this.logger.info('Auth private key sent: ' + keyPath)
       return true
@@ -101,7 +101,7 @@ export class SshClient {
       return false
     }
     try {
-      harmotty_ssh.sshVerifyHostKey(this.sessionId, accepted)
+      sshNative.sshVerifyHostKey(this.sessionId, accepted)
       return true
     } catch (e) {
       this.reportError(new SshError(SshErrorCode.HostKey, 'Host key response failed', '' + e, 'client'))
@@ -115,7 +115,7 @@ export class SshClient {
       return
     }
     try {
-      harmotty_ssh.sshWrite(this.sessionId, data)
+      sshNative.sshWrite(this.sessionId, data)
     } catch (e) {
       this.logger.error('sshWrite failed: ' + e)
       this.handleWarning('Write request rejected: ' + e)
@@ -127,7 +127,7 @@ export class SshClient {
       return
     }
     try {
-      harmotty_ssh.sshResize(this.sessionId, cols, rows)
+      sshNative.sshResize(this.sessionId, cols, rows)
     } catch (e) {
       this.logger.error('sshResize failed: ' + e)
       this.handleWarning('Resize request rejected: ' + e)
@@ -139,7 +139,7 @@ export class SshClient {
       return
     }
     try {
-      harmotty_ssh.sshSetOutputPaused(this.sessionId, paused)
+      sshNative.sshSetOutputPaused(this.sessionId, paused)
     } catch (e) {
       this.logger.error('sshSetOutputPaused failed: ' + e)
       this.handleWarning('Output flow-control request rejected: ' + e)
@@ -151,7 +151,7 @@ export class SshClient {
       return
     }
     try {
-      harmotty_ssh.sshDisconnect(this.sessionId)
+      sshNative.sshDisconnect(this.sessionId)
     } catch (e) {
       this.logger.error('sshDisconnect failed: ' + e)
     }

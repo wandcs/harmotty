@@ -2,7 +2,7 @@ import { common } from '@kit.AbilityKit'
 import { KeyAlgorithm, KeyPairInfo, KeyGenerationResult, algorithmToString } from '../../common/types/SshKeyTypes'
 import { FileUtils } from '../../common/utils/FileUtils'
 import { Logger } from '../../common/logger/Logger'
-import harmotty_ssh from 'libharmotty_ssh.so'
+import sshNative from 'libleantty_ssh.so'
 
 const logger: Logger = new Logger('SshKeyManager')
 const DEFAULT_ALGOS: string[] = ['id_ed25519', 'id_ed25519_sk', 'id_rsa']
@@ -68,7 +68,7 @@ export class SshKeyManager {
     if (FileUtils.fileExists(targetPath) || FileUtils.fileExists(targetPath + '.pub')) {
       throw new Error('Key already exists: ' + keyName)
     }
-    let json: string = harmotty_ssh.sshGenerateKeyPair(algoStr, passphrase, sshDir, keyName, comment)
+    let json: string = sshNative.sshGenerateKeyPair(algoStr, passphrase, sshDir, keyName, comment)
     let parsed: Record<string, string> = SshKeyManager.validateKeyGenResult(json)
     let result: KeyGenerationResult = new KeyGenerationResult()
     result.privateKey.algorithm = algo
@@ -117,7 +117,7 @@ export class SshKeyManager {
     FileUtils.copyFile(sourcePath, targetPath)
     let pubTarget: string = targetPath + '.pub'
     try {
-      harmotty_ssh.sshProtectPrivateKey(targetPath)
+      sshNative.sshProtectPrivateKey(targetPath)
       let inspected: PrivateKeyInspection = SshKeyManager.inspectPrivateKey(targetPath)
       FileUtils.writeTextFile(pubTarget, inspected.publicKeyText + '\n')
       let key: KeyPairInfo | null = SshKeyManager.readKeyInfo(context, newName)
@@ -223,7 +223,7 @@ export class SshKeyManager {
   }
 
   private static inspectPrivateKey(privatePath: string): PrivateKeyInspection {
-    let raw: string = harmotty_ssh.sshInspectPrivateKey(privatePath)
+    let raw: string = sshNative.sshInspectPrivateKey(privatePath)
     let lines: string[] = raw.split('\n')
     if (lines.length < 4 || (lines[1] !== 'ssh-ed25519' && lines[1] !== 'ssh-rsa')) {
       throw new Error('Invalid private key inspection result')
@@ -241,7 +241,7 @@ export class SshKeyManager {
 
   private static readFingerprint(pubPath: string): string {
     try {
-      return harmotty_ssh.sshReadPublicKey(pubPath)
+      return sshNative.sshReadPublicKey(pubPath)
     } catch (e) {
       return ''
     }

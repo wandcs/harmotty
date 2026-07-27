@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$rustPath = Join-Path $repoRoot 'harmotty_ssh\src\lib.rs'
+$rustPath = Join-Path $repoRoot 'leantty_ssh\src\lib.rs'
 $viewModelPath = Join-Path $repoRoot 'entry\src\main\ets\viewmodel\SessionViewModel.ets'
 
 $rust = Get-Content -Raw -LiteralPath $rustPath

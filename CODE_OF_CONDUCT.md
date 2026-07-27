@@ -1,6 +1,6 @@
 # Code of Conduct
 
-HarmoTTY contributors and maintainers are expected to keep project spaces
+LeanTTY contributors and maintainers are expected to keep project spaces
 welcoming, professional and focused on the work.
 
 Acceptable participation includes:

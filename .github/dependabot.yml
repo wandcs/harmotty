@@ -9,7 +9,7 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: cargo
-    directory: /harmotty_ssh
+    directory: /leantty_ssh
     schedule:
       interval: monthly
     labels:

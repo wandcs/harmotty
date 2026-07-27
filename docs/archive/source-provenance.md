@@ -1,5 +1,7 @@
 # 1.0.0 source provenance
 
+> Historical archive for the rejected, unpublished HarmoTTY 1.0.0 submission.
+
 This record maps the Huawei AppGallery Connect 1.0.0 submission to the first
 public HarmoTTY source baseline without publishing the private development
 history or production signing material.

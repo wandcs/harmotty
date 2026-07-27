@@ -1,8 +1,8 @@
 import { FileUtils } from '../../common/utils/FileUtils'
 import { common } from '@kit.AbilityKit'
 
-const MANAGED_BEGIN: string = '# >>> HarmoTTY managed hosts >>>'
-const MANAGED_END: string = '# <<< HarmoTTY managed hosts <<<'
+const MANAGED_BEGIN: string = '# >>> LeanTTY managed hosts >>>'
+const MANAGED_END: string = '# <<< LeanTTY managed hosts <<<'
 
 export class SshConfigHost {
   alias: string
@@ -134,7 +134,7 @@ export class SshConfig {
     let configPath: string = sshDir + '/config'
     let content: string = this.previewConfigText()
     if (this.sourceText.length > 0) {
-      FileUtils.writeTextFile(configPath + '.harmotty.bak', this.sourceText)
+      FileUtils.writeTextFile(configPath + '.leantty.bak', this.sourceText)
     }
     FileUtils.writeTextFile(configPath, content)
     this.loadFromText(content)

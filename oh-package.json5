@@ -1,11 +1,11 @@
 {
-  "name": "harmotty",
+  "name": "leantty",
   "version": "1.0.1",
   "modelVersion": "6.1.1",
   "description": "Modern terminal emulator for HarmonyOS PC",
-  "author": "HarmoTTY Contributors",
+  "author": "LeanTTY Contributors",
   "license": "Apache-2.0",
-  "repository": "https://github.com/wandcs/harmotty",
+  "repository": "https://github.com/wandcs/leantty",
   "dependencies": {
   },
   "devDependencies": {

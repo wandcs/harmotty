@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Run the low-frequency HarmoTTY verification gate and deploy to a real PC.
+  Run the low-frequency LeanTTY verification gate and deploy to a real PC.
 .DESCRIPTION
   Runs the trusted ArkTS suite, Rust formatting and script syntax checks, and a
   clean ARM64 debug build. The ARM64 build compiles both the pure Rust core and
@@ -35,7 +35,7 @@ foreach ($scriptName in @(
 }
 Write-Host 'PowerShell syntax checks passed.' -ForegroundColor Green
 
-$generatedNativePath = 'entry/libs/arm64-v8a/libharmotty_ssh.so'
+$generatedNativePath = 'entry/libs/arm64-v8a/libleantty_ssh.so'
 $trackedNative = @(git -C $repoRoot ls-files -- $generatedNativePath)
 if ($LASTEXITCODE -ne 0) {
     throw 'Unable to inspect tracked native build outputs'
@@ -116,7 +116,7 @@ if ([int]$arkTsTestSummaryMatch.Groups['failure'].Value -ne 0 -or
 }
 Write-Host 'Trusted ArkTS unit tests passed.' -ForegroundColor Green
 
-$cargoManifest = Join-Path $repoRoot 'harmotty_ssh\Cargo.toml'
+$cargoManifest = Join-Path $repoRoot 'leantty_ssh\Cargo.toml'
 & cargo fmt --manifest-path $cargoManifest -- --check
 if ($LASTEXITCODE -ne 0) { throw 'Rust formatting check failed' }
 Write-Host 'Rust formatting passed; ARM64 compilation is verified by the HAP build.' -ForegroundColor Green

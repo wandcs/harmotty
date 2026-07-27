@@ -74,12 +74,12 @@ export class SshSession {
     if (this.hostname.length > 0) {
       return this.username.length > 0 ? this.username + '@' + this.hostname : this.hostname
     }
-    return 'htty'
+    return 'ltty'
   }
 
   getConnectionTitle(): string {
     if (this.hostname.length === 0) {
-      return 'htty'
+      return 'ltty'
     }
     return this.username.length > 0 ? this.username + '@' + this.hostname : this.hostname
   }

@@ -53,10 +53,10 @@ try {
     )
     $sensitiveContent = @(
         @{ Pattern = '(?i)[A-Z]:[\\/]+Users[\\/]+'; Reason = 'personal Windows profile path' },
-        @{ Pattern = '(?i)[A-Z]:[\\/]+repos[\\/]+harmotty'; Reason = 'fixed local checkout path' },
+        @{ Pattern = '(?i)[A-Z]:[\\/]+repos[\\/]+[^\\/\s]+'; Reason = 'fixed local checkout path' },
         @{ Pattern = '3QC[0-9A-Z]{8,}'; Reason = 'physical device identifier' },
         @{ Pattern = '10\.160\.'; Reason = 'known private network address' },
-        @{ Pattern = 'security@harmotty\.dev'; Reason = 'nonexistent placeholder address' },
+        @{ Pattern = 'security@leantty\.dev'; Reason = 'nonexistent placeholder address' },
         @{ Pattern = '-----BEGIN (?:OPENSSH |RSA |EC )?PRIVATE KEY-----'; Reason = 'private key data' },
         @{ Pattern = '(?:ghp_|ghs_|github_pat_)[A-Za-z0-9_]{20,}'; Reason = 'GitHub credential' }
     )

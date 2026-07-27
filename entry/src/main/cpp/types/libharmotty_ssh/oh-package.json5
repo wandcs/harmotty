@@ -1,9 +1,0 @@
-{
-  "name": "libharmotty_ssh.so",
-  "types": "./index.d.ts",
-  "version": "1.0.1",
-  "description": "HarmoTTY SSH native module",
-  "author": "HarmoTTY Contributors",
-  "license": "Apache-2.0",
-  "repository": "https://github.com/wandcs/harmotty"
-}

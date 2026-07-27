@@ -1,6 +1,6 @@
-# HarmoTTY 文档入口
+# LeanTTY 文档入口
 
-> 更新日期：2026-07-26
+> 更新日期：2026-07-27
 
 `docs/` 根目录只保留当前规则、唯一工作清单和稳定执行手册。已完成、被取代、暂停或只用于追溯的材料统一放入 `archive/`。
 
@@ -18,7 +18,8 @@
 |---|---|
 | [`dev-environment.md`](dev-environment.md) | 工具链、SDK、依赖和目标环境 |
 | [`release-process.md`](release-process.md) | 发布分支、构建、签名、提审、tag 和校验程序 |
-| [`open-source-publication.md`](open-source-publication.md) | 私有审计归档、干净公开基线和 GitHub 协作执行方案 |
+| [`archive/open-source-publication.md`](archive/open-source-publication.md) | 1.0.0 私有审计归档、干净公开基线和 GitHub 协作历史 |
+| [`archive/source-provenance.md`](archive/source-provenance.md) | 被拒绝且未发布的 1.0.0 提审源码来源映射 |
 | [`versioning.md`](versioning.md) | 版本号、分支、Unreleased 和商店审核规则 |
 | [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | 静态资源、Rust 和 ArkTS 依赖声明 |
 

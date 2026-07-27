@@ -1,11 +1,11 @@
 {
   "app": {
-    "bundleName": "com.harmotty.app",
-    "vendor": "harmotty",
+    "bundleName": "com.leantty.app",
+    "vendor": "leantty",
     "versionCode": 1000001,
     "versionName": "1.0.1",
     "buildVersion": "1",
-    "icon": "$media:harmotty_icon",
+    "icon": "$media:leantty_icon",
     "label": "$string:app_name"
   }
 }

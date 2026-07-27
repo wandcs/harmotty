@@ -2,7 +2,7 @@
 
 Audit date: 2026-07-26.
 
-HarmoTTY includes or depends on the software listed below. The authoritative
+LeanTTY includes or depends on the software listed below. The authoritative
 inputs for this audit are the checked-in Cargo/OHPM/NPM lockfiles and the
 resources actually packaged in the ARM64 release HAP.
 
@@ -62,7 +62,7 @@ Font License 1.1. The full OFL text and the Nerd Fonts attribution note are in
 
 ## Rust Dependencies (Cargo)
 
-`harmotty_ssh/Cargo.lock` resolves 147 registry packages for
+`leantty_ssh/Cargo.lock` resolves 147 registry packages for
 `aarch64-unknown-linux-ohos`; all 147 report a license expression or license
 file through Cargo metadata. The complete versioned inventory is in
 `docs/RUST_DEPENDENCIES.md`.
@@ -96,7 +96,7 @@ neither is included in the release HAP:
 | `@ohos/hypium` | `1.0.25` | Test framework | Apache-2.0 |
 | `@ohos/hamock` | `1.0.0` | Mock framework | Apache-2.0 |
 
-`entry/oh-package-lock.json5` also records the local HarmoTTY native package at
+`entry/oh-package-lock.json5` also records the local LeanTTY native package at
 version `1.0.0`; it is project code under Apache-2.0, not a third-party package.
 
 ## Distribution

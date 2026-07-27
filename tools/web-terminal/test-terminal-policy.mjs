@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import './test-font-cell-width.mjs';
 import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 
-const policy = globalThis.HarmoTTYTerminalPolicy;
+const policy = globalThis.LeanTTYTerminalPolicy;
 const encode = text => `c;${Buffer.from(text, 'utf8').toString('base64')}`;
 
 const assetManifest = JSON.parse(
@@ -162,12 +162,12 @@ assert.match(terminalHtml, /themeObj\.overviewRulerBorder = themeObj\.background
   'the width-only overview ruler must not draw a contrasting edge line');
 assert.match(terminalHtml, /parseTerminalPacket\(e\.data\)/,
   'the MessagePort must accept the original binary terminal packet directly');
-assert.doesNotMatch(terminalHtml, /harmottyOutput\.pullOutput|decodePulledTerminalPacket|case 'outputAvailable':/,
+assert.doesNotMatch(terminalHtml, /leanttyOutput\.pullOutput|decodePulledTerminalPacket|case 'outputAvailable':/,
   'the rejected synchronous Base64 pull experiment must not remain in the terminal path');
 assert.match(terminalHtml, /term\.write\(terminalBytes/,
   'the terminal must receive the original Uint8Array bytes rather than a decoded string');
 assert.doesNotMatch(terminalHtml,
-  /outputBurst|validationMarker|HTTY_(?:BEGIN|END|KEY)_|samplePortDelivery|TERMINAL_RENDERER_MODE/,
+  /outputBurst|validationMarker|LTTY_(?:BEGIN|END|KEY)_|samplePortDelivery|TERMINAL_RENDERER_MODE/,
   'temporary binary-output and renderer diagnostics must not remain in the terminal runtime');
 assert.doesNotMatch(terminalHtml, /replayGate|replayBegin|replayEnd/,
   'terminal history must not be replayed into a new xterm instance');
@@ -246,7 +246,7 @@ assert.doesNotMatch(terminalBridge, /Base64Helper|pullOutput|outputAvailable/,
   'terminal output must not retain the rejected Base64 pull transport');
 assert.doesNotMatch(terminalBridge, /TextDecoder|LOSSY_OUTPUT_CHUNK_CHARACTERS/,
   'the native terminal transport must not decode or heuristically rewrite terminal bytes');
-assert.doesNotMatch(terminalBridge, /HTTY_(?:BEGIN|END|KEY)_|scanValidationMarkers|sentAtLow32/,
+assert.doesNotMatch(terminalBridge, /LTTY_(?:BEGIN|END|KEY)_|scanValidationMarkers|sentAtLow32/,
   'temporary cross-layer marker and delivery-timestamp diagnostics must not remain in the bridge');
 assert.doesNotMatch(terminalBridge, /replay/i,
   'the bridge must have only one ordered output path and no historical replay state');
@@ -315,7 +315,7 @@ const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');
 assert.match(terminalPane, /renderMode:\s*RenderMode\.ASYNC_RENDER/,
   'terminal panes must use the normal asynchronous ArkWeb render mode');
-assert.match(terminalPane, /sharedRenderProcessToken:\s*'harmotty-terminal'/,
+assert.match(terminalPane, /sharedRenderProcessToken:\s*'leantty-terminal'/,
   'terminal panes keep the measured shared renderer-process configuration');
 assert.doesNotMatch(terminalPane, /\.onRenderProcess(?:NotResponding|Responding)\(/,
   'temporary ArkWeb renderer responsiveness diagnostics must not remain');

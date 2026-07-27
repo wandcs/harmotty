@@ -1,6 +1,6 @@
 # Rust Dependency License Inventory
 
-Generated and reviewed on 2026-07-26 from `harmotty_ssh/Cargo.lock` with:
+Generated and reviewed on 2026-07-26 from `leantty_ssh/Cargo.lock` with:
 
 ```powershell
 cargo metadata --locked --offline `
@@ -94,4 +94,4 @@ The inventory normalizes the equivalent expressions `Apache-2.0 OR MIT` and
 The release build copies the applicable license and notice files from the
 locked crate source archives into package-specific directories and generates
 `licenses/rust/packages.json` as the package-to-file index. It also includes
-HarmoTTY's Apache-2.0 text and the consolidated third-party notice.
+LeanTTY's Apache-2.0 text and the consolidated third-party notice.

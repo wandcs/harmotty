@@ -644,30 +644,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "harmotty-ssh-core"
-version = "1.0.1"
-dependencies = [
- "rand",
- "russh",
- "zeroize",
-]
-
-[[package]]
-name = "harmotty_ssh"
-version = "1.0.1"
-dependencies = [
- "harmotty-ssh-core",
- "napi-build-ohos",
- "napi-derive-ohos",
- "napi-ohos",
- "once_cell",
- "rand",
- "russh",
- "tokio",
- "zeroize",
-]
-
-[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -784,6 +760,30 @@ checksum = "01737161ba802849cfd486b5bd209d38ba4943494c249a8126005170c7621edd"
 dependencies = [
  "crypto-common",
  "rand_core",
+]
+
+[[package]]
+name = "leantty-ssh-core"
+version = "1.0.1"
+dependencies = [
+ "rand",
+ "russh",
+ "zeroize",
+]
+
+[[package]]
+name = "leantty_ssh"
+version = "1.0.1"
+dependencies = [
+ "leantty-ssh-core",
+ "napi-build-ohos",
+ "napi-derive-ohos",
+ "napi-ohos",
+ "once_cell",
+ "rand",
+ "russh",
+ "tokio",
+ "zeroize",
 ]
 
 [[package]]

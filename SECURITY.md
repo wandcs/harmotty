@@ -17,7 +17,7 @@ vulnerability.
 
 Use GitHub's private vulnerability-reporting form:
 
-<https://github.com/wandcs/harmotty/security/advisories/new>
+<https://github.com/wandcs/leantty/security/advisories/new>
 
 Include the affected version or commit, impact, reproduction steps and any
 suggested mitigation. Remove real credentials, private keys, device identifiers
@@ -44,11 +44,11 @@ method shown on the GitHub profile rather than publishing the details.
 - Development builds use a local test-signing identity and are not official
   distribution artifacts.
 - ArkWeb/xterm.js currently requires CSP `unsafe-eval`.
-- HarmoTTY inherits security assumptions and update cadence from HarmonyOS,
+- LeanTTY inherits security assumptions and update cadence from HarmonyOS,
   ArkWeb and its third-party dependencies.
 - Terminal output and remote applications are untrusted input; bugs in parsing,
   rendering or bridge validation may still exist.
 
 Official release provenance and hashes are published separately from the source
 tree. A package obtained from an unofficial fork should not be treated as an
-official HarmoTTY build.
+official LeanTTY build.

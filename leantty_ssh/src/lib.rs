@@ -11,8 +11,8 @@ use napi_ohos::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallM
 use napi_ohos::{Error, Result, Status};
 use zeroize::Zeroize;
 
-use harmotty_ssh_core::keygen::{self};
-use harmotty_ssh_core::AuthMethod;
+use leantty_ssh_core::keygen::{self};
+use leantty_ssh_core::AuthMethod;
 
 static NEXT_SESSION_ID: AtomicU32 = AtomicU32::new(1);
 
@@ -116,7 +116,7 @@ impl Drop for SessionCleanupGuard {
 fn try_send_callback(callback: &JsCallback, value: String, label: &str) -> bool {
     let status = callback.call(value, ThreadsafeFunctionCallMode::NonBlocking);
     if status != Status::Ok {
-        eprintln!("[HTTY_SSH] callback={} status={}", label, status);
+        eprintln!("[LTTY_SSH] callback={} status={}", label, status);
         return false;
     }
     true
@@ -125,7 +125,7 @@ fn try_send_callback(callback: &JsCallback, value: String, label: &str) -> bool 
 fn try_send_data_callback(callback: &JsDataCallback, value: Vec<u8>) -> Status {
     let status = callback.call(value.into(), ThreadsafeFunctionCallMode::NonBlocking);
     if status != Status::Ok && status != Status::QueueFull {
-        eprintln!("[HTTY_SSH] callback=data status={}", status);
+        eprintln!("[LTTY_SSH] callback=data status={}", status);
     }
     status
 }
@@ -286,7 +286,7 @@ async fn run_session(
 ) {
     let _cleanup_guard = SessionCleanupGuard(session_id);
     eprintln!(
-        "[HTTY_SSH] session={} stage=connect host={} port={}",
+        "[LTTY_SSH] session={} stage=connect host={} port={}",
         session_id, host, port
     );
 
@@ -328,12 +328,12 @@ async fn run_session(
             return;
         }
         ConnectWaitResult::Cancelled => {
-            eprintln!("[HTTY_SSH] session={} stage=connect_cancelled", session_id);
+            eprintln!("[LTTY_SSH] session={} stage=connect_cancelled", session_id);
             return;
         }
     };
 
-    eprintln!("[HTTY_SSH] session={} stage=kex_complete", session_id);
+    eprintln!("[LTTY_SSH] session={} stage=kex_complete", session_id);
 
     loop {
         send_control(&control_callback, "PASSWORD_PROMPT");
@@ -382,7 +382,7 @@ async fn run_session(
                             Ok(result) if result.success() => break,
                             Ok(_) => {
                                 eprintln!(
-                                    "[HTTY_SSH] session={} stage=key_rejected fallback=password",
+                                    "[LTTY_SSH] session={} stage=key_rejected fallback=password",
                                     session_id
                                 );
                             }
@@ -422,7 +422,7 @@ async fn run_session(
         return;
     }
 
-    eprintln!("[HTTY_SSH] session={} stage=connected", session_id);
+    eprintln!("[LTTY_SSH] session={} stage=connected", session_id);
     send_control(&control_callback, "CONNECTED");
 
     let mut pending_output: Vec<u8> = Vec::new();
@@ -454,7 +454,7 @@ async fn run_session(
           }
           paused = receivers.output_pause_rx.recv() => {
             output_paused = paused.unwrap_or(false);
-            eprintln!("[HTTY_SSH] session={} output_paused={}", session_id, output_paused);
+            eprintln!("[LTTY_SSH] session={} output_paused={}", session_id, output_paused);
           }
           message = channel.wait(), if !output_paused && pending_output.len() < 512 * 1024 => {
             match message {
@@ -534,7 +534,7 @@ async fn run_session(
         if !delivered {
             delivery_metrics.record_final_delivery_failure(output_len);
             eprintln!(
-                "[HTTY_SSH] session={} final_delivery_failed_bytes={}",
+                "[LTTY_SSH] session={} final_delivery_failed_bytes={}",
                 session_id, output_len
             );
         }
@@ -543,7 +543,7 @@ async fn run_session(
         match ssh.await {
             Err(russh::Error::KeepaliveTimeout) => {
                 eprintln!(
-                    "[HTTY_SSH] session={} stage=keepalive_timeout intervalSeconds={} max={}",
+                    "[LTTY_SSH] session={} stage=keepalive_timeout intervalSeconds={} max={}",
                     session_id,
                     SSH_KEEPALIVE_INTERVAL.as_secs(),
                     SSH_KEEPALIVE_MAX
@@ -552,7 +552,7 @@ async fn run_session(
             }
             Err(error) => {
                 eprintln!(
-                    "[HTTY_SSH] session={} stage=connection_task_failed error={}",
+                    "[LTTY_SSH] session={} stage=connection_task_failed error={}",
                     session_id, error
                 );
                 false
@@ -574,7 +574,7 @@ async fn run_session(
     };
     let _ = try_send_callback(&close_callback, close_result, "close");
 
-    eprintln!("[HTTY_SSH] session={} stage=closed", session_id);
+    eprintln!("[LTTY_SSH] session={} stage=closed", session_id);
 }
 
 #[napi]

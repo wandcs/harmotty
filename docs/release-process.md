@@ -6,7 +6,7 @@ release work is tracked only in [`next-work.md`](next-work.md).
 ## Source Authority and Workspaces
 
 Every release is built from source already pushed to
-[`wandcs/harmotty`](https://github.com/wandcs/harmotty). Local-only commits,
+[`wandcs/leantty`](https://github.com/wandcs/leantty). Local-only commits,
 uncommitted files and development build outputs are never release inputs.
 
 Use two independent Git clones. Choose local paths appropriate for the
@@ -27,7 +27,7 @@ repositories. The release checkout may contain an ignored
 `signing.local.json5` that references those external materials. Never copy the
 development test-signing identity into the production release workflow.
 
-The generated `entry/libs/arm64-v8a/libharmotty_ssh.so` is ignored and must
+The generated `entry/libs/arm64-v8a/libleantty_ssh.so` is ignored and must
 never be tracked. A clean clone rebuilds it from the locked Rust source before
 packaging; generated native output must not make the release checkout dirty.
 
@@ -58,8 +58,8 @@ empty. Do not build from an implicitly advancing branch, and do not use
 For the first setup only:
 
 ```powershell
-$releaseCheckout = Join-Path (Split-Path (Get-Location) -Parent) 'harmotty-release'
-git clone https://github.com/wandcs/harmotty.git $releaseCheckout
+$releaseCheckout = Join-Path (Split-Path (Get-Location) -Parent) 'leantty-release'
+git clone https://github.com/wandcs/leantty.git $releaseCheckout
 ```
 
 ## Release Gate
@@ -76,7 +76,7 @@ Before building a release:
 - Update CHANGELOG with the release date.
 - Update every version source defined by [`versioning.md`](versioning.md).
 
-HarmoTTY publishes stable versions directly. Any code, dependency, resource,
+LeanTTY publishes stable versions directly. Any code, dependency, resource,
 version or packaging change requires a new pushed commit and a new clean build
 from the release checkout.
 
@@ -98,11 +98,11 @@ $releaseId = 'X.Y.Z'
 
 This generates named ARM64 release artifacts:
 
-- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-unsigned.hap`
-- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-signed.hap` when production
+- `build/outputs/release/LeanTTY-X.Y.Z-arm64-v8a-unsigned.hap`
+- `build/outputs/release/LeanTTY-X.Y.Z-arm64-v8a-signed.hap` when production
   signing is configured
-- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-unsigned.app`
-- `build/outputs/release/HarmoTTY-X.Y.Z-arm64-v8a-signed.app` when production
+- `build/outputs/release/LeanTTY-X.Y.Z-arm64-v8a-unsigned.app`
+- `build/outputs/release/LeanTTY-X.Y.Z-arm64-v8a-signed.app` when production
   signing is configured; this is the AppGallery upload artifact
 - `build/outputs/release/licenses/` with the project license, third-party
   notice, complete Rust dependency inventory, OFL text, and package-specific
@@ -145,7 +145,7 @@ git status --short
    ```powershell
    java -jar "<DevEco SDK>\default\openharmony\toolchains\lib\hap-sign-tool.jar" `
      verify-app `
-     -inFile "build\outputs\release\HarmoTTY-X.Y.Z-arm64-v8a-signed.hap" `
+     -inFile "build\outputs\release\LeanTTY-X.Y.Z-arm64-v8a-signed.hap" `
      -outCertChain "build\outputs\metadata\signing-cert-chain.cer" `
      -outProfile "build\outputs\metadata\signing-profile.p7b"
    ```
@@ -206,8 +206,8 @@ submission was rejected.
 
 ```powershell
 Get-FileHash -Algorithm SHA256 `
-  build\outputs\release\HarmoTTY-X.Y.Z-arm64-v8a-signed.app,
-  build\outputs\release\HarmoTTY-X.Y.Z-arm64-v8a-signed.hap,
-  entry\libs\arm64-v8a\libharmotty_ssh.so,
+  build\outputs\release\LeanTTY-X.Y.Z-arm64-v8a-signed.app,
+  build\outputs\release\LeanTTY-X.Y.Z-arm64-v8a-signed.hap,
+  entry\libs\arm64-v8a\libleantty_ssh.so,
   build\outputs\metadata\build-manifest.json
 ```

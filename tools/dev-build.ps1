@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  HarmoTTY 快速开发构建（不含 native，仅 ArkTS + 资源）
+  LeanTTY 快速开发构建（不含 native，仅 ArkTS + 资源）
 .DESCRIPTION
   跳过 Rust native 交叉编译，仅触发 ArkTS/资源构建
   用法:

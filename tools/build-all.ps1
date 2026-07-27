@@ -2,7 +2,7 @@
 .SYNOPSIS
   Build the HarmonyOS PC ARM64 HAP.
 .DESCRIPTION
-  This is the single HAP build path for current HarmoTTY development.
+  This is the single HAP build path for current LeanTTY development.
   Native Rust code is rebuilt only when its inputs change. The resulting HAP
   is checked to ensure that it contains only the arm64-v8a native library.
 #>
@@ -154,7 +154,7 @@ if ($Clean) {
         (Join-Path $repoRoot 'entry\build'),
         (Join-Path $repoRoot 'build'),
         (Join-Path $repoRoot '.hvigor'),
-        (Join-Path $repoRoot 'harmotty_ssh\target')
+        (Join-Path $repoRoot 'leantty_ssh\target')
     )) {
         if (Test-Path -LiteralPath $directory) {
             Remove-Item -LiteralPath $directory -Recurse -Force
@@ -166,7 +166,7 @@ $nativeArgs = @{}
 if ($ForceNative -or $Clean) { $nativeArgs['Force'] = $true }
 & (Join-Path $PSScriptRoot 'build-native.ps1') @nativeArgs
 if ($LASTEXITCODE -ne 0) { throw 'ARM64 native build failed' }
-$nativeSo = Join-Path $repoRoot 'entry\libs\arm64-v8a\libharmotty_ssh.so'
+$nativeSo = Join-Path $repoRoot 'entry\libs\arm64-v8a\libleantty_ssh.so'
 if (-not (Test-Path -LiteralPath $nativeSo)) { throw "Native output missing: $nativeSo" }
 
 $hapArgs = @(
@@ -271,18 +271,18 @@ if ($Metadata) {
     }
     New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
     $manifestPath = Join-Path $metadataDir 'build-manifest.json'
-    $releaseUnsignedHap = Join-Path $artifactDir "HarmoTTY-$ReleaseId-arm64-v8a-unsigned.hap"
+    $releaseUnsignedHap = Join-Path $artifactDir "LeanTTY-$ReleaseId-arm64-v8a-unsigned.hap"
     Copy-Item -LiteralPath $unsignedHap -Destination $releaseUnsignedHap -Force
-    $releaseUnsignedApp = Join-Path $artifactDir "HarmoTTY-$ReleaseId-arm64-v8a-unsigned.app"
+    $releaseUnsignedApp = Join-Path $artifactDir "LeanTTY-$ReleaseId-arm64-v8a-unsigned.app"
     Copy-Item -LiteralPath $unsignedApp -Destination $releaseUnsignedApp -Force
     $releaseSignedHap = $null
     $releaseSignedApp = $null
     if (Test-Path -LiteralPath $signedHap) {
-        $releaseSignedHap = Join-Path $artifactDir "HarmoTTY-$ReleaseId-arm64-v8a-signed.hap"
+        $releaseSignedHap = Join-Path $artifactDir "LeanTTY-$ReleaseId-arm64-v8a-signed.hap"
         Copy-Item -LiteralPath $signedHap -Destination $releaseSignedHap -Force
     }
     if ($null -ne $signedApp) {
-        $releaseSignedApp = Join-Path $artifactDir "HarmoTTY-$ReleaseId-arm64-v8a-signed.app"
+        $releaseSignedApp = Join-Path $artifactDir "LeanTTY-$ReleaseId-arm64-v8a-signed.app"
         Copy-Item -LiteralPath $signedApp -Destination $releaseSignedApp -Force
     }
 
@@ -332,7 +332,7 @@ if ($Metadata) {
 
     $rustLicenseDir = Join-Path $licenseDir 'rust'
     New-Item -ItemType Directory -Force -Path $rustLicenseDir | Out-Null
-    Push-Location (Join-Path $repoRoot 'harmotty_ssh')
+    Push-Location (Join-Path $repoRoot 'leantty_ssh')
     try {
         $cargoMetadataJson = & cargo metadata --locked --offline `
             --filter-platform aarch64-unknown-linux-ohos --format-version 1

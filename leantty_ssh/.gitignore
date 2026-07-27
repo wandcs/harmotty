@@ -5,4 +5,4 @@ target/
 package/libs
 
 *.har
-harmotty-ssh-core/Cargo.lock
+leantty-ssh-core/Cargo.lock

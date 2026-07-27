@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-  HarmoTTY native cross-compilation
+  LeanTTY native cross-compilation
 .DESCRIPTION
-  Build harmotty_ssh for the HarmonyOS PC ARM64 target.
+  Build leantty_ssh for the HarmonyOS PC ARM64 target.
   Requires OHOS SDK/NDK from DevEco Studio.
 #>
 param(
@@ -68,13 +68,13 @@ $env:OHOS_NDK_HOME = $ndkDir
 $env:JAVA_HOME = Join-Path $deveco 'jbr'
 $env:PATH = "$PSScriptRoot;$llvmBin;$jbrBin;$env:PATH"
 
-$cargoManifest = Join-Path $repoRoot 'harmotty_ssh\Cargo.toml'
-$rustSrcDir   = Join-Path $repoRoot 'harmotty_ssh\src'
-$buildScript  = Join-Path $repoRoot 'harmotty_ssh\build.rs'
-$coreManifest = Join-Path $repoRoot 'harmotty_ssh\harmotty-ssh-core\Cargo.toml'
-$coreSrcDir   = Join-Path $repoRoot 'harmotty_ssh\harmotty-ssh-core\src'
+$cargoManifest = Join-Path $repoRoot 'leantty_ssh\Cargo.toml'
+$rustSrcDir   = Join-Path $repoRoot 'leantty_ssh\src'
+$buildScript  = Join-Path $repoRoot 'leantty_ssh\build.rs'
+$coreManifest = Join-Path $repoRoot 'leantty_ssh\leantty-ssh-core\Cargo.toml'
+$coreSrcDir   = Join-Path $repoRoot 'leantty_ssh\leantty-ssh-core\src'
 $libsDir       = Join-Path $repoRoot 'entry\libs'
-$cargoLock     = Join-Path $repoRoot 'harmotty_ssh\Cargo.lock'
+$cargoLock     = Join-Path $repoRoot 'leantty_ssh\Cargo.lock'
 $toolchainToml = Join-Path $repoRoot 'rust-toolchain.toml'
 $cargoConfig   = Join-Path $repoRoot '.cargo\config.toml'
 
@@ -124,7 +124,7 @@ $targets = @(
 foreach ($t in $targets) {
     $target = $t.Target
     $abi    = $t.Abi
-    $soPath = Join-Path $libsDir "$abi\libharmotty_ssh.so"
+    $soPath = Join-Path $libsDir "$abi\libleantty_ssh.so"
 
     if (-not (Test-Stale $soPath)) {
         Write-Host "[build-native] $abi up to date, skip" -ForegroundColor Green
@@ -154,8 +154,8 @@ if ($SkipCopy) {
 
 $readelf = Join-Path $llvmBin 'llvm-readelf.exe'
 foreach ($t in $targets) {
-    $source = Join-Path $repoRoot "harmotty_ssh\target\$($t.Target)\release\libharmotty_ssh.so"
-    $dest   = Join-Path $libsDir "$($t.Abi)\libharmotty_ssh.so"
+    $source = Join-Path $repoRoot "leantty_ssh\target\$($t.Target)\release\libleantty_ssh.so"
+    $dest   = Join-Path $libsDir "$($t.Abi)\libleantty_ssh.so"
     if (-not (Test-Path -LiteralPath $source)) {
         throw "$($t.Abi) .so is missing after the ARM64 build"
     }
