@@ -15,6 +15,9 @@
         "name": "ohos.permission.PREPARE_APP_TERMINATE"
       },
       {
+        "name": "ohos.permission.STORE_PERSISTENT_DATA"
+      },
+      {
         "name": "ohos.permission.READ_PASTEBOARD",
         "reason": "$string:read_pasteboard_reason",
         "usedScene": {
@@ -46,20 +49,6 @@
             ]
           }
         ]
-      }
-    ],
-    "extensionAbilities": [
-      {
-        "name": "EntryBackupAbility",
-        "srcEntry": "./ets/entrybackupability/EntryBackupAbility.ets",
-        "type": "backup",
-        "exported": false,
-        "metadata": [
-          {
-            "name": "ohos.extension.backup",
-            "resource": "$profile:backup_config"
-          }
-        ],
       }
     ]
   }

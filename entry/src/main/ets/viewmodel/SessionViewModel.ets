@@ -10,6 +10,7 @@ import { CommandParser, KeyCommandKind } from '../model/command/CommandParser'
 import { KeyCommandService, KeyCommandContext } from '../model/command/KeyCommandService'
 import { Logger } from '../common/logger/Logger'
 import { FileUtils } from '../common/utils/FileUtils'
+import { DurableStateManager } from '../model/persistence/DurableStateManager'
 import { TerminalInputAction, TerminalInputActionKind, TerminalInputParser } from '../model/terminal/TerminalInputParser'
 import { TerminalMode } from '../common/types/TerminalTypes'
 import { ConnectionControl } from '../model/ssh/ConnectionControl'
@@ -550,6 +551,20 @@ export class SessionViewModel {
       return
     }
     let accepted: boolean = answer === 'yes'
+    if (accepted) {
+      if (this.context === null) {
+        this.sshClient.verifyHostKey(false)
+        this.onSshError('Host key could not be retained because the application context is unavailable')
+        return
+      }
+      try {
+        DurableStateManager.commitKnownHostLine(this.context, this.sshClient.getPendingKnownHostLine())
+      } catch (e) {
+        this.sshClient.verifyHostKey(false)
+        this.onSshError('Host key could not be retained: ' + e)
+        return
+      }
+    }
     if (this.sshClient.verifyHostKey(accepted) && accepted) {
       this.setMode(TerminalMode.CONNECTING)
       this.session.setState(SshSessionState.CONNECTING)

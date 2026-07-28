@@ -165,12 +165,26 @@ impl russh::client::Handler for ClientHandler {
                 let fingerprint = server_public_key
                     .fingerprint(russh::keys::HashAlg::Sha256)
                     .to_string();
+                let host = if self.port == 22 {
+                    self.host.clone()
+                } else {
+                    format!("[{}]:{}", self.host, self.port)
+                };
+                let public_key = match server_public_key.to_openssh() {
+                    Ok(value) => value,
+                    Err(error) => {
+                        send_control(&self.control_callback, &format!("HOST_KEY_ERROR:{}", error));
+                        return Ok(false);
+                    }
+                };
                 send_control(
                     &self.control_callback,
                     &format!(
-                        "HOST_KEY_PROMPT:{} {}",
+                        "HOST_KEY_PROMPT:{} {}\t{} {}",
                         server_public_key.algorithm(),
-                        fingerprint
+                        fingerprint,
+                        host,
+                        public_key
                     ),
                 );
                 let _ = self
@@ -182,20 +196,7 @@ impl russh::client::Handler for ClientHandler {
                     .connect_progress_tx
                     .send(ConnectProgress::NetworkActivityResumed)
                     .await;
-                if accepted {
-                    if let Err(error) = russh::keys::known_hosts::learn_known_hosts_path(
-                        &self.host,
-                        self.port,
-                        server_public_key,
-                        &self.known_hosts_path,
-                    ) {
-                        send_control(&self.control_callback, &format!("HOST_KEY_ERROR:{}", error));
-                        return Ok(false);
-                    }
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
+                Ok(accepted)
             }
             Err(error) => {
                 let fingerprint = server_public_key

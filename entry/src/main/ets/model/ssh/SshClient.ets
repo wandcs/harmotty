@@ -19,6 +19,7 @@ export class SshClient {
   private sessionId: string = ''
   private connected: boolean = false
   private waitingAuth: boolean = false
+  private pendingKnownHostLine: string = ''
   private eventCallback: ((event: SshClientEvent, data: string) => void) | null = null
   private dataCallback: ((data: Uint8Array) => void) | null = null
   private logger: Logger = new Logger('SshClient')
@@ -102,11 +103,16 @@ export class SshClient {
     }
     try {
       sshNative.sshVerifyHostKey(this.sessionId, accepted)
+      this.pendingKnownHostLine = ''
       return true
     } catch (e) {
       this.reportError(new SshError(SshErrorCode.HostKey, 'Host key response failed', '' + e, 'client'))
       return false
     }
+  }
+
+  getPendingKnownHostLine(): string {
+    return this.pendingKnownHostLine
   }
 
   write(data: string): void {
@@ -199,7 +205,14 @@ export class SshClient {
       this.logger.info('SSH connected')
       this.emitEvent(SshClientEvent.CONNECTED, '')
     } else if (event.startsWith('HOST_KEY_PROMPT:')) {
-      this.emitEvent(SshClientEvent.HOST_KEY_PROMPT, event.substring(16))
+      let payload: string = event.substring(16)
+      let separator: number = payload.indexOf('\t')
+      if (separator < 1 || separator >= payload.length - 1) {
+        this.handleError('HOST_KEY:Invalid host key prompt payload')
+        return
+      }
+      this.pendingKnownHostLine = payload.substring(separator + 1)
+      this.emitEvent(SshClientEvent.HOST_KEY_PROMPT, payload.substring(0, separator))
     } else if (event.startsWith('HOST_KEY_CHANGED:')) {
       this.emitEvent(SshClientEvent.HOST_KEY_CHANGED, event.substring(17))
     } else if (event.startsWith('HOST_KEY_ERROR:')) {
