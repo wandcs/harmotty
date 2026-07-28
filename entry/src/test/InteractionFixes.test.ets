@@ -307,6 +307,13 @@ export default function interactionFixesTest() {
       expect(actions.length).assertEqual(0)
     })
 
+    it('endsAcceptedHostKeyInputBeforeTheNextAuthenticationPrompt', 0, () => {
+      expect(SessionViewModel.hostKeyDecisionSubmitOutput('yes')).assertEqual('\r\n')
+      expect(SessionViewModel.hostKeyDecisionSubmitOutput('no')).assertEqual('\r\n')
+      expect(SessionViewModel.hostKeyDecisionSubmitOutput('maybe'))
+        .assertEqual('\r\nPlease type yes or no: ')
+    })
+
     it('buildsKeypushMarkerAndShellCommandWithoutEchoFalsePositive', 0, () => {
       let generatedMarker: string = SessionViewModel.buildKeypushMarker()
       expect(generatedMarker.startsWith('__LTTY_KEYPUSH_')).assertEqual(true)
