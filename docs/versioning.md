@@ -239,9 +239,11 @@ tagged version as `Released`.
 | OHPM | `entry/oh-package.json5` | `1.0.1` |
 | Native OHPM | `entry/src/main/cpp/types/libleantty_ssh/oh-package.json5` | `1.0.1` |
 | Root OHPM | `oh-package.json5` | `1.0.1` |
-| Release artifact default | `tools/build-all.ps1` | `1.0.1` |
+| Release artifact name | `tools/build-all.ps1` | Derived from `AppScope/app.json5` unless explicitly supplied |
 
-All semantic version sources must stay aligned.
+All semantic version sources must stay aligned. The build script does not own
+another version value: formal release builds supply `-ReleaseId`, then fail
+before compiling if it differs from any version source.
 
 `AppScope/app.json5` uses:
 
