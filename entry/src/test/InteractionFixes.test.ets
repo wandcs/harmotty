@@ -23,14 +23,22 @@ export default function interactionFixesTest() {
       let removeResult: CommandParseResult | KeyCommandResult | null = CommandParser.parseInput('key rm deploy', config)
       let importResult: CommandParseResult | KeyCommandResult | null =
         CommandParser.parseInput('key import C:\\keys\\source deploy', config)
+      let exportResult: CommandParseResult | KeyCommandResult | null =
+        CommandParser.parseInput('key export deploy', config)
       expect(showResult instanceof KeyCommandResult).assertEqual(true)
       expect(removeResult instanceof KeyCommandResult).assertEqual(true)
       expect(importResult instanceof KeyCommandResult).assertEqual(true)
+      expect(exportResult instanceof KeyCommandResult).assertEqual(true)
       if (showResult instanceof KeyCommandResult) { expect(showResult.keyName).assertEqual('deploy') }
       if (removeResult instanceof KeyCommandResult) { expect(removeResult.keyName).assertEqual('deploy') }
       if (importResult instanceof KeyCommandResult) {
         expect(importResult.sourcePath).assertEqual('C:\\keys\\source')
         expect(importResult.keyName).assertEqual('deploy')
+      }
+      if (exportResult instanceof KeyCommandResult) {
+        expect(exportResult.kind).assertEqual(KeyCommandKind.KEYEXPORT)
+        expect(exportResult.keyName).assertEqual('deploy')
+        expect(exportResult.destinationName).assertEqual('deploy')
       }
     })
 
@@ -73,7 +81,7 @@ export default function interactionFixesTest() {
       expect(empty instanceof CommandParseResult).assertEqual(true)
       expect(invalidSsh instanceof CommandParseResult).assertEqual(true)
       if (empty instanceof CommandParseResult) {
-        expect(empty.errorMessage).assertEqual('Usage: ssh user@host')
+        expect(empty.errorMessage).assertEqual('Usage: ssh <user>@<host>')
       }
       if (invalidSsh instanceof CommandParseResult) {
         expect(invalidSsh.errorMessage).assertEqual('Username required')
@@ -91,6 +99,16 @@ export default function interactionFixesTest() {
       expect(publicResult.kind).assertEqual(KeyCommandKind.KEYPUB)
       expect(infoResult.kind).assertEqual(KeyCommandKind.KEYINFO)
       expect(publicResult.keyName).assertEqual('~/.ssh/deploy')
+    })
+
+    it('parsesOptionalKeyExportFileNameAndRejectsInvalidSyntax', 0, () => {
+      let missingName: KeyCommandResult = CommandParser.parseKeyExport('key export')
+      let renamed: KeyCommandResult = CommandParser.parseKeyExport('key export deploy deploy-backup')
+      let extraName: KeyCommandResult = CommandParser.parseKeyExport('key export deploy backup extra')
+      expect(missingName.errorMessage).assertEqual('Usage: key export <key-name> [<file-name>]')
+      expect(renamed.keyName).assertEqual('deploy')
+      expect(renamed.destinationName).assertEqual('deploy-backup')
+      expect(extraName.errorMessage).assertEqual('Usage: key export <key-name> [<file-name>]')
     })
 
     it('parsesHostCommandsAndMarksLegacyAliasSyntax', 0, () => {

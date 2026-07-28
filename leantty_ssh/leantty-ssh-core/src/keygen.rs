@@ -55,6 +55,78 @@ pub fn protect_private_key(key_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn export_key_pair(
+    private_path: &str,
+    public_path: &str,
+    output_dir: &str,
+    file_name: &str,
+) -> Result<(), String> {
+    use std::fs::{File, OpenOptions};
+    use std::io::{self, Write};
+    use std::path::Path;
+
+    validate_export_file_name(file_name)?;
+
+    let output_dir_path = Path::new(output_dir);
+    if !output_dir_path.is_dir() {
+        return Err("Downloads directory is unavailable".to_string());
+    }
+
+    let private_destination = output_dir_path.join(file_name);
+    let public_destination = output_dir_path.join(format!("{}.pub", file_name));
+    if private_destination.exists() || public_destination.exists() {
+        return Err(format!("destination already exists: {}", file_name));
+    }
+
+    let mut private_source =
+        File::open(private_path).map_err(|e| format!("open private key failed: {}", e))?;
+    let mut public_source =
+        File::open(public_path).map_err(|e| format!("open public key failed: {}", e))?;
+
+    let mut private_options = OpenOptions::new();
+    private_options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        private_options.mode(0o600);
+    }
+    let mut private_destination_file = private_options
+        .open(&private_destination)
+        .map_err(|e| format!("create export failed: {}", e))?;
+
+    let public_result = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&public_destination);
+    let mut public_destination_file = match public_result {
+        Ok(file) => file,
+        Err(error) => {
+            drop(private_destination_file);
+            let _ = std::fs::remove_file(&private_destination);
+            return Err(format!("create public export failed: {}", error));
+        }
+    };
+
+    let copy_result = (|| -> io::Result<()> {
+        io::copy(&mut private_source, &mut private_destination_file)?;
+        private_destination_file.flush()?;
+        private_destination_file.sync_all()?;
+        io::copy(&mut public_source, &mut public_destination_file)?;
+        public_destination_file.flush()?;
+        public_destination_file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(error) = copy_result {
+        drop(private_destination_file);
+        drop(public_destination_file);
+        let _ = std::fs::remove_file(&private_destination);
+        let _ = std::fs::remove_file(&public_destination);
+        return Err(format!("write export failed: {}", error));
+    }
+
+    Ok(())
+}
+
 pub fn generate_key_pair(
     algorithm: &str,
     output_dir: &str,
@@ -176,6 +248,20 @@ fn validate_key_name(file_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_export_file_name(file_name: &str) -> Result<(), String> {
+    if file_name.is_empty() || file_name == "." || file_name == ".." {
+        return Err("invalid export file name".to_string());
+    }
+    if file_name.to_ascii_lowercase().ends_with(".pub")
+        || !file_name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+    {
+        return Err("invalid export file name".to_string());
+    }
+    Ok(())
+}
+
 pub fn read_public_key_fingerprint(key_path: &str) -> Result<String, String> {
     let content: String =
         std::fs::read_to_string(key_path).map_err(|e| format!("read failed: {}", e))?;
@@ -192,7 +278,7 @@ pub fn read_public_key_fingerprint(key_path: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{generate_key_pair, inspect_private_key};
+    use super::{export_key_pair, generate_key_pair, inspect_private_key};
 
     #[test]
     fn uses_requested_name_and_refuses_overwrite() {
@@ -233,5 +319,92 @@ mod tests {
         assert!(!inspected.encrypted);
         assert!(inspected.public_key.ends_with("test@host"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn exports_key_pair_without_overwriting() {
+        let root = std::env::temp_dir().join(format!("leantty-export-{}", std::process::id()));
+        let source_dir = root.join("source");
+        let downloads_dir = root.join("Downloads");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&downloads_dir).unwrap();
+
+        let source_dir_text = source_dir.to_string_lossy().to_string();
+        let downloads_dir_text = downloads_dir.to_string_lossy().to_string();
+        let generated =
+            generate_key_pair("ed25519", &source_dir_text, "deploy", "", "test@host").unwrap();
+        export_key_pair(
+            &generated.private_path,
+            &generated.public_path,
+            &downloads_dir_text,
+            "deploy",
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read(&generated.private_path).unwrap(),
+            std::fs::read(downloads_dir.join("deploy")).unwrap()
+        );
+        assert_eq!(
+            std::fs::read(&generated.public_path).unwrap(),
+            std::fs::read(downloads_dir.join("deploy.pub")).unwrap()
+        );
+        assert!(export_key_pair(
+            &generated.private_path,
+            &generated.public_path,
+            &downloads_dir_text,
+            "deploy",
+        )
+        .is_err());
+        export_key_pair(
+            &generated.private_path,
+            &generated.public_path,
+            &downloads_dir_text,
+            "deploy-backup",
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(&generated.private_path).unwrap(),
+            std::fs::read(downloads_dir.join("deploy-backup")).unwrap()
+        );
+        assert_eq!(
+            std::fs::read(&generated.public_path).unwrap(),
+            std::fs::read(downloads_dir.join("deploy-backup.pub")).unwrap()
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn public_name_conflict_leaves_no_partial_private_export() {
+        let root =
+            std::env::temp_dir().join(format!("leantty-export-conflict-{}", std::process::id()));
+        let source_dir = root.join("source");
+        let downloads_dir = root.join("Downloads");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&downloads_dir).unwrap();
+
+        let source_dir_text = source_dir.to_string_lossy().to_string();
+        let downloads_dir_text = downloads_dir.to_string_lossy().to_string();
+        let generated = generate_key_pair("ed25519", &source_dir_text, "work", "", "").unwrap();
+        std::fs::write(downloads_dir.join("work.pub"), "existing").unwrap();
+
+        let error = export_key_pair(
+            &generated.private_path,
+            &generated.public_path,
+            &downloads_dir_text,
+            "work",
+        )
+        .unwrap_err();
+        assert!(error.contains("destination already exists"));
+        assert!(!downloads_dir.join("work").exists());
+        assert_eq!(
+            std::fs::read_to_string(downloads_dir.join("work.pub")).unwrap(),
+            "existing"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -12,6 +12,7 @@ export declare function sshResize(sessionId: string, cols: number, rows: number)
 export declare function sshSetOutputPaused(sessionId: string, paused: boolean): void
 export declare function sshDisconnect(sessionId: string): void
 export declare function sshGenerateKeyPair(algorithm: string, passphrase: string, outputDir: string, fileName: string, comment: string): string
+export declare function sshExportKeyPair(privatePath: string, publicPath: string, outputDir: string, fileName: string): void
 export declare function sshReadPublicKey(keyPath: string): string
 export declare function sshInspectPrivateKey(keyPath: string): string
 export declare function sshProtectPrivateKey(keyPath: string): void

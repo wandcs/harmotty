@@ -8,41 +8,49 @@ import { Logger } from '../../common/logger/Logger'
 const logger: Logger = new Logger('KeyCommandService')
 const HELP_TEXT: string =
   '\r\n' +
+  'Syntax: <...> is required; [...] is optional; <a|b> means choose one.\r\n' +
+  '\r\n' +
   'Connection\r\n' +
-  '  ssh [-p port] [-i identity] user@host     Connect to a server\r\n' +
-  '  ssh <host>                                Connect using ~/.ssh/config\r\n' +
+  '  ssh [-p <port>] [-i <identity>] <user>@<host>  Connect to a server\r\n' +
+  '  ssh [-p <port>] [-i <identity>] <host-name>    Connect using ~/.ssh/config\r\n' +
   '\r\n' +
   'OpenSSH keys\r\n' +
-  '  ssh-keygen -t ed25519|rsa [-f name]       Generate a key pair\r\n' +
-  '  ssh-keygen -y|-l -f identity             Show public key or fingerprint\r\n' +
-  '  ssh-copy-id -i name [-p port] user@host   Install a public key\r\n' +
+  '  ssh-keygen [-t <ed25519|rsa>] [-f <key-name>]  Generate a key pair\r\n' +
+  '  ssh-keygen -y -f <identity>                    Show a public key\r\n' +
+  '  ssh-keygen -l -f <identity>[.pub]               Show a fingerprint\r\n' +
+  '  ssh-copy-id -i <key-name> [-p <port>] <user>@<host>  Install a public key\r\n' +
   '\r\n' +
   'LeanTTY key store\r\n' +
-  '  key list                                  List verified key pairs\r\n' +
-  '  key import <path> [name]                  Import and verify a private key\r\n' +
-  '  key rm <name>                             Delete a verified key pair\r\n' +
+  '  key list                                       List verified key pairs\r\n' +
+  '  key import <path> [<key-name>]                  Import and verify a private key\r\n' +
+  '  key export <key-name> [<file-name>]             Export a key pair to Downloads\r\n' +
+  '  key rm <key-name>                               Delete a verified key pair\r\n' +
   '\r\n' +
   'Host configuration\r\n' +
-  '  host add <name> user@host[:port]          Add a host\r\n' +
-  '  host set <name> user@host[:port]          Update a host\r\n' +
-  '  host rm <name>                            Remove a host\r\n' +
-  '  host list                                 List hosts\r\n' +
+  '  host add <host-name> <user>@<host>[:<port>]    Add a host\r\n' +
+  '  host set <host-name> <user>@<host>[:<port>]    Update a host\r\n' +
+  '  host rm <host-name>                            Remove a host\r\n' +
+  '  host list                                      List hosts\r\n' +
   '\r\n' +
-  '  help [command], <command> --help, ?        Show help\r\n' +
-  '  exit                                      Close this pane\r\n' +
+  '  help [<command>], <command> --help, ?           Show help\r\n' +
+  '  exit                                           Close this pane\r\n' +
   'ltty> '
 
-const SSH_HELP: string = '\r\nUsage: ssh [-p port] [-i identity] user@host\r\n' +
-  '       ssh [-p port] [-i identity] <host>\r\n\r\nHost settings come from ~/.ssh/config; command options take precedence.\r\nltty> '
-const KEYGEN_HELP: string = '\r\nUsage: ssh-keygen -t ed25519|rsa [-f name] [-C comment]\r\n' +
-  '       ssh-keygen -y -f identity\r\n       ssh-keygen -l -f identity[.pub]\r\n\r\n' +
+const SSH_HELP: string = '\r\nUsage: ssh [-p <port>] [-i <identity>] <user>@<host>\r\n' +
+  '       ssh [-p <port>] [-i <identity>] <host-name>\r\n\r\n' +
+  'Host settings come from ~/.ssh/config; command options take precedence.\r\nltty> '
+const KEYGEN_HELP: string = '\r\nUsage: ssh-keygen [-t <ed25519|rsa>] [-f <key-name>] [-C <comment>]\r\n' +
+  '       ssh-keygen -y -f <identity>\r\n       ssh-keygen -l -f <identity>[.pub]\r\n\r\n' +
   'Creates or inspects keys in LeanTTY ~/.ssh.\r\nltty> '
-const COPY_ID_HELP: string = '\r\nUsage: ssh-copy-id -i name [-p port] user@host\r\n\r\n' +
+const COPY_ID_HELP: string = '\r\nUsage: ssh-copy-id -i <key-name> [-p <port>] <user>@<host>\r\n\r\n' +
   'Installs the public key once; an existing identical line is not duplicated.\r\nltty> '
-const KEY_HELP: string = '\r\nUsage: key list | key import <path> [name] | key rm <name>\r\n\r\n' +
-  'Only verified private/public key pairs are listed or removable.\r\nltty> '
-const HOST_HELP: string = '\r\nUsage: host add|set <name> user@host[:port]\r\n' +
-  '       host rm <name>\r\n       host list\r\n\r\nLegacy alias commands remain temporarily supported.\r\nltty> '
+const KEY_HELP: string =
+  '\r\nUsage: key list | key import <path> [<key-name>] | ' +
+  'key export <key-name> [<file-name>] | key rm <key-name>\r\n\r\n' +
+  '<key-name> is the name shown by "key list". <file-name> is the optional Downloads basename; ' +
+  'it defaults to <key-name>. The private key and .pub file are never overwritten.\r\nltty> '
+const HOST_HELP: string = '\r\nUsage: host add|set <host-name> <user>@<host>[:<port>]\r\n' +
+  '       host rm <host-name>\r\n       host list\r\n\r\nLegacy alias commands remain temporarily supported.\r\nltty> '
 
 export interface KeyCommandContext {
   context: common.Context
@@ -67,6 +75,7 @@ export class KeyCommandService {
     if (result.kind === KeyCommandKind.KEYIMPORT) { KeyCommandService.executeKeyimport(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYPUB) { KeyCommandService.executeKeypub(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYINFO) { KeyCommandService.executeKeyinfo(result, ctx); return }
+    if (result.kind === KeyCommandKind.KEYEXPORT) { KeyCommandService.executeKeyexport(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYRM) { KeyCommandService.executeKeyrm(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYPUSH) { KeyCommandService.executeKeypush(result, ctx); return }
     if (result.kind === KeyCommandKind.ALIAS_ADD) { KeyCommandService.executeAliasAdd(result, ctx); return }
@@ -167,6 +176,23 @@ export class KeyCommandService {
       SshKeyManager.deleteKey(ctx.context, keyName)
       ctx.writeOutput('\r\nDeleted: ' + keyName + '\r\nltty> ')
     }, () => { ctx.writeOutput('ltty> ') })
+  }
+
+  private static async executeKeyexport(result: KeyCommandResult, ctx: KeyCommandContext): Promise<void> {
+    let key: KeyPairInfo | null = SshKeyManager.findKeyByName(ctx.context, result.keyName)
+    if (key === null) {
+      ctx.writeError('Key not found: ' + result.keyName + '. Use key list to see available names.')
+      return
+    }
+    let keyName: string = KeyCommandService.fileName(key.filePath)
+    let exportFileName: string = result.destinationName.length > 0 ? result.destinationName : keyName
+    try {
+      await SshKeyManager.exportKeyPair(ctx.context, keyName, exportFileName)
+      ctx.writeOutput('\r\nExported to Downloads:\r\n  ' + exportFileName + '\r\n  ' +
+        exportFileName + '.pub\r\nltty> ')
+    } catch (e) {
+      ctx.writeError('Key export failed: ' + e)
+    }
   }
 
   private static executeAliasAdd(result: KeyCommandResult, ctx: KeyCommandContext): void {

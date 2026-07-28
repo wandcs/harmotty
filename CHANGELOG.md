@@ -4,6 +4,9 @@
 
 ### Development
 
+- Added `key export <key-name> [<file-name>]` to copy a verified OpenSSH
+  private/public key pair directly to Downloads under an optional basename,
+  failing without overwrite when either destination name already exists.
 - Serialized all build-output writers across worktrees of the same repository,
   made the native cache independent of cleaned Cargo output, and retained only
   the five most recent verified test-signed HAP candidates outside volatile

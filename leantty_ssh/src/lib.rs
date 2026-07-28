@@ -812,6 +812,17 @@ pub fn ssh_generate_key_pair(
 }
 
 #[napi]
+pub fn ssh_export_key_pair(
+    private_path: String,
+    public_path: String,
+    output_dir: String,
+    file_name: String,
+) -> Result<()> {
+    keygen::export_key_pair(&private_path, &public_path, &output_dir, &file_name)
+        .map_err(|e| napi_error(&e))
+}
+
+#[napi]
 pub fn ssh_read_public_key(key_path: String) -> Result<String> {
     keygen::read_public_key_fingerprint(&key_path).map_err(|e| napi_error(&e))
 }
