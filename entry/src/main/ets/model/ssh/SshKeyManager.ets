@@ -2,6 +2,7 @@ import { common } from '@kit.AbilityKit'
 import { KeyAlgorithm, KeyPairInfo, KeyGenerationResult, algorithmToString } from '../../common/types/SshKeyTypes'
 import { FileUtils } from '../../common/utils/FileUtils'
 import { Logger } from '../../common/logger/Logger'
+import { DurableStateManager } from '../persistence/DurableStateManager'
 import sshNative from 'libleantty_ssh.so'
 
 const logger: Logger = new Logger('SshKeyManager')
@@ -77,6 +78,13 @@ export class SshKeyManager {
     result.privateKey.fingerprint = parsed['fingerprint']
     result.privateKey.hasPassphrase = passphrase.length > 0
     result.privateKey.publicKeyText = FileUtils.readTextFile(result.privateKey.pubPath)
+    try {
+      DurableStateManager.captureKeyPair(context, keyName)
+    } catch (e) {
+      FileUtils.removeFile(targetPath)
+      FileUtils.removeFile(targetPath + '.pub')
+      throw new Error('Failed to retain generated key pair: ' + e)
+    }
     return result
   }
 
@@ -124,6 +132,7 @@ export class SshKeyManager {
       if (key === null) {
         throw new Error('Imported private key could not be verified')
       }
+      DurableStateManager.captureKeyPair(context, newName)
       return key
     } catch (e) {
       FileUtils.removeFile(targetPath)
@@ -137,13 +146,13 @@ export class SshKeyManager {
     if (key === null) {
       throw new Error('Key not found or invalid: ' + name)
     }
-    let privPath: string = SshKeyManager.resolveSafeKeyPath(context, name)
-    let pubPath: string = privPath + '.pub'
-    if (FileUtils.fileExists(privPath)) {
-      FileUtils.removeFile(privPath)
-    }
-    if (FileUtils.fileExists(pubPath)) {
-      FileUtils.removeFile(pubPath)
+    DurableStateManager.deleteKeyPair(context, name)
+  }
+
+  static protectKeyFile(context: common.Context, name: string): void {
+    let privatePath: string = SshKeyManager.resolveSafeKeyPath(context, name)
+    if (FileUtils.fileExists(privatePath)) {
+      sshNative.sshProtectPrivateKey(privatePath)
     }
   }
 

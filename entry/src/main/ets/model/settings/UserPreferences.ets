@@ -2,6 +2,7 @@ import { preferences } from '@kit.ArkData'
 import { common } from '@kit.AbilityKit'
 import { Logger } from '../../common/logger/Logger'
 import { InteractionPolicy } from '../ui/InteractionPolicy'
+import { DurableStateManager } from '../persistence/DurableStateManager'
 
 const logger: Logger = new Logger('UserPreferences')
 const PREFERENCES_NAME: string = 'leantty_settings'
@@ -11,36 +12,67 @@ export class UserPreferences {
   private static store: preferences.Preferences | null = null
 
   static initialize(context: common.UIAbilityContext): number {
+    let retainedValue: number | null = DurableStateManager.readFontSize()
+    if (retainedValue !== null) {
+      let retainedFontSize: number = InteractionPolicy.clampFontSize(retainedValue)
+      if (retainedFontSize !== retainedValue) {
+        DurableStateManager.writeFontSize(retainedFontSize)
+      }
+      UserPreferences.openLocalStore(context)
+      UserPreferences.writeLocalFontSize(retainedFontSize)
+      return retainedFontSize
+    }
     try {
-      UserPreferences.store = preferences.getPreferencesSync(context, { name: PREFERENCES_NAME })
+      UserPreferences.openLocalStore(context)
+      if (UserPreferences.store === null) {
+        DurableStateManager.writeFontSize(InteractionPolicy.DEFAULT_FONT_SIZE)
+        return InteractionPolicy.DEFAULT_FONT_SIZE
+      }
       let storedValue: preferences.ValueType = UserPreferences.store.getSync(
         TERMINAL_FONT_SIZE_KEY, InteractionPolicy.DEFAULT_FONT_SIZE)
       if (typeof storedValue !== 'number') {
-        UserPreferences.saveFontSize(InteractionPolicy.DEFAULT_FONT_SIZE)
+        DurableStateManager.writeFontSize(InteractionPolicy.DEFAULT_FONT_SIZE)
+        UserPreferences.writeLocalFontSize(InteractionPolicy.DEFAULT_FONT_SIZE)
         return InteractionPolicy.DEFAULT_FONT_SIZE
       }
       let fontSize: number = InteractionPolicy.clampFontSize(storedValue)
-      if (fontSize !== storedValue) {
-        UserPreferences.saveFontSize(fontSize)
-      }
+      DurableStateManager.writeFontSize(fontSize)
+      UserPreferences.writeLocalFontSize(fontSize)
       return fontSize
     } catch (e) {
       logger.warn('Failed to load user preferences: ' + e)
-      return InteractionPolicy.DEFAULT_FONT_SIZE
+      throw new Error('Failed to initialize retained user preferences: ' + e)
     }
   }
 
   static saveFontSize(value: number): void {
+    let fontSize: number = InteractionPolicy.clampFontSize(value)
+    DurableStateManager.writeFontSize(fontSize)
     if (UserPreferences.store === null) {
       logger.warn('Cannot save terminal font size before preferences initialization')
       return
     }
     try {
-      let fontSize: number = InteractionPolicy.clampFontSize(value)
-      UserPreferences.store.putSync(TERMINAL_FONT_SIZE_KEY, fontSize)
-      UserPreferences.store.flushSync()
+      UserPreferences.writeLocalFontSize(fontSize)
     } catch (e) {
       logger.warn('Failed to save terminal font size: ' + e)
     }
+  }
+
+  private static openLocalStore(context: common.UIAbilityContext): void {
+    try {
+      UserPreferences.store = preferences.getPreferencesSync(context, { name: PREFERENCES_NAME })
+    } catch (e) {
+      logger.warn('Failed to open local preferences projection: ' + e)
+      UserPreferences.store = null
+    }
+  }
+
+  private static writeLocalFontSize(fontSize: number): void {
+    if (UserPreferences.store === null) {
+      return
+    }
+    UserPreferences.store.putSync(TERMINAL_FONT_SIZE_KEY, fontSize)
+    UserPreferences.store.flushSync()
   }
 }

@@ -1,5 +1,6 @@
 import { FileUtils } from '../../common/utils/FileUtils'
 import { common } from '@kit.AbilityKit'
+import { DurableStateManager } from '../persistence/DurableStateManager'
 
 const MANAGED_BEGIN: string = '# >>> LeanTTY managed hosts >>>'
 const MANAGED_END: string = '# <<< LeanTTY managed hosts <<<'
@@ -136,7 +137,7 @@ export class SshConfig {
     if (this.sourceText.length > 0) {
       FileUtils.writeTextFile(configPath + '.leantty.bak', this.sourceText)
     }
-    FileUtils.writeTextFile(configPath, content)
+    DurableStateManager.commitSshConfig(context, content)
     this.loadFromText(content)
   }
 

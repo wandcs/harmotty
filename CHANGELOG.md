@@ -4,6 +4,10 @@
 
 ### Development
 
+- Added owner-isolated persistent custody for SSH configuration, verified key
+  pairs, trusted host keys, terminal font size and window geometry so the same
+  application identity can rematerialize them after a normal uninstall and
+  reinstall without exposing a backup or restore workflow.
 - Added a fail-fast AppGallery release preflight and a single build, comparison
   and archive command that keeps production upload artifacts separate from the
   test-signed HAP used for device acceptance and review media.
