@@ -13,7 +13,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
 
+Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'build-native' -Action {
 # ── Detect DevEco Studio ──
 $deveco = ''
 $candidates = @(
@@ -28,7 +30,7 @@ foreach ($c in $candidates) {
 if ($deveco -eq '') {
     Write-Host 'DevEco Studio not found. Set DEVECO_HOME.' -ForegroundColor Red
     Write-Host 'Example: $env:DEVECO_HOME = ''C:\Program Files\Huawei\DevEco Studio''' -ForegroundColor Yellow
-    exit 1
+    throw 'DevEco Studio not found. Set DEVECO_HOME.'
 }
 
     $sdkDir = Join-Path $deveco 'sdk'
@@ -49,7 +51,7 @@ $required = @(
 foreach ($r in $required) {
     if (-not (Test-Path -LiteralPath $r.Path)) {
         Write-Host "ERROR: $($r.Name) not found at $($r.Path)" -ForegroundColor Red
-        exit 1
+        throw "$($r.Name) not found at $($r.Path)"
     }
 }
 
@@ -149,7 +151,7 @@ foreach ($t in $targets) {
 # ── Verify & copy ──
 if ($SkipCopy) {
     Write-Host '[build-native] Skip copy' -ForegroundColor Yellow
-    exit 0
+    return
 }
 
 $readelf = Join-Path $llvmBin 'llvm-readelf.exe'
@@ -174,3 +176,4 @@ foreach ($t in $targets) {
 }
 
 Write-Host '[build-native] Done' -ForegroundColor Green
+}

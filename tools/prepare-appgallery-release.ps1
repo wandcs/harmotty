@@ -35,6 +35,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $productionCheckout = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
 $productionBuildScript = Join-Path $PSScriptRoot 'build-all.ps1'
 $releaseRootFull = [IO.Path]::GetFullPath($ReleaseRoot)
 $releaseDirectory = Join-Path $releaseRootFull "releases\$ReleaseId"
@@ -174,6 +175,8 @@ function Copy-CheckedFile {
     }
 }
 
+Invoke-WithLeanTTYBuildLock -RepoRoot $productionCheckout `
+    -Operation "prepare AppGallery release $ReleaseId" -Action {
 if (-not (Test-Path -LiteralPath $productionBuildScript -PathType Leaf)) {
     throw "Production build script missing: $productionBuildScript"
 }
@@ -370,4 +373,5 @@ Write-Host "Upload APP: $archivedApp" -ForegroundColor Cyan
 Write-Host "Evidence: $evidenceDirectory" -ForegroundColor Cyan
 if ($review) {
     Write-Host 'Review HAP archived separately for device/media use only.' -ForegroundColor Yellow
+}
 }

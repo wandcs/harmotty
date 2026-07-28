@@ -19,8 +19,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
 . (Join-Path $PSScriptRoot 'hdc-common.ps1')
 
+Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'dev-pc' -Action {
 $hdc = Resolve-Hdc
 if ([string]::IsNullOrWhiteSpace($Target)) {
     $readyTargets = @(Get-HdcTargets -Hdc $hdc | Where-Object {
@@ -85,4 +87,5 @@ if (-not $NoLaunch) {
 if ($FollowLogs) {
     Write-Host 'Following LeanTTY logs. Press Ctrl+C to stop.' -ForegroundColor Cyan
     & $hdc -t $Target hilog | Select-String 'LeanTTY|LTTY_SSH|EntryAbility'
+}
 }
