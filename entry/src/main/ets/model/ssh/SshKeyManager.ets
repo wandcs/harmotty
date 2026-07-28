@@ -1,4 +1,5 @@
-import { common } from '@kit.AbilityKit'
+import { abilityAccessCtrl, common, PermissionRequestResult, Permissions } from '@kit.AbilityKit'
+import { Environment } from '@kit.CoreFileKit'
 import { KeyAlgorithm, KeyPairInfo, KeyGenerationResult, algorithmToString } from '../../common/types/SshKeyTypes'
 import { FileUtils } from '../../common/utils/FileUtils'
 import { Logger } from '../../common/logger/Logger'
@@ -9,6 +10,7 @@ const logger: Logger = new Logger('SshKeyManager')
 const DEFAULT_ALGOS: string[] = ['id_ed25519', 'id_ed25519_sk', 'id_rsa']
 const VALID_KEY_NAME: RegExp = /^[A-Za-z0-9._-]+$/
 const RESERVED_SSH_FILES: string[] = ['config', 'known_hosts', 'authorized_keys', 'rc', 'environment', 'moduli']
+const DOWNLOAD_PERMISSION: Permissions = 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY'
 
 class PrivateKeyInspection {
   encrypted: boolean = false
@@ -147,6 +149,77 @@ export class SshKeyManager {
       throw new Error('Key not found or invalid: ' + name)
     }
     DurableStateManager.deleteKeyPair(context, name)
+  }
+
+  static async exportKeyPair(context: common.Context, keyName: string, exportFileName: string): Promise<void> {
+    let key: KeyPairInfo | null = SshKeyManager.findKeyByName(context, keyName)
+    if (key === null) {
+      throw new Error('Key not found or invalid: ' + keyName)
+    }
+    let fileNameError: string | null = SshKeyManager.validateExportFileName(exportFileName)
+    if (fileNameError !== null) {
+      throw new Error(fileNameError)
+    }
+    await SshKeyManager.ensureDownloadsAccess(context)
+    let downloadDir: string = ''
+    try {
+      downloadDir = Environment.getUserDownloadDir()
+    } catch (e) {
+      throw new Error('Downloads directory is unavailable: ' + e)
+    }
+    try {
+      sshNative.sshExportKeyPair(key.filePath, key.pubPath, downloadDir, exportFileName)
+    } catch (e) {
+      let detail: string = '' + e
+      if (detail.includes('destination already exists')) {
+        throw new Error('Downloads already contains "' + exportFileName + '" or "' + exportFileName +
+          '.pub". Try: key export ' + keyName + ' ' + exportFileName + '-copy')
+      }
+      throw new Error('Cannot write key pair to Downloads: ' + detail)
+    }
+  }
+
+  private static validateExportFileName(name: string): string | null {
+    if (name.length === 0 || name === '.' || name === '..') {
+      return 'Export file name must not be empty, "." or ".."'
+    }
+    if (!VALID_KEY_NAME.test(name)) {
+      return 'Export file name can only contain letters, digits, ".", "_", "-"'
+    }
+    if (name.toLowerCase().endsWith('.pub')) {
+      return 'Export file name must not end with .pub'
+    }
+    return null
+  }
+
+  private static async ensureDownloadsAccess(context: common.Context): Promise<void> {
+    let accessManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager()
+    let result: PermissionRequestResult
+    try {
+      result = await accessManager.requestPermissionsFromUser(context, [DOWNLOAD_PERMISSION])
+    } catch (e) {
+      throw new Error('Cannot request Downloads access: ' + e)
+    }
+    if (result.authResults.length === 1 &&
+      result.authResults[0] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+      return
+    }
+
+    let dialogWasShown: boolean = result.dialogShownResults !== undefined &&
+      result.dialogShownResults.length === 1 && result.dialogShownResults[0]
+    if (!dialogWasShown) {
+      try {
+        let settingResults: abilityAccessCtrl.GrantStatus[] =
+          await accessManager.requestPermissionOnSetting(context, [DOWNLOAD_PERMISSION])
+        if (settingResults.length === 1 &&
+          settingResults[0] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+          return
+        }
+      } catch (e) {
+        logger.warn('Downloads settings request failed: ' + e)
+      }
+    }
+    throw new Error('Downloads access was not granted; no files were exported')
   }
 
   static protectKeyFile(context: common.Context, name: string): void {

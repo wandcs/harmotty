@@ -35,13 +35,15 @@ export enum KeyCommandKind {
   EXIT = 10,
   HOST_SET = 11,
   SSH_CONFIG = 12,
-  KEYINFO = 13
+  KEYINFO = 13,
+  KEYEXPORT = 14
 }
 
 export class KeyCommandResult {
   kind: KeyCommandKind
   algorithm: KeyAlgorithm
   keyName: string
+  destinationName: string
   sourcePath: string
   sshHost: string
   sshPort: number
@@ -53,6 +55,7 @@ export class KeyCommandResult {
     this.kind = KeyCommandKind.KEYS
     this.algorithm = KeyAlgorithm.ED25519
     this.keyName = ''
+    this.destinationName = ''
     this.sourcePath = ''
     this.sshHost = ''
     this.sshPort = 22
@@ -69,7 +72,7 @@ export class CommandParser {
     if (trimmed === '?' || trimmed === '？' || trimmed === '-h' || trimmed === '--help' || words[0] === 'help') {
       let result: KeyCommandResult = new KeyCommandResult()
       result.kind = KeyCommandKind.HELP
-      if (words.length > 2) { result.errorMessage = 'Usage: help [command]'; return result }
+      if (words.length > 2) { result.errorMessage = 'Usage: help [<command>]'; return result }
       if (words.length === 2) { result.keyName = words[1] }
       return result
     }
@@ -87,7 +90,7 @@ export class CommandParser {
     if (words[0] === 'ssh' && words[1] === '-G') {
       let result: KeyCommandResult = new KeyCommandResult()
       result.kind = KeyCommandKind.SSH_CONFIG
-      if (words.length !== 3) { result.errorMessage = 'Usage: ssh -G <host>'; return result }
+      if (words.length !== 3) { result.errorMessage = 'Usage: ssh -G <host-name>'; return result }
       result.keyName = words[2]
       return result
     }
@@ -114,6 +117,9 @@ export class CommandParser {
     }
     if (words[0] === 'key' && words[1] === 'import') {
       return CommandParser.parseKeyImport(trimmed)
+    }
+    if (words[0] === 'key' && words[1] === 'export') {
+      return CommandParser.parseKeyExport(trimmed)
     }
 
     if ((words[0] === 'host' || words[0] === 'alias') && (words[1] === 'add' || words[1] === 'set')) {
@@ -144,7 +150,7 @@ export class CommandParser {
     let result: CommandParseResult = new CommandParseResult()
     let trimmed: string = input.trim()
     if (trimmed.length === 0) {
-      result.errorMessage = 'Usage: ssh user@host'
+      result.errorMessage = 'Usage: ssh <user>@<host>'
       return result
     }
     let argText: string = trimmed
@@ -152,7 +158,7 @@ export class CommandParser {
       argText = trimmed.substring(4).trim()
     }
     if (argText.length === 0) {
-      result.errorMessage = 'Usage: ssh user@host or ssh alias'
+      result.errorMessage = 'Usage: ssh <user>@<host> or ssh <host-name>'
       return result
     }
 
@@ -261,7 +267,7 @@ export class CommandParser {
       result.errorMessage = 'ssh-keygen: -y and -l cannot be used together'
     } else if (publicMode || fingerprintMode) {
       if (result.keyName.length === 0) {
-        result.errorMessage = 'ssh-keygen: -f <identity_file> is required with -y or -l'
+        result.errorMessage = 'ssh-keygen: -f <identity> is required with -y or -l'
       } else {
         result.kind = publicMode ? KeyCommandKind.KEYPUB : KeyCommandKind.KEYINFO
       }
@@ -312,8 +318,8 @@ export class CommandParser {
       }
       i += 1
     }
-    if (result.keyName.length === 0) { result.errorMessage = 'ssh-copy-id: -i <keyname> is required' }
-    if (result.sshHost.length === 0) { result.errorMessage = 'ssh-copy-id: target user@host is required' }
+    if (result.keyName.length === 0) { result.errorMessage = 'ssh-copy-id: -i <key-name> is required' }
+    if (result.sshHost.length === 0) { result.errorMessage = 'ssh-copy-id: target <user>@<host> is required' }
     return result
   }
 
@@ -322,7 +328,7 @@ export class CommandParser {
     result.kind = KeyCommandKind.KEYPUB
     result.sourcePath = 'legacy-key-show'
     let parts: string[] = input.split(/\s+/)
-    if (parts.length !== 3) { result.errorMessage = 'Usage: key show <name>'; return result }
+    if (parts.length !== 3) { result.errorMessage = 'Usage: key show <key-name>'; return result }
     result.keyName = parts[2]
     return result
   }
@@ -331,7 +337,7 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.KEYRM
     let parts: string[] = input.split(/\s+/)
-    if (parts.length !== 3) { result.errorMessage = 'Usage: key rm <name>'; return result }
+    if (parts.length !== 3) { result.errorMessage = 'Usage: key rm <key-name>'; return result }
     result.keyName = parts[2]
     return result
   }
@@ -340,7 +346,10 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.KEYIMPORT
     let parts: string[] = input.split(/\s+/)
-    if (parts.length < 3 || parts.length > 4) { result.errorMessage = 'Usage: key import <path> [name]'; return result }
+    if (parts.length < 3 || parts.length > 4) {
+      result.errorMessage = 'Usage: key import <path> [<key-name>]'
+      return result
+    }
     result.sourcePath = parts[2]
     if (parts.length === 4) { result.keyName = parts[3] }
     else {
@@ -351,15 +360,34 @@ export class CommandParser {
     return result
   }
 
+  static parseKeyExport(input: string): KeyCommandResult {
+    let result: KeyCommandResult = new KeyCommandResult()
+    result.kind = KeyCommandKind.KEYEXPORT
+    let parts: string[] = input.split(/\s+/)
+    if (parts.length < 3 || parts.length > 4) {
+      result.errorMessage = 'Usage: key export <key-name> [<file-name>]'
+      return result
+    }
+    result.keyName = parts[2]
+    result.destinationName = parts.length === 4 ? parts[3] : result.keyName
+    return result
+  }
+
   static parseAliasAdd(input: string): KeyCommandResult {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.ALIAS_ADD
     let parts: string[] = input.split(/\s+/)
-    if (parts.length !== 4) { result.errorMessage = 'Usage: host add <name> user@host[:port]'; return result }
+    if (parts.length !== 4) {
+      result.errorMessage = 'Usage: host add <host-name> <user>@<host>[:<port>]'
+      return result
+    }
     result.keyName = parts[2]
     let target: string = parts[3]
     let atIdx: number = target.lastIndexOf('@')
-    if (atIdx <= 0) { result.errorMessage = 'Usage: host add <name> user@host'; return result }
+    if (atIdx <= 0) {
+      result.errorMessage = 'Usage: host add <host-name> <user>@<host>[:<port>]'
+      return result
+    }
     result.sshUser = target.substring(0, atIdx)
     let hostPort: string = target.substring(atIdx + 1)
     let colonIdx: number = hostPort.indexOf(':')
@@ -376,7 +404,7 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.ALIAS_RM
     let parts: string[] = input.split(/\s+/)
-    if (parts.length !== 3) { result.errorMessage = 'Usage: host rm <name>'; return result }
+    if (parts.length !== 3) { result.errorMessage = 'Usage: host rm <host-name>'; return result }
     result.keyName = parts[2]
     return result
   }

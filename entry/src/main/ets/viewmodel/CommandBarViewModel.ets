@@ -35,7 +35,7 @@ export class CommandBarViewModel {
       this.completions = hostMatches
       return hostMatches
     }
-    let commands: string[] = ['help', 'ssh', 'ssh-keygen', 'ssh-copy-id', 'key list', 'key import', 'key rm',
+    let commands: string[] = ['help', 'ssh', 'ssh-keygen', 'ssh-copy-id', 'key list', 'key import', 'key export', 'key rm',
       'host list', 'host add', 'host set', 'host rm', 'exit']
     let matches: string[] = []
     for (let i = 0; i < commands.length; i++) {

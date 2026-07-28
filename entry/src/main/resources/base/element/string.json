@@ -15,6 +15,10 @@
     {
       "name": "read_pasteboard_reason",
       "value": "Used to paste clipboard content into the SSH terminal"
+    },
+    {
+      "name": "read_write_download_reason",
+      "value": "Used to export SSH key pairs to Downloads"
     }
   ]
 }
