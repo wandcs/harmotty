@@ -11,6 +11,11 @@
   artifact naming now derives from the application version unless a formal
   release explicitly supplies and validates `-ReleaseId`.
 
+### Documentation
+
+- Recorded the public AppGallery release of 1.0.1 and selected the authorized
+  1.1.0 authentication and workspace-navigation scope.
+
 ## [1.0.1] - 2026-07-28
 
 ### Security
