@@ -121,6 +121,15 @@ export class DurableStateManager {
     FileUtils.writeTextFile(FileUtils.getSshDir(context) + '/known_hosts', content)
   }
 
+  static readKnownHosts(): string {
+    return DurableStateManager.requireStore().read(SSH_KNOWN_HOSTS_PATH) ?? ''
+  }
+
+  static commitKnownHostsContent(context: common.Context, content: string): void {
+    DurableStateManager.requireStore().write(SSH_KNOWN_HOSTS_PATH, content)
+    FileUtils.writeTextFile(FileUtils.getSshDir(context) + '/known_hosts', content)
+  }
+
   static captureKeyPair(context: common.Context, name: string): void {
     let privatePath: string = FileUtils.getSshDir(context) + '/' + name
     let publicPath: string = privatePath + '.pub'

@@ -15,6 +15,14 @@ export enum SshClientEvent {
   WARNING = 'WARNING'
 }
 
+export class HostKeyChangedInfo {
+  algorithm: string = ''
+  oldFingerprint: string = ''
+  newFingerprint: string = ''
+  host: string = ''
+  port: number = 22
+}
+
 export class SshClient {
   private sessionId: string = ''
   private connected: boolean = false
@@ -194,6 +202,25 @@ export class SshClient {
     return detail.length > 0 ? detail : 'SSH connection ended unexpectedly.'
   }
 
+  static parseHostKeyChangedInfo(payload: string): HostKeyChangedInfo | null {
+    let fields: string[] = payload.split('\t')
+    if (fields.length !== 5) {
+      return null
+    }
+    let port: number = parseInt(fields[4], 10)
+    if (fields[0].length === 0 || fields[1].length === 0 || fields[2].length === 0 ||
+      fields[3].length === 0 || !/^\d+$/.test(fields[4]) || isNaN(port) || port < 1 || port > 65535) {
+      return null
+    }
+    let info: HostKeyChangedInfo = new HostKeyChangedInfo()
+    info.algorithm = fields[0]
+    info.oldFingerprint = fields[1]
+    info.newFingerprint = fields[2]
+    info.host = fields[3]
+    info.port = port
+    return info
+  }
+
   private handleRustEvent(event: string): void {
     this.logger.info('rust event: ' + event)
     if (event === 'PASSWORD_PROMPT') {
@@ -214,7 +241,12 @@ export class SshClient {
       this.pendingKnownHostLine = payload.substring(separator + 1)
       this.emitEvent(SshClientEvent.HOST_KEY_PROMPT, payload.substring(0, separator))
     } else if (event.startsWith('HOST_KEY_CHANGED:')) {
-      this.emitEvent(SshClientEvent.HOST_KEY_CHANGED, event.substring(17))
+      let info: HostKeyChangedInfo | null = SshClient.parseHostKeyChangedInfo(event.substring(17))
+      if (info === null) {
+        this.handleError('HOST_KEY:Invalid changed host key payload')
+        return
+      }
+      this.emitEvent(SshClientEvent.HOST_KEY_CHANGED, JSON.stringify(info))
     } else if (event.startsWith('HOST_KEY_ERROR:')) {
       this.handleError('HOST_KEY:' + event.substring(15))
     } else if (event.startsWith('RESIZE_ERROR:')) {

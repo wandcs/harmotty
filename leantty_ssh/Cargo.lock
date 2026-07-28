@@ -766,8 +766,11 @@ dependencies = [
 name = "leantty-ssh-core"
 version = "1.0.1"
 dependencies = [
+ "data-encoding",
+ "hmac",
  "rand",
  "russh",
+ "sha1",
  "zeroize",
 ]
 

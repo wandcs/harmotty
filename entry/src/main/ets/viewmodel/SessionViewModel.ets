@@ -1,4 +1,4 @@
-import { SshClient, SshClientEvent } from '../model/ssh/SshClient'
+import { HostKeyChangedInfo, SshClient, SshClientEvent } from '../model/ssh/SshClient'
 import util from '@ohos.util'
 import { SshConnectOptions } from '../common/types/SshTypes'
 import { SshSession, SshSessionState } from '../model/ssh/SshSession'
@@ -17,6 +17,7 @@ import { ConnectionControl } from '../model/ssh/ConnectionControl'
 import { TerminalSurfaceController } from '../model/terminal/TerminalSurfaceController'
 import { LocalCommandLine } from '../model/terminal/LocalCommandLine'
 import { common } from '@kit.AbilityKit'
+import { KnownHostsManager } from '../model/ssh/KnownHostsManager'
 
 export { TerminalMode } from '../common/types/TerminalTypes'
 
@@ -272,7 +273,7 @@ export class SessionViewModel {
           'Fingerprint: ' + data + '\r\nTrust this host key? Type yes or no: ')
         break
       case SshClientEvent.HOST_KEY_CHANGED:
-        this.onSshError('WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED. Fingerprint: ' + data)
+        this.onHostKeyChanged(data)
         break
       case SshClientEvent.CONNECTED:
         this.setMode(TerminalMode.CONNECTED)
@@ -396,6 +397,55 @@ export class SessionViewModel {
     this.releaseDisconnectedFlowControl()
     this.writeError('SSH error: ' + errorDetail)
     this.notifyStateChange()
+  }
+
+  private onHostKeyChanged(data: string): void {
+    let record: Record<string, string | number>
+    try {
+      record = JSON.parse(data)
+    } catch (e) {
+      this.onSshError('Invalid changed host key data: ' + e)
+      return
+    }
+    let info: HostKeyChangedInfo = new HostKeyChangedInfo()
+    info.algorithm = '' + record['algorithm']
+    info.oldFingerprint = '' + record['oldFingerprint']
+    info.newFingerprint = '' + record['newFingerprint']
+    info.host = '' + record['host']
+    info.port = Number(record['port'])
+    if (info.algorithm.length === 0 || info.oldFingerprint.length === 0 ||
+      info.newFingerprint.length === 0 || info.host.length === 0 ||
+      !Number.isInteger(info.port) || info.port < 1 || info.port > 65535) {
+      this.onSshError('Invalid changed host key data')
+      return
+    }
+    this.clearKeypushState()
+    let rejectedClient: SshClient = this.sshClient
+    rejectedClient.onEvent(() => {})
+    rejectedClient.onData(() => {})
+    this.sshClient = new SshClient()
+    this.session.setState(SshSessionState.FAILED)
+    this.session.setErrorMessage('Remote host identification has changed')
+    this.setMode(TerminalMode.IDLE)
+    this.releaseDisconnectedFlowControl()
+    this.writeTerminal('\r\n' + SessionViewModel.buildHostKeyChangedWarning(
+      info.host, info.port, info.algorithm, info.oldFingerprint, info.newFingerprint) +
+      '\r\nltty> ')
+    this.notifyStateChange()
+  }
+
+  static buildHostKeyChangedWarning(host: string, port: number, algorithm: string,
+    oldFingerprint: string, newFingerprint: string): string {
+    let target: string = KnownHostsManager.formatTarget(host, port)
+    return 'WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\r\n\r\n' +
+      'Host: ' + target + '\r\n' +
+      'Stored ' + algorithm + ' fingerprint:\r\n  ' + oldFingerprint + '\r\n\r\n' +
+      'Received ' + algorithm + ' fingerprint:\r\n  ' + newFingerprint + '\r\n\r\n' +
+      'The connection was stopped. The server may have been reinstalled,\r\n' +
+      'or someone may be intercepting the connection.\r\n\r\n' +
+      'Verify the new fingerprint through another trusted channel.\r\n\r\n' +
+      'To remove the stored host key, run:\r\n  ssh-keygen -R ' + target + '\r\n\r\n' +
+      'Then reconnect and confirm the new fingerprint.'
   }
 
   private notifyStateChange(): void {

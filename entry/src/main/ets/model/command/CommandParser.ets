@@ -36,7 +36,8 @@ export enum KeyCommandKind {
   HOST_SET = 11,
   SSH_CONFIG = 12,
   KEYINFO = 13,
-  KEYEXPORT = 14
+  KEYEXPORT = 14,
+  HOST_KEY_REMOVE = 15
 }
 
 export class KeyCommandResult {
@@ -236,6 +237,15 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.KEYGEN
     let parts: string[] = input.split(/\s+/)
+    if (parts.length >= 2 && parts[1] === '-R') {
+      result.kind = KeyCommandKind.HOST_KEY_REMOVE
+      if (parts.length !== 3) {
+        result.errorMessage = 'Usage: ssh-keygen -R <host> or ssh-keygen -R [<host>]:<port>'
+        return result
+      }
+      CommandParser.parseKnownHostTarget(parts[2], result)
+      return result
+    }
     let publicMode: boolean = false
     let fingerprintMode: boolean = false
     let i: number = 1
@@ -273,6 +283,37 @@ export class CommandParser {
       }
     }
     return result
+  }
+
+  private static parseKnownHostTarget(target: string, result: KeyCommandResult): void {
+    if (target.length === 0) {
+      result.errorMessage = 'ssh-keygen: missing host after -R'
+      return
+    }
+    if (target.startsWith('[')) {
+      let closingBracket: number = target.indexOf(']')
+      if (closingBracket <= 1 || closingBracket + 1 >= target.length ||
+        target[closingBracket + 1] !== ':' || target.indexOf(']', closingBracket + 1) >= 0) {
+        result.errorMessage = 'ssh-keygen: invalid [host]:port target'
+        return
+      }
+      let portText: string = target.substring(closingBracket + 2)
+      let port: number = parseInt(portText, 10)
+      if (!/^\d+$/.test(portText) || isNaN(port) || port < 1 || port > 65535) {
+        result.errorMessage = 'ssh-keygen: port must be between 1 and 65535'
+        return
+      }
+      result.sshHost = target.substring(1, closingBracket)
+      result.sshPort = port
+      return
+    }
+    let firstColon: number = target.indexOf(':')
+    if (firstColon > 0 && firstColon === target.lastIndexOf(':')) {
+      result.errorMessage = 'ssh-keygen: non-default ports must use [host]:port'
+      return
+    }
+    result.sshHost = target
+    result.sshPort = 22
   }
 
   static parseSshCopyId(input: string): KeyCommandResult {
