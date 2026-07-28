@@ -101,6 +101,60 @@ export default function interactionFixesTest() {
       expect(publicResult.keyName).assertEqual('~/.ssh/deploy')
     })
 
+    it('parsesExactOpenSshKnownHostRemovalTargets', 0, () => {
+      let defaultPort: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -R server.example.com')
+      let customPort: KeyCommandResult =
+        CommandParser.parseSshKeygen('ssh-keygen -R [server.example.com]:2222')
+      let ipv6: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -R [2001:db8::1]:2200')
+      expect(defaultPort.kind).assertEqual(KeyCommandKind.HOST_KEY_REMOVE)
+      expect(defaultPort.sshHost).assertEqual('server.example.com')
+      expect(defaultPort.sshPort).assertEqual(22)
+      expect(customPort.kind).assertEqual(KeyCommandKind.HOST_KEY_REMOVE)
+      expect(customPort.sshHost).assertEqual('server.example.com')
+      expect(customPort.sshPort).assertEqual(2222)
+      expect(ipv6.sshHost).assertEqual('2001:db8::1')
+      expect(ipv6.sshPort).assertEqual(2200)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -R server.example.com:2222').errorMessage.length > 0)
+        .assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -R').errorMessage.length > 0).assertEqual(true)
+    })
+
+    it('buildsChangedHostRemovalCommandFromResolvedAliasEndpoint', 0, () => {
+      let config: SshConfig = new SshConfig()
+      config.loadFromText('Host prod\n  HostName server.example.com\n  Port 2222\n  User deploy\n')
+      let parsed: CommandParseResult | KeyCommandResult | null = CommandParser.parseInput('ssh prod', config)
+      let overridden: CommandParseResult | KeyCommandResult | null =
+        CommandParser.parseInput('ssh -p 2200 prod', config)
+      expect(parsed instanceof CommandParseResult).assertEqual(true)
+      if (parsed instanceof CommandParseResult) {
+        let warning: string = SessionViewModel.buildHostKeyChangedWarning(
+          parsed.host, parsed.port, 'ssh-ed25519', 'SHA256:old', 'SHA256:new')
+        expect(warning.includes('Host: [server.example.com]:2222')).assertEqual(true)
+        expect(warning.includes('ssh-keygen -R [server.example.com]:2222')).assertEqual(true)
+        expect(warning.includes('ssh-keygen -R prod')).assertEqual(false)
+      }
+      expect(overridden instanceof CommandParseResult).assertEqual(true)
+      if (overridden instanceof CommandParseResult) {
+        let warning: string = SessionViewModel.buildHostKeyChangedWarning(
+          overridden.host, overridden.port, 'ssh-ed25519', 'SHA256:old', 'SHA256:new')
+        expect(warning.includes('ssh-keygen -R [server.example.com]:2200')).assertEqual(true)
+      }
+    })
+
+    it('parsesStructuredChangedHostKeyEvents', 0, () => {
+      let info = SshClient.parseHostKeyChangedInfo(
+        'ssh-ed25519\tSHA256:old\tSHA256:new\tserver.example.com\t2222')
+      expect(info !== null).assertEqual(true)
+      if (info !== null) {
+        expect(info.algorithm).assertEqual('ssh-ed25519')
+        expect(info.oldFingerprint).assertEqual('SHA256:old')
+        expect(info.newFingerprint).assertEqual('SHA256:new')
+        expect(info.host).assertEqual('server.example.com')
+        expect(info.port).assertEqual(2222)
+      }
+      expect(SshClient.parseHostKeyChangedInfo('SHA256:new')).assertEqual(null)
+    })
+
     it('parsesOptionalKeyExportFileNameAndRejectsInvalidSyntax', 0, () => {
       let missingName: KeyCommandResult = CommandParser.parseKeyExport('key export')
       let renamed: KeyCommandResult = CommandParser.parseKeyExport('key export deploy deploy-backup')

@@ -12,6 +12,7 @@ use napi_ohos::{Error, Result, Status};
 use zeroize::Zeroize;
 
 use leantty_ssh_core::keygen::{self};
+use leantty_ssh_core::known_hosts::remove_known_host_entries;
 use leantty_ssh_core::AuthMethod;
 
 static NEXT_SESSION_ID: AtomicU32 = AtomicU32::new(1);
@@ -199,13 +200,32 @@ impl russh::client::Handler for ClientHandler {
                 Ok(accepted)
             }
             Err(error) => {
-                let fingerprint = server_public_key
+                let new_fingerprint = server_public_key
                     .fingerprint(russh::keys::HashAlg::Sha256)
                     .to_string();
-                if matches!(error, russh::keys::Error::KeyChanged { .. }) {
+                if let russh::keys::Error::KeyChanged { line } = error {
+                    let old_fingerprint = russh::keys::known_hosts::known_host_keys_path(
+                        &self.host,
+                        self.port,
+                        &self.known_hosts_path,
+                    )
+                    .ok()
+                    .and_then(|keys| {
+                        keys.into_iter()
+                            .find(|(recorded_line, _)| *recorded_line == line)
+                    })
+                    .map(|(_, key)| key.fingerprint(russh::keys::HashAlg::Sha256).to_string())
+                    .unwrap_or_else(|| "unavailable".to_string());
                     send_control(
                         &self.control_callback,
-                        &format!("HOST_KEY_CHANGED:{}", fingerprint),
+                        &format!(
+                            "HOST_KEY_CHANGED:{}\t{}\t{}\t{}\t{}",
+                            server_public_key.algorithm(),
+                            old_fingerprint,
+                            new_fingerprint,
+                            self.host,
+                            self.port
+                        ),
                     );
                 } else {
                     send_control(&self.control_callback, &format!("HOST_KEY_ERROR:{}", error));
@@ -825,6 +845,30 @@ pub fn ssh_export_key_pair(
 #[napi]
 pub fn ssh_read_public_key(key_path: String) -> Result<String> {
     keygen::read_public_key_fingerprint(&key_path).map_err(|e| napi_error(&e))
+}
+
+#[napi(object)]
+pub struct KnownHostsRemovalResult {
+    pub content: String,
+    pub removed: u32,
+}
+
+#[napi]
+pub fn ssh_remove_known_host_entries(
+    content: String,
+    host: String,
+    port: u32,
+) -> Result<KnownHostsRemovalResult> {
+    let port = u16::try_from(port)
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| napi_error("known_hosts port must be between 1 and 65535"))?;
+    let result =
+        remove_known_host_entries(&content, &host, port).map_err(|error| napi_error(&error))?;
+    Ok(KnownHostsRemovalResult {
+        content: result.content,
+        removed: result.removed,
+    })
 }
 
 #[napi]

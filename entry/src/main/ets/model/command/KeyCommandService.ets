@@ -4,6 +4,7 @@ import { KeyPairInfo } from '../../common/types/SshKeyTypes'
 import { KeyCommandResult, KeyCommandKind } from './CommandParser'
 import { SshConfig } from '../ssh/SshConfig'
 import { Logger } from '../../common/logger/Logger'
+import { KnownHostRemovalResult, KnownHostsManager } from '../ssh/KnownHostsManager'
 
 const logger: Logger = new Logger('KeyCommandService')
 const HELP_TEXT: string =
@@ -18,6 +19,7 @@ const HELP_TEXT: string =
   '  ssh-keygen [-t <ed25519|rsa>] [-f <key-name>]  Generate a key pair\r\n' +
   '  ssh-keygen -y -f <identity>                    Show a public key\r\n' +
   '  ssh-keygen -l -f <identity>[.pub]               Show a fingerprint\r\n' +
+  '  ssh-keygen -R <host>|[<host>]:<port>            Remove trusted host keys\r\n' +
   '  ssh-copy-id -i <key-name> [-p <port>] <user>@<host>  Install a public key\r\n' +
   '\r\n' +
   'LeanTTY key store\r\n' +
@@ -40,8 +42,9 @@ const SSH_HELP: string = '\r\nUsage: ssh [-p <port>] [-i <identity>] <user>@<hos
   '       ssh [-p <port>] [-i <identity>] <host-name>\r\n\r\n' +
   'Host settings come from ~/.ssh/config; command options take precedence.\r\nltty> '
 const KEYGEN_HELP: string = '\r\nUsage: ssh-keygen [-t <ed25519|rsa>] [-f <key-name>] [-C <comment>]\r\n' +
-  '       ssh-keygen -y -f <identity>\r\n       ssh-keygen -l -f <identity>[.pub]\r\n\r\n' +
-  'Creates or inspects keys in LeanTTY ~/.ssh.\r\nltty> '
+  '       ssh-keygen -y -f <identity>\r\n       ssh-keygen -l -f <identity>[.pub]\r\n' +
+  '       ssh-keygen -R <host>|[<host>]:<port>\r\n\r\n' +
+  'Creates or inspects keys and removes trusted host records in LeanTTY ~/.ssh.\r\nltty> '
 const COPY_ID_HELP: string = '\r\nUsage: ssh-copy-id -i <key-name> [-p <port>] <user>@<host>\r\n\r\n' +
   'Installs the public key once; an existing identical line is not duplicated.\r\nltty> '
 const KEY_HELP: string =
@@ -76,6 +79,10 @@ export class KeyCommandService {
     if (result.kind === KeyCommandKind.KEYPUB) { KeyCommandService.executeKeypub(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYINFO) { KeyCommandService.executeKeyinfo(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYEXPORT) { KeyCommandService.executeKeyexport(result, ctx); return }
+    if (result.kind === KeyCommandKind.HOST_KEY_REMOVE) {
+      KeyCommandService.executeHostKeyRemove(result, ctx)
+      return
+    }
     if (result.kind === KeyCommandKind.KEYRM) { KeyCommandService.executeKeyrm(result, ctx); return }
     if (result.kind === KeyCommandKind.KEYPUSH) { KeyCommandService.executeKeypush(result, ctx); return }
     if (result.kind === KeyCommandKind.ALIAS_ADD) { KeyCommandService.executeAliasAdd(result, ctx); return }
@@ -176,6 +183,22 @@ export class KeyCommandService {
       SshKeyManager.deleteKey(ctx.context, keyName)
       ctx.writeOutput('\r\nDeleted: ' + keyName + '\r\nltty> ')
     }, () => { ctx.writeOutput('ltty> ') })
+  }
+
+  private static executeHostKeyRemove(result: KeyCommandResult, ctx: KeyCommandContext): void {
+    try {
+      let removal: KnownHostRemovalResult =
+        KnownHostsManager.remove(ctx.context, result.sshHost, result.sshPort)
+      if (removal.removed === 0) {
+        ctx.writeOutput('\r\nNo host key found for ' + removal.target + '.\r\nltty> ')
+        return
+      }
+      let noun: string = removal.removed === 1 ? 'entry' : 'entries'
+      ctx.writeOutput('\r\nRemoved ' + removal.removed.toString() + ' host key ' + noun +
+        ' for ' + removal.target + '.\r\nReconnect to verify and trust the new host key.\r\nltty> ')
+    } catch (e) {
+      ctx.writeError('Failed to remove host key: ' + e)
+    }
   }
 
   private static async executeKeyexport(result: KeyCommandResult, ctx: KeyCommandContext): Promise<void> {

@@ -26,6 +26,9 @@
 
 - Ended accepted SSH host-key confirmation input with a new line before showing
   the next authentication prompt.
+- Added OpenSSH-compatible `ssh-keygen -R` host-record removal and made changed
+  host-key failures show the stored and received fingerprints plus the exact
+  cleanup command for the effective host and port.
 
 ### Documentation
 
