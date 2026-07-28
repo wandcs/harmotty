@@ -12,6 +12,7 @@ param(
     [switch]$Clean,
     [switch]$ForceNative,
     [switch]$SkipBuild,
+    [switch]$LatestCandidate,
     [switch]$NoLaunch,
     [switch]$FollowLogs,
     [switch]$RequireUsb
@@ -20,9 +21,26 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
+. (Join-Path $PSScriptRoot 'candidate-store.ps1')
 . (Join-Path $PSScriptRoot 'hdc-common.ps1')
 
 Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'dev-pc' -Action {
+if ($LatestCandidate) {
+    if (-not [string]::IsNullOrWhiteSpace($HapPath) -or $Clean -or $ForceNative) {
+        throw '-LatestCandidate cannot be combined with -HapPath, -Clean or -ForceNative'
+    }
+    $candidate = Get-LeanTTYLatestVerifiedCandidate -RepoRoot $repoRoot
+    if ($null -eq $candidate) {
+        throw 'No verified LeanTTY candidate is retained for this repository'
+    }
+    $HapPath = $candidate.hapPath
+    $SkipBuild = $true
+    Write-Host (
+        "Using latest $($candidate.verificationMode)-verified candidate: " +
+        "$HapPath (SHA256=$($candidate.sha256))"
+    ) -ForegroundColor Cyan
+}
+
 $hdc = Resolve-Hdc
 if ([string]::IsNullOrWhiteSpace($Target)) {
     $readyTargets = @(Get-HdcTargets -Hdc $hdc | Where-Object {

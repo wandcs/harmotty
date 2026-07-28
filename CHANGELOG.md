@@ -4,6 +4,10 @@
 
 ### Development
 
+- Serialized all build-output writers across worktrees of the same repository,
+  made the native cache independent of cleaned Cargo output, and retained only
+  the five most recent verified test-signed HAP candidates outside volatile
+  build directories for rebuild-free device installation.
 - Added owner-isolated persistent custody for SSH configuration, verified key
   pairs, trusted host keys, terminal font size and window geometry so the same
   application identity can rematerialize them after a normal uninstall and
