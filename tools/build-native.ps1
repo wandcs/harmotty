@@ -122,6 +122,9 @@ function Test-Stale {
 $targets = @(
     @{ Target = 'aarch64-unknown-linux-ohos'; Abi = 'arm64-v8a'; Machine = 'AArch64' }
 )
+$rebuiltTargets = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
 
 foreach ($t in $targets) {
     $target = $t.Target
@@ -143,6 +146,7 @@ foreach ($t in $targets) {
     try {
         & $cargo build --manifest-path $cargoManifest --target $target --release --locked
         if ($LASTEXITCODE -ne 0) { throw "Cargo build failed for $target" }
+        [void]$rebuiltTargets.Add($target)
     } finally {
         Pop-Location
     }
@@ -156,21 +160,31 @@ if ($SkipCopy) {
 
 $readelf = Join-Path $llvmBin 'llvm-readelf.exe'
 foreach ($t in $targets) {
-    $source = Join-Path $repoRoot "leantty_ssh\target\$($t.Target)\release\libleantty_ssh.so"
+    $cargoOutput = Join-Path $repoRoot "leantty_ssh\target\$($t.Target)\release\libleantty_ssh.so"
     $dest   = Join-Path $libsDir "$($t.Abi)\libleantty_ssh.so"
-    if (-not (Test-Path -LiteralPath $source)) {
-        throw "$($t.Abi) .so is missing after the ARM64 build"
+    if ($rebuiltTargets.Contains($t.Target)) {
+        if (-not (Test-Path -LiteralPath $cargoOutput)) {
+            throw "$($t.Abi) .so is missing after the ARM64 build"
+        }
+        $verificationSource = $cargoOutput
+    } else {
+        if (-not (Test-Path -LiteralPath $dest)) {
+            throw "$($t.Abi) cached .so is missing"
+        }
+        $verificationSource = $dest
     }
-    $header = & $readelf -h $source | Out-String
+    $header = & $readelf -h $verificationSource | Out-String
     if (-not $header.Contains($t.Machine)) {
-        throw "ELF arch mismatch: $source"
+        throw "ELF arch mismatch: $verificationSource"
     }
-    $destDir = Split-Path $dest -Parent
-    if (-not (Test-Path -LiteralPath $destDir)) {
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    if ($rebuiltTargets.Contains($t.Target)) {
+        $destDir = Split-Path $dest -Parent
+        if (-not (Test-Path -LiteralPath $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $cargoOutput -Destination $dest -Force
+        Get-SourceHash | Set-Content -LiteralPath ($dest + '.build-hash') -NoNewline
     }
-    Copy-Item -LiteralPath $source -Destination $dest -Force
-    Get-SourceHash | Set-Content -LiteralPath ($dest + '.build-hash') -NoNewline
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $dest).Hash
     Write-Host "[build-native] $($t.Abi) OK  SHA256=$hash" -ForegroundColor Green
 }

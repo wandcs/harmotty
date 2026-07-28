@@ -1,7 +1,19 @@
 function Get-LeanTTYBuildLockIdentity {
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
 
-    $normalizedRoot = [IO.Path]::GetFullPath($RepoRoot).
+    $identityRoot = $RepoRoot
+    $commonDirectoryOutput = @(
+        & git -C $RepoRoot rev-parse --git-common-dir 2>$null
+    )
+    if ($LASTEXITCODE -eq 0 -and $commonDirectoryOutput.Count -eq 1) {
+        $commonDirectory = [string]$commonDirectoryOutput[0]
+        if (-not [IO.Path]::IsPathRooted($commonDirectory)) {
+            $commonDirectory = Join-Path $RepoRoot $commonDirectory
+        }
+        $identityRoot = $commonDirectory
+    }
+
+    $normalizedRoot = [IO.Path]::GetFullPath($identityRoot).
         TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar).
         ToUpperInvariant()
     $sha256 = [Security.Cryptography.SHA256]::Create()

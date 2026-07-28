@@ -36,3 +36,29 @@ Required for HAP build:
 - `DEVECO_SDK_HOME` — set by `build-all.ps1`
 - `JAVA_HOME` — set by `build-all.ps1`
 - `NODE_OPTIONS` — must be empty
+
+## Build and verification workflow
+
+All repository build, verification, deployment and release-package entry
+points share one lock across worktrees belonging to the same Git repository.
+Starting another writer waits for the active task instead of cleaning or
+rewriting Cargo, Hvigor or HAP outputs concurrently.
+
+`tools/verify-pc.ps1` retains its signed test HAP only after the gate succeeds.
+Candidates are stored outside build output directories under the current
+user's local application data, keyed to the Git repository. Retention has one
+rule: keep the five most recently verified unique HAPs. There is no age-based
+cleanup policy.
+
+After an uninstall, install and launch the latest retained candidate without
+rebuilding:
+
+```powershell
+.\tools\dev-pc.ps1 -LatestCandidate
+```
+
+The candidate manifest records its SHA-256, Git commit/tree, checkout dirty
+state and whether verification included the physical device. Formal
+AppGallery production artifacts remain governed by
+[`release-process.md`](release-process.md) and are never added to this
+developer candidate store.

@@ -19,7 +19,10 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 foreach ($scriptName in @(
         'build-native.ps1',
         'build-lock.ps1',
+        'candidate-store.ps1',
+        'test-build-workflows.ps1',
         'build-all.ps1',
+        'dev-build.ps1',
         'hdc-common.ps1',
         'dev-pc.ps1',
         'deploy-usb.ps1',
@@ -36,7 +39,11 @@ foreach ($scriptName in @(
 }
 Write-Host 'PowerShell syntax checks passed.' -ForegroundColor Green
 
+& (Join-Path $PSScriptRoot 'test-build-workflows.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Build workflow regression tests failed' }
+
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
+. (Join-Path $PSScriptRoot 'candidate-store.ps1')
 Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'verify-pc' -Action {
 $generatedNativePath = 'entry/libs/arm64-v8a/libleantty_ssh.so'
 $trackedNative = @(git -C $repoRoot ls-files -- $generatedNativePath)
@@ -132,6 +139,19 @@ if ($SkipDevice) {
     & (Join-Path $PSScriptRoot 'dev-pc.ps1') @deviceArgs
 }
 if ($LASTEXITCODE -ne 0) { throw 'PC verification build or deployment failed' }
+
+$verifiedHap = Join-Path $repoRoot (
+    'entry\build\default\outputs\default\entry-default-signed.hap'
+)
+$verificationMode = if ($SkipDevice) { 'software' } else { 'device' }
+$retainedCandidate = Save-LeanTTYVerifiedCandidate `
+    -RepoRoot $repoRoot `
+    -HapPath $verifiedHap `
+    -VerificationMode $verificationMode
+Write-Host (
+    "Retained $verificationMode-verified candidate: " +
+    "$($retainedCandidate.hapPath) (SHA256=$($retainedCandidate.sha256))"
+) -ForegroundColor Cyan
 
 Write-Host 'VERIFY PC SUCCESS' -ForegroundColor Green
 }

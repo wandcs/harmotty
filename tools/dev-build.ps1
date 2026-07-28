@@ -13,7 +13,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
 
+Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'dev-build' -Action {
 $deveco = $env:DEVECO_HOME
 if (-not $deveco) {
     $candidates = @('C:\Program Files\Huawei\DevEco Studio', 'D:\Program Files\Huawei\DevEco Studio')
@@ -50,3 +52,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 
 $elapsed = (Get-Date) - $start
 Write-Host "BUILD SUCCESS in $([math]::Round($elapsed.TotalSeconds, 1))s" -ForegroundColor Green
+}

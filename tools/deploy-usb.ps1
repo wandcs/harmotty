@@ -9,6 +9,7 @@ param(
     [string]$Target = '',
     [string]$HapPath = '',
     [switch]$SkipBuild,
+    [switch]$LatestCandidate,
     [switch]$NoLaunch,
     [switch]$FollowLogs
 )
@@ -16,6 +17,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $arguments = @{ Target = $Target; HapPath = $HapPath; RequireUsb = $true }
 if ($SkipBuild) { $arguments['SkipBuild'] = $true }
+if ($LatestCandidate) { $arguments['LatestCandidate'] = $true }
 if ($NoLaunch) { $arguments['NoLaunch'] = $true }
 if ($FollowLogs) { $arguments['FollowLogs'] = $true }
 
