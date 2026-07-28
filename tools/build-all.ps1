@@ -12,8 +12,9 @@ param(
     [ValidateSet('debug', 'release')]
     [string]$BuildMode = 'debug',
     [switch]$Metadata,
+    [switch]$PreflightOnly,
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$ReleaseId = '1.0.1'
+    [string]$ReleaseId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,6 +22,160 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $productName = 'default'
 $projectProfilePath = Join-Path $repoRoot 'build-profile.json5'
 $localSigningConfigPath = Join-Path $repoRoot 'signing.local.json5'
+$releasePreflight = $null
+if (-not $ReleaseId) {
+    $appVersionConfig = Get-Content -LiteralPath (
+        Join-Path $repoRoot 'AppScope\app.json5'
+    ) -Raw | ConvertFrom-Json
+    $ReleaseId = [string]$appVersionConfig.app.versionName
+}
+
+function Get-CargoPackageVersion {
+    param([Parameter(Mandatory = $true)][string]$ManifestPath)
+
+    $content = Get-Content -LiteralPath $ManifestPath -Raw
+    $packageSection = [regex]::Match(
+        $content,
+        '(?ms)^\[package\]\s*(?<body>.*?)(?=^\[|\z)'
+    )
+    if (-not $packageSection.Success) {
+        throw "Cargo package section missing: $ManifestPath"
+    }
+    $versionMatch = [regex]::Match(
+        $packageSection.Groups['body'].Value,
+        '(?m)^\s*version\s*=\s*"(?<version>[^"]+)"\s*$'
+    )
+    if (-not $versionMatch.Success) {
+        throw "Cargo package version missing: $ManifestPath"
+    }
+    return $versionMatch.Groups['version'].Value
+}
+
+function Assert-ReleasePreflight {
+    $gitStatus = @(git -C $repoRoot status --porcelain --untracked-files=all 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect the release checkout'
+    }
+    if ($gitStatus.Count -gt 0) {
+        throw "Release checkout must be clean before the build:`n$($gitStatus -join "`n")"
+    }
+
+    $branchName = (& git -C $repoRoot symbolic-ref --quiet --short HEAD 2>$null)
+    $branchExitCode = $LASTEXITCODE
+    if ($branchExitCode -eq 0 -and $branchName) {
+        throw "Release checkout must use a detached exact commit, not branch '$branchName'"
+    }
+    if ($branchExitCode -notin @(0, 1)) {
+        throw 'Unable to determine whether the release checkout is detached'
+    }
+
+    $gitCommit = (& git -C $repoRoot rev-parse HEAD 2>&1).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to resolve the release commit'
+    }
+    $gitTree = (& git -C $repoRoot rev-parse 'HEAD^{tree}' 2>&1).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to resolve the release tree'
+    }
+    $remoteRefs = @(& git -C $repoRoot for-each-ref '--format=%(refname)' `
+        "--contains=$gitCommit" refs/remotes/origin 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect origin refs for the release commit'
+    }
+    if ($remoteRefs.Count -eq 0) {
+        throw "Release commit is not contained by a fetched origin ref: $gitCommit"
+    }
+
+    $appConfigPath = Join-Path $repoRoot 'AppScope\app.json5'
+    $appConfig = Get-Content -LiteralPath $appConfigPath -Raw | ConvertFrom-Json
+    $versionSources = [ordered]@{
+        'AppScope/app.json5' = [string]$appConfig.app.versionName
+        'leantty_ssh/Cargo.toml' = Get-CargoPackageVersion `
+            (Join-Path $repoRoot 'leantty_ssh\Cargo.toml')
+        'leantty_ssh/leantty-ssh-core/Cargo.toml' = Get-CargoPackageVersion `
+            (Join-Path $repoRoot 'leantty_ssh\leantty-ssh-core\Cargo.toml')
+        'entry/oh-package.json5' = [string](
+            Get-Content -LiteralPath (Join-Path $repoRoot 'entry\oh-package.json5') -Raw |
+                ConvertFrom-Json
+        ).version
+        'entry/src/main/cpp/types/libleantty_ssh/oh-package.json5' = [string](
+            Get-Content -LiteralPath (
+                Join-Path $repoRoot 'entry\src\main\cpp\types\libleantty_ssh\oh-package.json5'
+            ) -Raw |
+                ConvertFrom-Json
+        ).version
+        'oh-package.json5' = [string](
+            Get-Content -LiteralPath (Join-Path $repoRoot 'oh-package.json5') -Raw |
+                ConvertFrom-Json
+        ).version
+    }
+    $versionMismatches = @($versionSources.GetEnumerator() |
+        Where-Object { $_.Value -ne $ReleaseId } |
+        ForEach-Object { "$($_.Key)=$($_.Value)" })
+    if ($versionMismatches.Count -gt 0) {
+        throw "ReleaseId $ReleaseId does not match all version sources:`n$($versionMismatches -join "`n")"
+    }
+
+    if (-not (Test-Path -LiteralPath $localSigningConfigPath -PathType Leaf)) {
+        throw "Formal release metadata requires ignored signing config: $localSigningConfigPath"
+    }
+    $signingConfig = Get-Content -LiteralPath $localSigningConfigPath -Raw | ConvertFrom-Json
+    foreach ($requiredProperty in @('name', 'type', 'material')) {
+        if ($null -eq $signingConfig.$requiredProperty) {
+            throw "Local signing config is missing '$requiredProperty': $localSigningConfigPath"
+        }
+    }
+    foreach ($requiredMaterial in @(
+        'certpath',
+        'keyAlias',
+        'keyPassword',
+        'profile',
+        'signAlg',
+        'storeFile',
+        'storePassword'
+    )) {
+        $value = $signingConfig.material.$requiredMaterial
+        if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) {
+            throw "Local signing material is missing '$requiredMaterial': $localSigningConfigPath"
+        }
+    }
+
+    $repoPrefix = [IO.Path]::GetFullPath($repoRoot).TrimEnd('\') + '\'
+    foreach ($pathProperty in @('certpath', 'profile', 'storeFile')) {
+        $configuredPath = [string]$signingConfig.material.$pathProperty
+        if (-not [IO.Path]::IsPathRooted($configuredPath)) {
+            throw "Signing material '$pathProperty' must use an absolute external path"
+        }
+        $materialPath = [IO.Path]::GetFullPath($configuredPath)
+        if ($materialPath.StartsWith($repoPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Signing material '$pathProperty' must remain outside the release checkout"
+        }
+        if (-not (Test-Path -LiteralPath $materialPath -PathType Leaf)) {
+            throw "Signing material '$pathProperty' does not exist: $materialPath"
+        }
+    }
+    foreach ($passwordProperty in @('keyPassword', 'storePassword')) {
+        $passwordValue = [string]$signingConfig.material.$passwordProperty
+        if ($passwordValue.Length -lt 64 -or
+            $passwordValue.Length % 2 -ne 0 -or
+            $passwordValue -notmatch '^[0-9A-Fa-f]+$') {
+            throw "Signing material '$passwordProperty' does not match the current DevEco encrypted format; configure it with DevEco Studio"
+        }
+    }
+
+    return [ordered]@{
+        commit = $gitCommit
+        tree = $gitTree
+        remoteRefs = @($remoteRefs)
+        bundleName = [string]$appConfig.app.bundleName
+        versionName = [string]$appConfig.app.versionName
+        versionCode = [int64]$appConfig.app.versionCode
+        versionSources = $versionSources
+        signingProfileSha256 = (
+            Get-FileHash -LiteralPath $signingConfig.material.profile -Algorithm SHA256
+        ).Hash
+    }
+}
 
 function Get-RepoRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -128,6 +283,19 @@ function Invoke-SignatureVerification {
         certificateChain = Get-RepoRelativePath $CertificateOutput
         profile = Get-RepoRelativePath $ProfileOutput
     }
+}
+
+if ($Metadata -and $BuildMode -eq 'release') {
+    $releasePreflight = Assert-ReleasePreflight
+    Write-Host "RELEASE PREFLIGHT SUCCESS [$ReleaseId]" -ForegroundColor Green
+    Write-Host "Commit: $($releasePreflight.commit)" -ForegroundColor Cyan
+    Write-Host "Tree: $($releasePreflight.tree)" -ForegroundColor Cyan
+}
+if ($PreflightOnly) {
+    if (-not ($Metadata -and $BuildMode -eq 'release')) {
+        throw '-PreflightOnly requires -Metadata -BuildMode release'
+    }
+    return $releasePreflight
 }
 
 $deveco = $env:DEVECO_HOME
@@ -247,7 +415,7 @@ Write-Host "Unsigned APP: $unsignedApp" -ForegroundColor Cyan
 if (Test-Path -LiteralPath $signedHap) {
     Write-Host "Signed HAP: $signedHap" -ForegroundColor Cyan
 } else {
-    Write-Host 'Signed HAP not generated. Create ignored signing.local.json5 before device deployment.' -ForegroundColor Yellow
+    Write-Host 'Signed HAP not generated. Configure the ignored signing.local.json5 with the identity appropriate for this checkout.' -ForegroundColor Yellow
 }
 if ($null -ne $signedApp) {
     Write-Host "Signed APP: $signedApp" -ForegroundColor Cyan
@@ -437,12 +605,26 @@ if ($Metadata) {
     if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve Git dirty state for build manifest' }
 
     $manifest = [ordered]@{
-        schemaVersion = 2
+        schemaVersion = 3
         releaseId = $ReleaseId
         timestamp = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK')
         git = [ordered]@{
             commit = $gitCommit
+            tree = if ($null -ne $releasePreflight) {
+                $releasePreflight.tree
+            } else {
+                (& git -C $repoRoot rev-parse 'HEAD^{tree}' 2>&1).Trim()
+            }
             dirty = ($gitStatus.Count -gt 0)
+        }
+        app = if ($null -ne $releasePreflight) {
+            [ordered]@{
+                bundleName = $releasePreflight.bundleName
+                versionName = $releasePreflight.versionName
+                versionCode = $releasePreflight.versionCode
+            }
+        } else {
+            $null
         }
         product = $productName
         buildMode = $BuildMode

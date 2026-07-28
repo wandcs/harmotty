@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Development
+
+- Added a fail-fast AppGallery release preflight and a single build, comparison
+  and archive command that keeps production upload artifacts separate from the
+  test-signed HAP used for device acceptance and review media.
+- Removed the duplicated hard-coded release version from the build script;
+  artifact naming now derives from the application version unless a formal
+  release explicitly supplies and validates `-ReleaseId`.
+
 ## [1.0.1] - 2026-07-28
 
 ### Security
