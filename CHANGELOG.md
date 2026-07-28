@@ -22,6 +22,11 @@
   artifact naming now derives from the application version unless a formal
   release explicitly supplies and validates `-ReleaseId`.
 
+### Fixed
+
+- Ended accepted SSH host-key confirmation input with a new line before showing
+  the next authentication prompt.
+
 ### Documentation
 
 - Recorded the public AppGallery release of 1.0.1 and selected the authorized

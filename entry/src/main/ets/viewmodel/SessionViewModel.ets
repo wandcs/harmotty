@@ -546,8 +546,8 @@ export class SessionViewModel {
     }
     let answer: string = this.hostKeyBuffer.trim().toLowerCase()
     this.hostKeyBuffer = ''
+    this.writeTerminal(SessionViewModel.hostKeyDecisionSubmitOutput(answer))
     if (answer !== 'yes' && answer !== 'no') {
-      this.writeTerminal('\r\nPlease type yes or no: ')
       return
     }
     let accepted: boolean = answer === 'yes'
@@ -578,6 +578,10 @@ export class SessionViewModel {
       this.writeError('Host key rejected')
       this.notifyStateChange()
     }
+  }
+
+  static hostKeyDecisionSubmitOutput(answer: string): string {
+    return answer === 'yes' || answer === 'no' ? '\r\n' : '\r\nPlease type yes or no: '
   }
 
   private executeCommandBuffer(): void {
