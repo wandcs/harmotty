@@ -18,6 +18,7 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 
 foreach ($scriptName in @(
         'build-native.ps1',
+        'build-lock.ps1',
         'build-all.ps1',
         'hdc-common.ps1',
         'dev-pc.ps1',
@@ -35,6 +36,8 @@ foreach ($scriptName in @(
 }
 Write-Host 'PowerShell syntax checks passed.' -ForegroundColor Green
 
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
+Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'verify-pc' -Action {
 $generatedNativePath = 'entry/libs/arm64-v8a/libleantty_ssh.so'
 $trackedNative = @(git -C $repoRoot ls-files -- $generatedNativePath)
 if ($LASTEXITCODE -ne 0) {
@@ -131,3 +134,4 @@ if ($SkipDevice) {
 if ($LASTEXITCODE -ne 0) { throw 'PC verification build or deployment failed' }
 
 Write-Host 'VERIFY PC SUCCESS' -ForegroundColor Green
+}

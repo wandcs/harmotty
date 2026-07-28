@@ -19,6 +19,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'build-lock.ps1')
 $productName = 'default'
 $projectProfilePath = Join-Path $repoRoot 'build-profile.json5'
 $localSigningConfigPath = Join-Path $repoRoot 'signing.local.json5'
@@ -298,6 +299,7 @@ if ($PreflightOnly) {
     return $releasePreflight
 }
 
+Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation "build-all $BuildMode" -Action {
 $deveco = $env:DEVECO_HOME
 if (-not $deveco) {
     foreach ($candidate in @('C:\Program Files\Huawei\DevEco Studio', 'D:\Program Files\Huawei\DevEco Studio')) {
@@ -660,4 +662,5 @@ if ($Metadata) {
     }
     Set-Content -LiteralPath $manifestPath -Value (ConvertTo-Json -InputObject $manifest -Depth 4) -Encoding UTF8
     Write-Host "Manifest: $manifestPath" -ForegroundColor Cyan
+}
 }
