@@ -29,6 +29,9 @@
 - Added OpenSSH-compatible `ssh-keygen -R` host-record removal and made changed
   host-key failures show the stored and received fingerprints plus the exact
   cleanup command for the effective host and port.
+- Accepted the default OSC 52 clipboard selector emitted when tmux mouse
+  selection ends, allowing the standard `MouseDragEnd1Pane` copy path to reach
+  the HarmonyOS system clipboard without Shift or a second right-click.
 
 ### Documentation
 

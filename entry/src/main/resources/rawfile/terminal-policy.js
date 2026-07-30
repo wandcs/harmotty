@@ -14,7 +14,9 @@
     if (separator < 0) return rejectOsc52('missing-separator');
     var target = payload.substring(0, separator);
     var encoded = payload.substring(separator + 1);
-    if (target !== 'c') return rejectOsc52('unsupported-target');
+    // OSC 52 uses an empty selector for the default clipboard. tmux emits
+    // this form when copy-mode completes a selection.
+    if (target !== '' && target !== 'c') return rejectOsc52('unsupported-target');
     if (encoded === '?') return rejectOsc52('read-not-supported');
     if (encoded.length > MAX_CLIPBOARD_BASE64_LENGTH) return rejectOsc52('encoded-too-large');
     if (encoded.length % 4 === 1 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {

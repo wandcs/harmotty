@@ -29,6 +29,12 @@ for (const text of ['', 'plain text', '中文 🚀\nsecond line']) {
   assert.equal(decoded.accepted, true);
   assert.equal(decoded.text, text);
 }
+const tmuxSelection = 'copied by tmux';
+const decodedTmuxSelection = policy.decodeOsc52(
+  `;${Buffer.from(tmuxSelection, 'utf8').toString('base64')}`
+);
+assert.equal(decodedTmuxSelection.accepted, true);
+assert.equal(decodedTmuxSelection.text, tmuxSelection);
 assert.equal(policy.decodeOsc52('c;?').reason, 'read-not-supported');
 assert.equal(policy.decodeOsc52('p;YQ==').reason, 'unsupported-target');
 assert.equal(policy.decodeOsc52('c;%%%').reason, 'invalid-base64');
