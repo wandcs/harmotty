@@ -2,7 +2,7 @@
 
 > 状态：唯一有效的项目 TODO
 >
-> 更新日期：2026-07-28
+> 更新日期：2026-07-30
 >
 > 上位规则：[`project-principles.md`](project-principles.md)
 
@@ -26,6 +26,21 @@ HarmonyOS PC 的系统和输入法冲突门禁。最小 `put/get` 文件传输�
   `eho`；同一版本使用物理键盘手动输入完整、远端输出正常，因此该现象归类为测试
   工具缺陷，不是 LeanTTY 键盘输入缺陷。修复前，自动注入产生的命令文本和数据面
   断言不得作为验收证据，相关场景继续以真机物理键盘验证为准。
+
+## P0：修复 tmux 鼠标模式下的选区复制
+
+- [x] 保持 tmux 对普通鼠标拖动的所有权，不用 LeanTTY 本地选区截获或模拟：
+  tmux 默认 `MouseDragEnd1Pane` 在松开鼠标时执行
+  `copy-pipe-and-cancel`，选区高亮随 copy-mode 退出而消失是标准行为。
+- [x] 接受 tmux 复制时发送的空目标 OSC 52（`OSC 52 ; ; <base64>`），将其与明确
+  的系统剪贴板目标 `c` 一样写入 HarmonyOS 系统剪贴板；继续拒绝剪贴板读取、非
+  系统剪贴板目标、非法 Base64、非法 UTF-8 和超过 1 MiB 的内容，并用策略测试覆盖
+  tmux 空目标回归。
+- [ ] 在物理 ARM64 HarmonyOS PC 上开启 `set -g mouse on`，确认普通拖动后无需
+  Shift 或二次右键即可由 `MouseDragEnd1Pane` 完成复制，`tmux show-buffer` 与系统
+  剪贴板内容一致；同时覆盖 `set-clipboard external/on`、`Ms` 能力、中文和多行
+  文本，并回归 tmux 滚动/TUI 鼠标、`Shift+拖动`后 `Ctrl+C` 的本地复制及普通终端
+  选区。
 
 ## P0：SSH 主机指纹变化恢复
 

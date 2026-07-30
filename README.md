@@ -36,7 +36,10 @@ No signing credential or generated application package is stored in Git.
   browser.
 - When tmux or another TUI has enabled mouse reporting, use
   `Ctrl+Shift+Left Click` instead.
-- Hold `Shift` and drag to bypass TUI mouse reporting for local text selection.
+- With tmux mouse mode enabled, drag normally to use tmux selection; releasing
+  the mouse copies through tmux's standard OSC 52 clipboard path.
+- Hold `Shift` and drag to bypass TUI mouse reporting for local text selection,
+  then press `Ctrl+C` to copy it.
 
 ## Product scope
 
