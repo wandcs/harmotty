@@ -20,6 +20,11 @@
     "sha256": "e34337f790d1cc817312a1ac1c00c473a7c504f471a70086db57ca9cd0335ca9"
   },
   {
+    "file": "addon-serialize.js",
+    "bytes": 16398,
+    "sha256": "7f10d39fe8e1b27996bc7bb66f31409e7943455b04a991fec2a9dfa15eaf2b98"
+  },
+  {
     "file": "addon-webgl.js",
     "bytes": 247496,
     "sha256": "e84bf980d7a5c3d0a69352a31f4c2d92b6edc3abebc722d856c3872573fea095"

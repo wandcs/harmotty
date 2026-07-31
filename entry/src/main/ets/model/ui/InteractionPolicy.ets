@@ -30,7 +30,7 @@ export class InteractionPolicy {
 
   static shouldMountTab(isActiveTab: boolean, isWarmTab: boolean,
     hasActiveSession: boolean, isWindowVisible: boolean = true): boolean {
-    return hasActiveSession || (isWindowVisible && (isActiveTab || isWarmTab))
+    return hasActiveSession || isActiveTab || (isWindowVisible && isWarmTab)
   }
 
   static shouldDetachTabOnEviction(hasActiveSession: boolean): boolean {
