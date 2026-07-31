@@ -75,6 +75,7 @@
   <script src="xterm.js"></script>
   <script src="addon-fit.js"></script>
   <script src="addon-web-links.js"></script>
+  <script src="addon-serialize.js"></script>
   <script src="addon-webgl.js"></script>
   <script src="terminal-policy.js"></script>
   <script>
@@ -82,11 +83,16 @@
     var TERMINAL_SCROLLBAR_WIDTH = 8;
     var TERMINAL_BASE_PADDING_TOP = 4;
     var TERMINAL_BASE_PADDING_BOTTOM = 4;
+    var MAX_SNAPSHOT_PAYLOAD_LENGTH = 4 * 1024 * 1024;
     var nativePort = null;
     var term = null;
     var fitAddon = null;
     var webglAddon = null;
     var webLinksAddon = null;
+    var serializeAddon = null;
+    var restoringSnapshot = false;
+    var pendingSnapshotRequestIds = [];
+    var snapshotCapturePending = false;
     var initialized = false;
     var requestedRenderer = 'webgl';
     var actualRenderer = 'dom';
@@ -294,7 +300,65 @@
       }
       return kind === 'theme' || kind === 'focus' || kind === 'blur' ||
         kind === 'clearSelection' || kind === 'ping' ||
-        kind === 'fit' || kind === 'fontSize' || kind === 'copySelection' || kind === 'secondaryAction';
+        kind === 'fit' || kind === 'fontSize' || kind === 'copySelection' ||
+        kind === 'secondaryAction' || kind === 'snapshotRequest' || kind === 'restoreSnapshot';
+    }
+
+    function serializeTerminalSnapshot(availableLength) {
+      if (!serializeAddon) {
+        return null;
+      }
+      var scrollback = 0;
+      var bestSnapshot = null;
+      try {
+        while (true) {
+          var snapshot = serializeAddon.serialize({ scrollback: scrollback });
+          if (term && term._core && term._core.coreService &&
+              term._core.coreService.isCursorHidden) {
+            snapshot += '\x1b[?25l';
+          }
+          if (snapshot.length > availableLength) {
+            return bestSnapshot;
+          }
+          bestSnapshot = snapshot;
+          if (scrollback === TERMINAL_SCROLLBACK_LINES) {
+            return bestSnapshot;
+          }
+          scrollback = scrollback === 0 ? Math.min(64, TERMINAL_SCROLLBACK_LINES) :
+            Math.min(scrollback * 2, TERMINAL_SCROLLBACK_LINES);
+        }
+      } catch (ex) {
+        return bestSnapshot;
+      }
+    }
+
+    function requestTerminalSnapshot(requestId) {
+      pendingSnapshotRequestIds.push(requestId);
+      if (snapshotCapturePending || !term) {
+        return;
+      }
+      snapshotCapturePending = true;
+      try {
+        term.write('', function() {
+          var requestIds = pendingSnapshotRequestIds;
+          pendingSnapshotRequestIds = [];
+          var maxRequestIdLength = 0;
+          for (var i = 0; i < requestIds.length; i++) {
+            maxRequestIdLength = Math.max(maxRequestIdLength, requestIds[i].length);
+          }
+          var snapshot = serializeTerminalSnapshot(
+            MAX_SNAPSHOT_PAYLOAD_LENGTH - maxRequestIdLength - 1);
+          if (snapshot !== null) {
+            for (var j = 0; j < requestIds.length; j++) {
+              sendBridgeControl('snapshot', requestIds[j] + '|' + snapshot);
+            }
+          }
+          snapshotCapturePending = false;
+        });
+      } catch (ex) {
+        pendingSnapshotRequestIds = [];
+        snapshotCapturePending = false;
+      }
     }
 
     function reportRendererState() {
@@ -573,6 +637,8 @@
 
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
+      serializeAddon = new SerializeAddon.SerializeAddon();
+      term.loadAddon(serializeAddon);
       var terminalContainer = document.getElementById('terminal-container');
       term.open(terminalContainer);
       webLinksAddon = new WebLinksAddon.WebLinksAddon(activateTerminalLink, {
@@ -602,7 +668,9 @@
       term.write('\x1b[?25h');
 
       term.onData(function(data) {
-        sendBridgeData('terminal', data);
+        if (!restoringSnapshot) {
+          sendBridgeData('terminal', data);
+        }
       });
 
       term.onKey(function() {
@@ -780,6 +848,29 @@
             case 'copySelection':
               if (message.channel !== BRIDGE_CONTROL) break;
               copyTerminalSelection();
+              break;
+            case 'snapshotRequest':
+              if (message.channel !== BRIDGE_CONTROL ||
+                  !/^[1-9][0-9]*$/.test(message.payload)) break;
+              requestTerminalSnapshot(message.payload);
+              break;
+            case 'restoreSnapshot':
+              if (message.channel !== BRIDGE_CONTROL ||
+                  message.payload.length === 0 ||
+                  message.payload.length > MAX_SNAPSHOT_PAYLOAD_LENGTH) break;
+              if (term) {
+                restoringSnapshot = true;
+                var completeRestore = function() {
+                  restoringSnapshot = false;
+                  sendBridgeControl('restoreComplete', '');
+                  reportResize(true);
+                };
+                try {
+                  term.write(message.payload, completeRestore);
+                } catch (ex) {
+                  completeRestore();
+                }
+              }
               break;
           }
         };

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import './test-font-cell-width.mjs';
 import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 
@@ -176,7 +177,53 @@ assert.doesNotMatch(terminalHtml,
   /outputBurst|validationMarker|LTTY_(?:BEGIN|END|KEY)_|samplePortDelivery|TERMINAL_RENDERER_MODE/,
   'temporary binary-output and renderer diagnostics must not remain in the terminal runtime');
 assert.doesNotMatch(terminalHtml, /replayGate|replayBegin|replayEnd/,
-  'terminal history must not be replayed into a new xterm instance');
+  'the removed raw terminal-history replay protocol must not return');
+assert.match(terminalHtml, /<script src="addon-serialize\.js"><\/script>/,
+  'the terminal page must load the pinned xterm serialization addon');
+assert.match(terminalHtml, /serializeAddon = new SerializeAddon\.SerializeAddon\(\)/,
+  'terminal recovery checkpoints must use xterm framebuffer serialization');
+assert.match(terminalHtml,
+  /term\._core\.coreService\.isCursorHidden[\s\S]*?snapshot \+= '\\x1b\[\?25l'/,
+  'terminal recovery checkpoints must preserve hidden cursor state');
+assert.match(terminalHtml,
+  /function requestTerminalSnapshot[\s\S]*?term\.write\('',[\s\S]*?serializeTerminalSnapshot/,
+  'snapshot capture must wait for all queued terminal writes to finish');
+assert.match(terminalHtml,
+  /var scrollback = 0[\s\S]*?snapshot\.length > availableLength[\s\S]*?return bestSnapshot[\s\S]*?Math\.min\(scrollback \* 2, TERMINAL_SCROLLBACK_LINES\)/,
+  'checkpoint allocation must grow from the visible screen instead of serializing all scrollback first');
+assert.doesNotMatch(terminalHtml, /scrollback = Math\.floor\(scrollback \/ 2\)/,
+  'checkpoint bounding must not allocate full scrollback before shrinking');
+assert.match(terminalHtml,
+  /pendingSnapshotRequestIds\.push[\s\S]*?snapshotCapturePending[\s\S]*?for \(var j = 0; j < requestIds\.length; j\+\+\)/,
+  'concurrent checkpoint requests must share one serialized framebuffer');
+assert.match(terminalHtml,
+  /return bestSnapshot[\s\S]*?if \(snapshot !== null\)[\s\S]*?sendBridgeControl\('snapshot'/,
+  'a failed checkpoint must time out without erasing the last successful snapshot');
+const snapshotSerializerSource = terminalHtml.match(
+  /(function serializeTerminalSnapshot\(availableLength\) \{[\s\S]*?\n    \})\n\n    function requestTerminalSnapshot/);
+assert.ok(snapshotSerializerSource,
+  'the bounded snapshot serializer must remain executable in the regression harness');
+const attemptedScrollbacks = [];
+globalThis.TERMINAL_SCROLLBACK_LINES = 10000;
+globalThis.term = null;
+globalThis.serializeAddon = {
+  serialize: ({ scrollback }) => {
+    attemptedScrollbacks.push(scrollback);
+    return 'x'.repeat(scrollback === 0 ? 100 : scrollback * 2);
+  }
+};
+vm.runInThisContext(snapshotSerializerSource[1]);
+const boundedSnapshot = globalThis.serializeTerminalSnapshot(4096);
+assert.equal(boundedSnapshot.length, 4096,
+  'the snapshot budget must retain the largest successful candidate');
+assert.deepEqual(attemptedScrollbacks, [0, 64, 128, 256, 512, 1024, 2048, 4096],
+  'snapshot work must grow from the visible screen and stop after one over-budget candidate');
+assert.match(terminalHtml,
+  /case 'restoreSnapshot':[\s\S]*?restoringSnapshot = true[\s\S]*?restoringSnapshot = false[\s\S]*?sendBridgeControl\('restoreComplete'[\s\S]*?term\.write\(message\.payload, completeRestore\)/,
+  'a replacement xterm instance must suppress generated input until restoration completes');
+assert.match(terminalHtml,
+  /term\.onData\(function\(data\)[\s\S]*?if \(!restoringSnapshot\)[\s\S]*?sendBridgeData\('terminal', data\)/,
+  'checkpoint mode restoration must not inject generated input into SSH');
 assert.doesNotMatch(terminalHtml, /releaseBuffers|term\.clear\(\)|term\.reset\(\)/,
   'normal disconnect cleanup must not clear the current xterm screen or scrollback');
 assert.match(terminalHtml, /term\.onBell\s*\(/,
@@ -240,8 +287,75 @@ assert.match(xtermJs,
   /areMouseEventsActive&&!this\._selectionService\.shouldForceSelection\(e\)/,
   'xterm must test the Shift bypass before forwarding mouse events to tmux or another TUI');
 
+const addonSerialize = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/addon-serialize.js', import.meta.url), 'utf8');
+assert.match(addonSerialize, /SerializeAddon/,
+  'the packaged serialization addon must expose the framebuffer checkpoint implementation');
+globalThis.self = globalThis;
+vm.runInThisContext(xtermJs);
+vm.runInThisContext(addonSerialize);
+const sourceTerminal = new globalThis.Terminal({ cols: 20, rows: 4, scrollback: 20 });
+const sourceSerializer = new globalThis.SerializeAddon.SerializeAddon();
+sourceTerminal.loadAddon(sourceSerializer);
+sourceTerminal.write('first\r\n');
+sourceTerminal.write('second\r\n');
+sourceTerminal.write('third\r\n');
+sourceTerminal.write('fourth\r\n');
+sourceTerminal.write('fifth\r\n');
+sourceTerminal.write('\u001b]0;checkpoint-title\u0007');
+sourceTerminal.write('\u001b]52;c;Y2hlY2twb2ludA==\u0007');
+sourceTerminal.write('\u001b[31msixth\u001b[0m\u001b[?25l\u001b[?1004h');
+await new Promise(resolve => {
+  sourceTerminal.write('', resolve);
+});
+const cursorVisibility = sourceTerminal._core.coreService.isCursorHidden ? '\u001b[?25l' : '';
+const serializedSnapshot = sourceSerializer.serialize({ scrollback: 20 }) + cursorVisibility;
+assert.doesNotMatch(serializedSnapshot, /\u0007|\u001b\]0;|\u001b\]52;/,
+  'framebuffer checkpoints must not retain title, clipboard, or bell side effects');
+assert.match(serializedSnapshot, /\u001b\[\?1004h/,
+  'the focus-reporting fixture must exercise serializer mode restoration');
+const restoredTerminal = new globalThis.Terminal({ cols: 20, rows: 4, scrollback: 20 });
+const restoredSerializer = new globalThis.SerializeAddon.SerializeAddon();
+restoredTerminal.loadAddon(restoredSerializer);
+const forwardedRestoreData = [];
+let restoringCheckpoint = true;
+restoredTerminal.onData(data => {
+  if (!restoringCheckpoint) forwardedRestoreData.push(data);
+});
+await new Promise(resolve => {
+  restoredTerminal.write(serializedSnapshot, () => {
+    restoringCheckpoint = false;
+    resolve();
+  });
+});
+assert.equal(forwardedRestoreData.length, 0,
+  'restoring focus-reporting mode must not emit synthetic input to native');
+assert.equal(restoredTerminal._core.coreService.isCursorHidden, true,
+  'serialized recovery must preserve hidden cursor state');
+await new Promise(resolve => {
+  restoredTerminal.write('\u001b[?1004l\u001b[?1004h', resolve);
+});
+assert.equal(forwardedRestoreData.length, 1,
+  'focus reporting must resume after the restore-complete boundary');
+await new Promise(resolve => {
+  restoredTerminal.write('\r\ndetached-output', resolve);
+});
+const restoredSnapshot = restoredSerializer.serialize();
+assert.match(restoredSnapshot, /first/,
+  'serialized recovery must restore lines that have moved into scrollback');
+assert.match(restoredSnapshot, /\u001b\[31msixth/,
+  'serialized recovery must restore styled terminal content');
+assert.equal(restoredSnapshot.match(/detached-output/g)?.length, 1,
+  'output produced after the checkpoint must follow restored content exactly once');
+
 const terminalBridge = readFileSync(
   new URL('../../entry/src/main/ets/model/bridge/TerminalBridge.ets', import.meta.url), 'utf8');
+assert.match(terminalBridge,
+  /awaitingRestoreComplete[\s\S]*?KIND_RESTORE_COMPLETE[\s\S]*?notifyReadyHandler/,
+  'native focus and ready handling must wait for the web restore acknowledgement');
+assert.match(terminalBridge,
+  /private pumpSnapshotRequests[\s\S]*?pendingDataHead < this\.pendingData\.length \|\| this\.inFlightMessages > 0/,
+  'a checkpoint request must wait until all earlier terminal output is acknowledged');
 assert.match(terminalBridge, /postMessageEvent\(packet\.buffer\)/,
   'terminal output must use one raw binary WebMessagePort push path');
 assert.match(terminalBridge, /BINARY_HEADER_BYTES:\s*number = 12/,
@@ -290,7 +404,13 @@ assert.match(terminalSurfaceController,
   /msg\.kind === BridgeProtocol\.KIND_OPEN_URL[\s\S]*onOpenUrlHandler/,
   'the terminal surface must consume browser requests before generic SSH session routing');
 assert.doesNotMatch(terminalSurfaceController, /getHistoryChunks|queueReplay|replayedHistory/,
-  'a new terminal surface must not receive already displayed terminal history');
+  'the rejected raw byte history replay buffer must not return');
+assert.match(terminalSurfaceController,
+  /bridge\.restoreSnapshot\(snapshot\)[\s\S]*?takeDetachedChunks/,
+  'a replacement surface must restore its checkpoint before detached output');
+assert.match(terminalSurfaceController,
+  /msg\.kind === BridgeProtocol\.KIND_SNAPSHOT[\s\S]*?requestIdText[\s\S]*?lastCommittedSnapshotRequestId[\s\S]*?replaceSnapshot/,
+  'only a sequenced current-bridge checkpoint may replace the session recovery snapshot');
 assert.match(terminalSurfaceController, /takeDetachedChunks/,
   'a new terminal surface must take only output produced while no surface was attached');
 assert.doesNotMatch(terminalSurfaceController, /releaseBuffers|term\.clear|term\.reset/,
@@ -302,6 +422,12 @@ assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
   'normal disconnect and failure must keep the current terminal surface mounted');
 assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
   'each terminal surface must route URL requests through its owning pane');
+assert.match(indexPage,
+  /private onMainWindowVisibilityChanged[\s\S]*?captureMountedTerminalSnapshots\(\)/,
+  'backgrounding the window must checkpoint every currently mounted terminal');
+assert.match(indexPage,
+  /private checkpointAndDestroyTabBridge[\s\S]*?checkpointingTabIds[\s\S]*?runtime\.surface\.captureSnapshot\(\(\) =>[\s\S]*?finishTabCheckpoint/,
+  'an idle tab must remain mounted until its asynchronous eviction checkpoint completes');
 assert.match(indexPage, /BrowserLauncher\.open\(/,
   'the ArkUI shell must hand validated HTTP(S) links to the HarmonyOS system browser');
 assert.doesNotMatch(indexPage, /requestCopySelection|['"]Copy['"]/,

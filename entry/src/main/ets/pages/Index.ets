@@ -59,6 +59,7 @@ struct Index {
   @State splitHandleHovered: boolean = false
   @State menuSelectedIndex: number = 0
   @State warmTabId: string = ''
+  @State checkpointingTabIds: string[] = []
   private workspaceWidth: number = 0
   private splitDragStartRatio: number = 0.5
   private warmTabEvictionTimerId: number = -1
@@ -253,7 +254,8 @@ struct Index {
       let tab: TabInfo = this.tabs[tabIndex]
       let isActiveTab: boolean = active !== null && tab.id === active.id
       let isWarmTab: boolean = tab.id === this.warmTabId
-      if (!InteractionPolicy.shouldMountTab(isActiveTab, isWarmTab,
+      let isCheckpointing: boolean = this.checkpointingTabIds.indexOf(tab.id) >= 0
+      if (!isCheckpointing && !InteractionPolicy.shouldMountTab(isActiveTab, isWarmTab,
         this.tabHasActiveSession(tab), this.mainWindowVisible)) {
         continue
       }
@@ -272,8 +274,19 @@ struct Index {
     if (this.mainWindowVisible) {
       return
     }
+    this.captureMountedTerminalSnapshots()
+    if (this.warmTabId.length > 0) {
+      this.checkpointAndDestroyTabBridge(this.warmTabId)
+    }
     this.clearWarmTabEvictionTimer()
     this.warmTabId = ''
+  }
+
+  private captureMountedTerminalSnapshots(): void {
+    let mounted: PaneRuntime[] = this.mountedPaneRuntimes()
+    for (let i = 0; i < mounted.length; i++) {
+      mounted[i].surface.captureSnapshot()
+    }
   }
 
   private isPaneInActiveTab(paneId: string): boolean {
@@ -408,7 +421,7 @@ struct Index {
     }
     let evictedTabId: string = InteractionPolicy.evictedWarmTab(tab.id, targetTabId, this.warmTabId)
     if (evictedTabId.length > 0) {
-      this.destroyTabBridge(evictedTabId)
+      this.checkpointAndDestroyTabBridge(evictedTabId)
     }
     this.clearWarmTabEvictionTimer()
     this.warmTabId = InteractionPolicy.warmTabAfterSwitch(tab.id)
@@ -421,12 +434,54 @@ struct Index {
     this.scheduleWarmTabEviction(this.warmTabId)
   }
 
-  private destroyTabBridge(tabId: string): void {
+  private checkpointAndDestroyTabBridge(tabId: string): void {
     let tab: TabInfo | null = this.findTabById(tabId)
     if (tab === null) {
       return
     }
     if (!InteractionPolicy.shouldDetachTabOnEviction(this.tabHasActiveSession(tab))) {
+      return
+    }
+    if (this.checkpointingTabIds.indexOf(tabId) >= 0) {
+      return
+    }
+    this.checkpointingTabIds = this.checkpointingTabIds.concat([tabId])
+    let pendingCaptures: number = tab.panes.length
+    if (pendingCaptures === 0) {
+      this.finishTabCheckpoint(tabId)
+      return
+    }
+    for (let i = 0; i < tab.panes.length; i++) {
+      let runtime: PaneRuntime | null = this.findPaneRuntime(tab.panes[i].id)
+      if (runtime !== null) {
+        runtime.surface.captureSnapshot(() => {
+          pendingCaptures--
+          if (pendingCaptures === 0) {
+            this.finishTabCheckpoint(tabId)
+          }
+        })
+      } else {
+        pendingCaptures--
+        if (pendingCaptures === 0) {
+          this.finishTabCheckpoint(tabId)
+        }
+      }
+    }
+  }
+
+  private finishTabCheckpoint(tabId: string): void {
+    this.checkpointingTabIds = this.checkpointingTabIds.filter((id: string) => id !== tabId)
+    let tab: TabInfo | null = this.findTabById(tabId)
+    if (tab === null) {
+      return
+    }
+    let active: TabInfo | null = this.activeTab()
+    let shouldRemainMounted: boolean = InteractionPolicy.shouldMountTab(
+      active !== null && active.id === tab.id,
+      tab.id === this.warmTabId,
+      this.tabHasActiveSession(tab),
+      this.mainWindowVisible)
+    if (shouldRemainMounted) {
       return
     }
     for (let i = 0; i < tab.panes.length; i++) {
@@ -451,7 +506,7 @@ struct Index {
         this.warmTabId = ''
         return
       }
-      this.destroyTabBridge(tabId)
+      this.checkpointAndDestroyTabBridge(tabId)
       this.warmTabId = ''
     }, WARM_TAB_RETENTION_MS)
   }
@@ -615,6 +670,15 @@ struct Index {
 
   private updatePaneState(paneId: string, state: SshSessionState): void {
     this.appVm.updatePaneState(paneId, state)
+    let tab: TabInfo | null = this.findTabForPane(paneId)
+    let active: TabInfo | null = this.activeTab()
+    if (tab !== null && !InteractionPolicy.shouldMountTab(
+      active !== null && active.id === tab.id,
+      tab.id === this.warmTabId,
+      this.tabHasActiveSession(tab),
+      this.mainWindowVisible)) {
+      this.checkpointAndDestroyTabBridge(tab.id)
+    }
     this.syncWorkspace()
   }
 

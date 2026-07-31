@@ -24,6 +24,9 @@
 
 ### Fixed
 
+- Added bounded session-memory checkpoints so a terminal surface rebuilt after
+  the app enters the background can recover its screen and scrollback even when
+  SSH disconnects; physical ARM64 PC lifecycle validation remains pending.
 - Ended accepted SSH host-key confirmation input with a new line before showing
   the next authentication prompt.
 - Added OpenSSH-compatible `ssh-keygen -R` host-record removal and made changed

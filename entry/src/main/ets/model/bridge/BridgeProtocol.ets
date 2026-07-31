@@ -32,6 +32,9 @@ export class BridgeProtocol {
   static readonly KIND_FIT: string = 'fit'
   static readonly KIND_FONT_SIZE: string = 'fontSize'
   static readonly KIND_SECONDARY_ACTION: string = 'secondaryAction'
+  static readonly KIND_SNAPSHOT_REQUEST: string = 'snapshotRequest'
+  static readonly KIND_RESTORE_SNAPSHOT: string = 'restoreSnapshot'
+  static readonly KIND_RESTORE_COMPLETE: string = 'restoreComplete'
 
   static readonly KIND_READY: string = 'ready'
   static readonly KIND_RESIZE: string = 'resize'
@@ -45,7 +48,9 @@ export class BridgeProtocol {
   static readonly KIND_PERF_RENDER: string = 'perfRender'
   static readonly KIND_RENDERER_STATE: string = 'rendererState'
   static readonly KIND_OPEN_URL: string = 'openUrl'
+  static readonly KIND_SNAPSHOT: string = 'snapshot'
   static readonly MAX_URL_PAYLOAD_LENGTH: number = 4096
+  static readonly MAX_SNAPSHOT_PAYLOAD_LENGTH: number = 4 * 1024 * 1024
 
   static parse(raw: string): BridgeMessage | null {
     let versionEnd: number = raw.indexOf('|')
@@ -72,6 +77,16 @@ export class BridgeProtocol {
     }
     if (kind === BridgeProtocol.KIND_OPEN_URL &&
       (payload.length === 0 || payload.length > BridgeProtocol.MAX_URL_PAYLOAD_LENGTH)) {
+      return null
+    }
+    if (kind === BridgeProtocol.KIND_SNAPSHOT_REQUEST && !BridgeProtocol.isPositiveIntegerPayload(payload)) {
+      return null
+    }
+    if (kind === BridgeProtocol.KIND_RESTORE_COMPLETE && payload.length > 0) {
+      return null
+    }
+    if ((kind === BridgeProtocol.KIND_RESTORE_SNAPSHOT || kind === BridgeProtocol.KIND_SNAPSHOT) &&
+      payload.length > BridgeProtocol.MAX_SNAPSHOT_PAYLOAD_LENGTH) {
       return null
     }
     return new BridgeMessage(direction, channel, kind, payload)
@@ -125,6 +140,14 @@ export class BridgeProtocol {
     return BridgeProtocol.nativeControl(BridgeProtocol.KIND_SECONDARY_ACTION)
   }
 
+  static snapshotRequest(requestId: number): BridgeMessage {
+    return BridgeProtocol.nativeControl(BridgeProtocol.KIND_SNAPSHOT_REQUEST, requestId.toString())
+  }
+
+  static restoreSnapshot(snapshot: string): BridgeMessage {
+    return BridgeProtocol.nativeControl(BridgeProtocol.KIND_RESTORE_SNAPSHOT, snapshot)
+  }
+
   static copySelection(): BridgeMessage {
     return BridgeProtocol.nativeControl(BridgeProtocol.KIND_COPY_SELECTION)
   }
@@ -155,6 +178,11 @@ export class BridgeProtocol {
     return channel === BridgeProtocol.CHANNEL_DATA || channel === BridgeProtocol.CHANNEL_CONTROL
   }
 
+  private static isPositiveIntegerPayload(payload: string): boolean {
+    let value: number = parseInt(payload, 10)
+    return !isNaN(value) && value > 0 && value.toString() === payload
+  }
+
   private static isSupportedMessage(direction: string, channel: string, kind: string): boolean {
     if (channel === BridgeProtocol.CHANNEL_DATA) {
       return kind === BridgeProtocol.KIND_TERMINAL
@@ -168,7 +196,9 @@ export class BridgeProtocol {
         kind === BridgeProtocol.KIND_FIT ||
         kind === BridgeProtocol.KIND_FONT_SIZE ||
         kind === BridgeProtocol.KIND_COPY_SELECTION ||
-        kind === BridgeProtocol.KIND_SECONDARY_ACTION
+        kind === BridgeProtocol.KIND_SECONDARY_ACTION ||
+        kind === BridgeProtocol.KIND_SNAPSHOT_REQUEST ||
+        kind === BridgeProtocol.KIND_RESTORE_SNAPSHOT
     }
     return kind === BridgeProtocol.KIND_READY ||
       kind === BridgeProtocol.KIND_RESIZE ||
@@ -181,6 +211,8 @@ export class BridgeProtocol {
       kind === BridgeProtocol.KIND_CLIPBOARD_PASTE ||
       kind === BridgeProtocol.KIND_PERF_RENDER ||
       kind === BridgeProtocol.KIND_RENDERER_STATE ||
-      kind === BridgeProtocol.KIND_OPEN_URL
+      kind === BridgeProtocol.KIND_OPEN_URL ||
+      kind === BridgeProtocol.KIND_RESTORE_COMPLETE ||
+      kind === BridgeProtocol.KIND_SNAPSHOT
   }
 }

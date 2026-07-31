@@ -104,8 +104,8 @@ export class SessionViewModel {
     surface.setOnMessage((msg: BridgeMessage) => {
       this.handleBridgeMessage(msg)
     })
-    surface.setOnReady((flushedDetachedOutput: boolean) => {
-      this.onBridgeReady(flushedDetachedOutput)
+    surface.setOnReady((recoveredOutput: boolean) => {
+      this.onBridgeReady(recoveredOutput)
     })
     surface.setOnOutputPauseChange((paused: boolean) => {
       this.applyOutputPause(paused)
@@ -116,15 +116,18 @@ export class SessionViewModel {
     this.stopHeartbeat()
   }
 
-  private onBridgeReady(flushedDetachedOutput: boolean): void {
-    if (this.mode === TerminalMode.IDLE && !flushedDetachedOutput) {
+  private onBridgeReady(recoveredOutput: boolean): void {
+    if (this.mode === TerminalMode.IDLE && !recoveredOutput) {
       this.writePrompt()
     }
     this.requestTerminalFit()
     this.applyTerminalFocus()
     this.startHeartbeat()
-    this.logger.info(flushedDetachedOutput ?
-      'Bridge ready, detached output flushed' : 'Bridge ready without detached output')
+    if (this.terminalSurface !== null) {
+      this.terminalSurface.captureSnapshot()
+    }
+    this.logger.info(recoveredOutput ?
+      'Bridge ready, terminal output recovered' : 'Bridge ready without recovered output')
   }
 
   writePrompt(): void {
@@ -380,6 +383,9 @@ export class SessionViewModel {
     this.releaseDisconnectedFlowControl()
     this.writeTerminal('\r\n' + ConnectionControl.describeClose(exitCode))
     this.writePrompt()
+    if (this.terminalSurface !== null) {
+      this.terminalSurface.captureSnapshot()
+    }
     this.notifyStateChange()
     this.logger.info('SSH closed, exitCode=' + exitCode.toString())
   }
@@ -396,6 +402,9 @@ export class SessionViewModel {
     this.setMode(TerminalMode.IDLE)
     this.releaseDisconnectedFlowControl()
     this.writeError('SSH error: ' + errorDetail)
+    if (this.terminalSurface !== null) {
+      this.terminalSurface.captureSnapshot()
+    }
     this.notifyStateChange()
   }
 

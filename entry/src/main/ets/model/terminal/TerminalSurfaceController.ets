@@ -6,6 +6,18 @@ import { Logger } from '../../common/logger/Logger'
 import { TerminalOutputBuffer } from './TerminalOutputBuffer'
 import util from '@ohos.util'
 
+class SnapshotCompletion {
+  requestId: number
+  handler: () => void
+  timerId: number
+
+  constructor(requestId: number, handler: () => void, timerId: number) {
+    this.requestId = requestId
+    this.handler = handler
+    this.timerId = timerId
+  }
+}
+
 export class TerminalSurfaceController {
   private bridge: TerminalBridge | null = null
   private outputBuffer: TerminalOutputBuffer = new TerminalOutputBuffer()
@@ -18,6 +30,10 @@ export class TerminalSurfaceController {
   private onOpenUrlHandler: ((url: string) => void) | null = null
   private logger: Logger = new Logger('TerminalSurfaceController')
   private textEncoder: util.TextEncoder = new util.TextEncoder()
+  private nextSnapshotRequestId: number = 1
+  private lastCommittedSnapshotRequestId: number = 0
+  private snapshotCompletions: SnapshotCompletion[] = []
+  private static readonly SNAPSHOT_COMPLETION_TIMEOUT_MS: number = 2000
 
   setOnMessage(handler: (msg: BridgeMessage) => void): void {
     this.onMessageHandler = handler
@@ -49,15 +65,14 @@ export class TerminalSurfaceController {
 
   attach(ctrl: webview.WebviewController): void {
     this.detach()
-    let detachedChunks: Uint8Array[] = this.outputBuffer.takeDetachedChunks()
-    let flushedDetachedOutput: boolean = detachedChunks.length > 0
+    let recoveredOutput: boolean = false
     let bridge: TerminalBridge = new TerminalBridge(ctrl)
     bridge.setOnMessage((msg: BridgeMessage) => {
       this.handleBridgeMessage(bridge, msg)
     })
     bridge.setOnReady(() => {
       if (this.onReadyHandler !== null) {
-        this.onReadyHandler(flushedDetachedOutput)
+        this.onReadyHandler(recoveredOutput)
       }
     })
     bridge.setOnBackpressure((paused: boolean) => {
@@ -66,6 +81,13 @@ export class TerminalSurfaceController {
       this.notifyOutputPauseChange(previousPaused)
     })
     this.bridge = bridge
+    let snapshot: string = this.outputBuffer.getSnapshot()
+    if (snapshot.length > 0) {
+      bridge.restoreSnapshot(snapshot)
+      recoveredOutput = true
+    }
+    let detachedChunks: Uint8Array[] = this.outputBuffer.takeDetachedChunks()
+    recoveredOutput = recoveredOutput || detachedChunks.length > 0
     let previousPaused: boolean = this.outputBuffer.isOutputPaused()
     this.outputBuffer.markAttached()
     for (let i = 0; i < detachedChunks.length; i++) {
@@ -77,6 +99,7 @@ export class TerminalSurfaceController {
 
   detach(): void {
     let previousPaused: boolean = this.outputBuffer.isOutputPaused()
+    this.clearSnapshotCompletions()
     if (this.bridge !== null) {
       this.bridge.destroy()
       this.bridge = null
@@ -166,6 +189,25 @@ export class TerminalSurfaceController {
     }
   }
 
+  captureSnapshot(onCaptured: (() => void) | null = null): void {
+    if (this.bridge === null) {
+      if (onCaptured !== null) {
+        onCaptured()
+      }
+      return
+    }
+    let requestId: number = this.nextSnapshotRequestId
+    this.nextSnapshotRequestId++
+    if (onCaptured !== null) {
+      let timerId: number = setTimeout(() => {
+        this.logger.warn('Terminal snapshot timed out, requestId=' + requestId.toString())
+        this.completeSnapshotRequest(requestId)
+      }, TerminalSurfaceController.SNAPSHOT_COMPLETION_TIMEOUT_MS)
+      this.snapshotCompletions.push(new SnapshotCompletion(requestId, onCaptured, timerId))
+    }
+    this.bridge.requestSnapshot(requestId)
+  }
+
   private handleBridgeMessage(sourceBridge: TerminalBridge, msg: BridgeMessage): void {
     if (msg.direction === BridgeProtocol.DIRECTION_WEB_TO_NATIVE &&
       msg.channel === BridgeProtocol.CHANNEL_CONTROL && msg.kind === BridgeProtocol.KIND_BELL_ATTENTION) {
@@ -216,8 +258,53 @@ export class TerminalSurfaceController {
       }
       return
     }
+    if (msg.direction === BridgeProtocol.DIRECTION_WEB_TO_NATIVE &&
+      msg.channel === BridgeProtocol.CHANNEL_CONTROL && msg.kind === BridgeProtocol.KIND_SNAPSHOT) {
+      let separator: number = msg.payload.indexOf('|')
+      let requestIdText: string = separator > 0 ? msg.payload.substring(0, separator) : ''
+      let requestId: number = parseInt(requestIdText, 10)
+      if (this.bridge === sourceBridge && separator > 0 && !isNaN(requestId) &&
+        requestId > 0 && requestId.toString() === requestIdText) {
+        if (requestId >= this.lastCommittedSnapshotRequestId) {
+          this.outputBuffer.replaceSnapshot(msg.payload.substring(separator + 1))
+          this.lastCommittedSnapshotRequestId = requestId
+        }
+        this.completeSnapshotRequest(requestId)
+      }
+      return
+    }
     if (this.onMessageHandler !== null) {
       this.onMessageHandler(msg)
+    }
+  }
+
+  private completeSnapshotRequest(requestId: number): void {
+    let remaining: SnapshotCompletion[] = []
+    let completedHandler: (() => void) | null = null
+    for (let i = 0; i < this.snapshotCompletions.length; i++) {
+      let completion: SnapshotCompletion = this.snapshotCompletions[i]
+      if (completion.requestId === requestId) {
+        clearTimeout(completion.timerId)
+        completedHandler = completion.handler
+      } else {
+        remaining.push(completion)
+      }
+    }
+    this.snapshotCompletions = remaining
+    if (completedHandler !== null) {
+      completedHandler()
+    }
+  }
+
+  private clearSnapshotCompletions(): void {
+    let handlers: (() => void)[] = []
+    for (let i = 0; i < this.snapshotCompletions.length; i++) {
+      clearTimeout(this.snapshotCompletions[i].timerId)
+      handlers.push(this.snapshotCompletions[i].handler)
+    }
+    this.snapshotCompletions = []
+    for (let i = 0; i < handlers.length; i++) {
+      handlers[i]()
     }
   }
 

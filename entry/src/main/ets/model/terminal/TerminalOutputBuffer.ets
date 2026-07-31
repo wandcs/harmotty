@@ -4,6 +4,7 @@ export class TerminalOutputBuffer {
   private bridgeBackpressured: boolean = false
   private detachedBackpressured: boolean = false
   private attached: boolean = false
+  private snapshot: string = ''
   private readonly hiddenHighWaterBytes: number
 
   constructor(hiddenHighWaterBytes: number = 768 * 1024) {
@@ -63,6 +64,14 @@ export class TerminalOutputBuffer {
 
   getDetachedByteCount(): number {
     return this.detachedBytes
+  }
+
+  replaceSnapshot(snapshot: string): void {
+    this.snapshot = snapshot
+  }
+
+  getSnapshot(): string {
+    return this.snapshot
   }
 
   releaseDisconnectedFlowControl(): void {

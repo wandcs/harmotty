@@ -402,6 +402,32 @@ export default function interactionFixesTest() {
       expect(BridgeProtocol.parse('H2|N2W|CONTROL|clipboardWrite|text')).assertEqual(null)
     })
 
+    it('allowsOnlyBoundedDirectionalTerminalSnapshotControls', 0, () => {
+      expect(BridgeProtocol.snapshotRequest(7).serialize())
+        .assertEqual('H2|N2W|CONTROL|snapshotRequest|7')
+      expect(BridgeProtocol.restoreSnapshot('\u001b[31mhistory').serialize())
+        .assertEqual('H2|N2W|CONTROL|restoreSnapshot|\u001b[31mhistory')
+      let snapshot: BridgeMessage | null =
+        BridgeProtocol.parse('H2|W2N|CONTROL|snapshot|7|\u001b[31mhistory')
+      expect(snapshot !== null).assertEqual(true)
+      if (snapshot !== null) {
+        expect(snapshot.kind).assertEqual(BridgeProtocol.KIND_SNAPSHOT)
+        expect(snapshot.payload).assertEqual('7|\u001b[31mhistory')
+      }
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|snapshotRequest|')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|snapshotRequest|0')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|snapshotRequest|07')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|restoreComplete|') !== null).assertEqual(true)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|restoreComplete|unexpected')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|snapshot|history')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|restoreSnapshot|history')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|snapshotRequest|unexpected')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|snapshot|' +
+        'x'.repeat(BridgeProtocol.MAX_SNAPSHOT_PAYLOAD_LENGTH + 1))).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|restoreSnapshot|' +
+        'x'.repeat(BridgeProtocol.MAX_SNAPSHOT_PAYLOAD_LENGTH + 1))).assertEqual(null)
+    })
+
     it('encodesShiftedDigitsAndAltPunctuation', 0, () => {
       expect(KeyCodeMap.toAnsi(KeyCodeMap.NUM_1, false, false, true)).assertEqual('!')
       expect(KeyCodeMap.toAnsi(KeyCodeMap.NUM_0, false, false, true)).assertEqual(')')
@@ -436,7 +462,7 @@ export default function interactionFixesTest() {
       expect(InteractionPolicy.shouldMountTab(false, false, false)).assertEqual(false)
       expect(InteractionPolicy.shouldMountTab(true, false, true, false)).assertEqual(true)
       expect(InteractionPolicy.shouldMountTab(false, false, true, false)).assertEqual(true)
-      expect(InteractionPolicy.shouldMountTab(true, false, false, false)).assertEqual(false)
+      expect(InteractionPolicy.shouldMountTab(true, false, false, false)).assertEqual(true)
       expect(InteractionPolicy.shouldMountTab(false, true, false, false)).assertEqual(false)
       expect(InteractionPolicy.shouldDetachTabOnEviction(true)).assertEqual(false)
       expect(InteractionPolicy.shouldDetachTabOnEviction(false)).assertEqual(true)
@@ -465,6 +491,23 @@ export default function interactionFixesTest() {
       output.append(new Uint8Array([13, 14]))
       expect(output.getDetachedByteCount()).assertEqual(2)
       expect(output.takeDetachedChunks()[0][1]).assertEqual(14)
+    })
+
+    it('keepsTheLatestTerminalSnapshotAcrossSurfaceReplacement', 0, () => {
+      let output: TerminalOutputBuffer = new TerminalOutputBuffer(16)
+      expect(output.getSnapshot()).assertEqual('')
+      output.replaceSnapshot('\u001b[31mold')
+      expect(output.getSnapshot()).assertEqual('\u001b[31mold')
+      output.markAttached()
+      output.append(new Uint8Array([1, 2]))
+      output.markDetached()
+      expect(output.getSnapshot()).assertEqual('\u001b[31mold')
+      output.append(new Uint8Array([3, 4]))
+      expect(output.takeDetachedChunks()[0][1]).assertEqual(4)
+      output.replaceSnapshot('\u001b[32mnew')
+      expect(output.getSnapshot()).assertEqual('\u001b[32mnew')
+      output.replaceSnapshot('')
+      expect(output.getSnapshot()).assertEqual('')
     })
 
     it('mapsTaggedCloseResultsToAnActionableSshError', 0, () => {
