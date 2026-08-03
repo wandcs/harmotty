@@ -197,6 +197,7 @@ export class KeyCommandService {
     let keyName: string = result.keyName
     ctx.confirmKeyDelete(keyName, key.fingerprint, () => {
       SshKeyManager.deleteKey(ctx.context, keyName)
+      logger.info('KEY_DELETE result=success')
       ctx.writeOutput('\r\nDeleted: ' + keyName + '\r\nltty> ')
     }, () => { ctx.writeOutput('ltty> ') })
   }

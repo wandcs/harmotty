@@ -14,6 +14,13 @@ try {
     if ($tracked.Count -eq 0) {
         throw 'No tracked source files were found'
     }
+    $sourceFiles = @(git ls-files --cached --others --exclude-standard | Sort-Object -Unique)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'git source-file enumeration failed'
+    }
+    $sourceFiles = @($sourceFiles | Where-Object {
+        Test-Path -LiteralPath (Join-Path $repoRoot $_) -PathType Leaf
+    })
 
     $forbiddenPaths = @(
         @{ Pattern = '(^|/)node_modules/'; Reason = 'dependency cache' },
@@ -27,7 +34,7 @@ try {
         @{ Pattern = '\.(p12|pfx|jks|keystore|pem|key)$'; Reason = 'credential material' }
     )
 
-    foreach ($path in $tracked) {
+    foreach ($path in $sourceFiles) {
         $normalized = $path.Replace('\', '/')
         foreach ($rule in $forbiddenPaths) {
             if ($normalized -match $rule.Pattern) {
@@ -61,7 +68,7 @@ try {
         @{ Pattern = '(?:ghp_|ghs_|github_pat_)[A-Za-z0-9_]{20,}'; Reason = 'GitHub credential' }
     )
 
-    foreach ($path in $tracked) {
+    foreach ($path in $sourceFiles) {
         $normalized = $path.Replace('\', '/')
         if ($normalized -eq 'tools/check-public-source.ps1') {
             continue
@@ -79,7 +86,7 @@ try {
         }
     }
 
-    foreach ($path in $tracked | Where-Object { $_ -like '*.ps1' }) {
+    foreach ($path in $sourceFiles | Where-Object { $_ -like '*.ps1' }) {
         $tokens = $null
         $parseErrors = $null
         [Management.Automation.Language.Parser]::ParseFile(
@@ -108,15 +115,15 @@ try {
                 continue
             }
             $dependencyRelative = $dependencyPath.Substring($repoRoot.Length + 1).Replace('\', '/')
-            if ($tracked -notcontains $dependencyRelative) {
+            if ($sourceFiles -notcontains $dependencyRelative) {
                 $failures.Add(
-                    "PowerShell dot-source is not tracked: $path -> $dependencyRelative"
+                    "PowerShell dot-source is not part of the source tree: $path -> $dependencyRelative"
                 )
             }
         }
     }
 
-    $workflowFiles = @($tracked | Where-Object {
+    $workflowFiles = @($sourceFiles | Where-Object {
         $_.Replace('\', '/') -match '^\.github/workflows/.+\.ya?ml$'
     })
     foreach ($path in $workflowFiles) {
@@ -139,7 +146,7 @@ try {
         throw "Public-source policy failed with $($failures.Count) finding(s)"
     }
 
-    Write-Host "Public-source policy passed for $($tracked.Count) tracked files."
+    Write-Host "Public-source policy passed for $($sourceFiles.Count) source files."
 }
 finally {
     Pop-Location

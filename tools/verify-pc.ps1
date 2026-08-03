@@ -1,26 +1,37 @@
 <#
 .SYNOPSIS
-  Run the low-frequency LeanTTY verification gate and deploy to a real PC.
+  Build and optionally deploy one clean LeanTTY verification candidate.
 .DESCRIPTION
-  Runs the trusted ArkTS suite, Rust formatting and script syntax checks, and a
-  clean ARM64 debug build. The ARM64 build compiles both the pure Rust core and
-  the HarmonyOS N-API layer. By default the resulting signed HAP is also
-  installed and launched on the HarmonyOS PC.
+  Requires a clean committed tree, runs the mandatory software regression gate
+  and performs one clean ARM64 debug HAP build. By default the resulting signed
+  HAP is installed and launched on a physical HarmonyOS PC and retained as
+  device-deployed evidence. Feature behavior needs a separate named scenario.
 #>
 param(
     [string]$Target = '',
     [switch]$SkipDevice,
-    [switch]$FollowLogs
+    [switch]$FollowLogs,
+    [string]$EvidenceDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+
+$candidateSourceStatus = @(git -C $repoRoot status --porcelain --untracked-files=all 2>&1)
+if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect candidate source state' }
+if ($candidateSourceStatus.Count -gt 0) {
+    throw 'verify-pc requires a clean committed candidate; run tools/test-regression.ps1 before committing'
+}
 
 foreach ($scriptName in @(
         'build-native.ps1',
         'build-lock.ps1',
         'candidate-store.ps1',
         'rust-wsl.ps1',
+        'device-regression.ps1',
+        'test-device-regression.ps1',
+        'test-regression.ps1',
+        'verify-key-passphrase-pc.ps1',
         'test-build-workflows.ps1',
         'build-all.ps1',
         'dev-build.ps1',
@@ -40,8 +51,17 @@ foreach ($scriptName in @(
 }
 Write-Host 'PowerShell syntax checks passed.' -ForegroundColor Green
 
-& (Join-Path $PSScriptRoot 'test-build-workflows.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Build workflow regression tests failed' }
+$temporaryEvidenceDirectory = $false
+if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
+    $EvidenceDirectory = Join-Path (
+        [IO.Path]::GetTempPath()
+    ) ('LeanTTY-verification-' + [Guid]::NewGuid().ToString('N'))
+    $temporaryEvidenceDirectory = $true
+}
+New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
+$softwareEvidencePath = Join-Path $EvidenceDirectory 'software.json'
+& (Join-Path $PSScriptRoot 'test-regression.ps1') -EvidencePath $softwareEvidencePath
+if ($LASTEXITCODE -ne 0) { throw 'Mandatory software regression gate failed' }
 
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
 . (Join-Path $PSScriptRoot 'candidate-store.ps1')
@@ -61,78 +81,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host 'Generated native library source-control policy passed.' -ForegroundColor Green
 
-$deveco = $env:DEVECO_HOME
-if (-not $deveco) {
-    foreach ($candidate in @('C:\Program Files\Huawei\DevEco Studio', 'D:\Program Files\Huawei\DevEco Studio')) {
-        if (Test-Path -LiteralPath $candidate) { $deveco = $candidate; break }
-    }
-}
-if (-not $deveco) { throw 'DevEco Studio not found. Set DEVECO_HOME.' }
-
-$nodeExe = Join-Path $deveco 'tools\node\node.exe'
-$hvigorJs = Join-Path $deveco 'tools\hvigor\bin\hvigorw.js'
-$ohpm = Join-Path $deveco 'tools\ohpm\bin\ohpm.bat'
-$env:NODE_OPTIONS = ''
-$env:DEVECO_SDK_HOME = Join-Path $deveco 'sdk'
-$env:JAVA_HOME = Join-Path $deveco 'jbr'
-$env:PATH = (Join-Path $deveco 'jbr\bin') + ';' + $env:PATH
-
-$hypiumPath = Join-Path $repoRoot 'oh_modules\@ohos\hypium'
-if (-not (Test-Path -LiteralPath $hypiumPath)) {
-    if (-not (Test-Path -LiteralPath $ohpm)) { throw "OHPM not found: $ohpm" }
-    Push-Location $repoRoot
-    try {
-        & $ohpm install --all --lockfile_stable_order
-        $ohpmExitCode = $LASTEXITCODE
-    } finally {
-        Pop-Location
-    }
-    if ($ohpmExitCode -ne 0 -or -not (Test-Path -LiteralPath $hypiumPath)) {
-        throw 'OHPM dependency restore failed'
-    }
-    Write-Host 'OHPM dependencies restored from the lockfile.' -ForegroundColor Green
-}
-
-& $nodeExe (Join-Path $repoRoot 'tools\web-terminal\test-terminal-policy.mjs')
-if ($LASTEXITCODE -ne 0) { throw 'Web terminal policy tests failed' }
-Write-Host 'Web terminal policy tests passed.' -ForegroundColor Green
-
-Push-Location $repoRoot
-try {
-    $arkTsTestStartedAt = Get-Date
-    & $nodeExe $hvigorJs --mode module -p module=entry@default test
-    $arkTsTestExitCode = $LASTEXITCODE
-} finally {
-    Pop-Location
-}
-if ($arkTsTestExitCode -ne 0) { throw 'Trusted ArkTS unit tests failed' }
-$arkTsTestResult = Join-Path $repoRoot 'entry\.test\default\intermediates\test\coverage_data\test_result.txt'
-if (-not (Test-Path -LiteralPath $arkTsTestResult)) {
-    throw "Trusted ArkTS unit test result not found: $arkTsTestResult"
-}
-$arkTsTestResultInfo = Get-Item -LiteralPath $arkTsTestResult
-if ($arkTsTestResultInfo.LastWriteTime -lt $arkTsTestStartedAt.AddSeconds(-1)) {
-    throw 'Trusted ArkTS unit test result was not refreshed by the current run'
-}
-$arkTsTestSummary = Get-Content -LiteralPath $arkTsTestResult -Raw
-$arkTsTestSummaryMatch = [regex]::Match(
-    $arkTsTestSummary,
-    '(?m)^Tests run: (?<run>\d+), Failure: (?<failure>\d+), Error: (?<error>\d+), Pass: (?<pass>\d+), Ignore: (?<ignore>\d+)\s*$'
-)
-if (-not $arkTsTestSummaryMatch.Success) {
-    throw 'Trusted ArkTS unit test summary is missing or malformed'
-}
-if ([int]$arkTsTestSummaryMatch.Groups['failure'].Value -ne 0 -or
-    [int]$arkTsTestSummaryMatch.Groups['error'].Value -ne 0) {
-    throw ('Trusted ArkTS unit tests failed: ' + $arkTsTestSummaryMatch.Value.Trim())
-}
-Write-Host 'Trusted ArkTS unit tests passed.' -ForegroundColor Green
-
-Invoke-LeanTTYRustWsl `
-    -RepoRoot $repoRoot `
-    -CargoArguments @('fmt', '--manifest-path', './leantty_ssh/Cargo.toml', '--', '--check')
-Write-Host 'Rust formatting passed; ARM64 compilation is verified by the HAP build.' -ForegroundColor Green
-
 if ($SkipDevice) {
     & (Join-Path $PSScriptRoot 'build-all.ps1') -Clean -BuildMode debug
 } else {
@@ -145,11 +93,16 @@ if ($LASTEXITCODE -ne 0) { throw 'PC verification build or deployment failed' }
 $verifiedHap = Join-Path $repoRoot (
     'entry\build\default\outputs\default\entry-default-signed.hap'
 )
-$verificationMode = if ($SkipDevice) { 'software' } else { 'device' }
+$verificationMode = if ($SkipDevice) { 'software' } else { 'device-deployed' }
 $retainedCandidate = Save-LeanTTYVerifiedCandidate `
     -RepoRoot $repoRoot `
     -HapPath $verifiedHap `
-    -VerificationMode $verificationMode
+    -VerificationMode $verificationMode `
+    -EvidencePaths @($softwareEvidencePath)
+if ($temporaryEvidenceDirectory -and
+    (Test-Path -LiteralPath $EvidenceDirectory -PathType Container)) {
+    Remove-Item -LiteralPath $EvidenceDirectory -Recurse -Force
+}
 Write-Host (
     "Retained $verificationMode-verified candidate: " +
     "$($retainedCandidate.hapPath) (SHA256=$($retainedCandidate.sha256))"

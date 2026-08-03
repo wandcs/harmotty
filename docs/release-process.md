@@ -74,8 +74,9 @@ git clone https://github.com/wandcs/leantty.git $releaseCheckout
 
 Before building a release:
 
-- Run `tools/verify-pc.ps1` on the target HarmonyOS PC from the development
-  checkout, then push the verified commit.
+- Run `tools/verify-pc.ps1` on the target HarmonyOS PC from the clean development
+  checkout, then run every applicable named `verify-*-pc.ps1` behavior scenario
+  against that unchanged retained HAP before pushing the verified commit.
 - Confirm the trusted ArkTS suite and Rust `fmt --check` pass.
 - Use the clean ARM64 cross-build as the native integration gate. Rust
   formatting, tests and compilation run in WSL; Windows supplies the DevEco

@@ -1,10 +1,11 @@
 # Rust Dependency License Inventory
 
-Generated and reviewed on 2026-08-03 from `leantty_ssh/Cargo.lock` with:
+Generated and reviewed on 2026-08-03 from `leantty_ssh/Cargo.lock` in a WSL
+shell opened at the mounted checkout:
 
-```powershell
-wsl.exe --cd . -- cargo metadata --locked --offline `
-  --filter-platform aarch64-unknown-linux-ohos `
+```bash
+cargo metadata --locked --offline \
+  --filter-platform aarch64-unknown-linux-ohos \
   --format-version 1
 ```
 

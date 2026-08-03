@@ -4,6 +4,10 @@
 
 ### Development
 
+- Established a mandatory regression standard with one local software gate,
+  monotonic retained-candidate evidence modes and self-driven physical-PC
+  scenarios that verify injected input, observable state, negative paths and
+  secret non-disclosure without rebuilding the accepted HAP.
 - Added `ssh-keygen -p -f <identity>` with non-echoing old/new passphrase
   prompts, verified atomic private-key replacement, durable retention and
   rollback on retention failure without changing the public key or comment.

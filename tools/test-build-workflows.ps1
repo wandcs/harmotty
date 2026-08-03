@@ -79,12 +79,80 @@ try {
         (Get-FileHash -LiteralPath $latestSource -Algorithm SHA256).Hash
     ) 'Latest candidate does not match the newest verified package'
 
+    $behaviorEvidence = Join-Path $testRoot 'device-key-passphrase.json'
+    [IO.File]::WriteAllText(
+        $behaviorEvidence,
+        '{"schemaVersion":1,"scenario":"ssh-keygen-passphrase","result":"passed"}',
+        [Text.UTF8Encoding]::new($false)
+    )
+    Save-LeanTTYVerifiedCandidate `
+        -RepoRoot $repoRoot `
+        -HapPath $latestCandidate.hapPath `
+        -VerificationMode 'device-behavior' `
+        -EvidencePaths @($behaviorEvidence) `
+        -CandidateBasePath $candidateBase | Out-Null
+    $behaviorCandidate = Get-LeanTTYLatestVerifiedCandidate `
+        -RepoRoot $repoRoot `
+        -CandidateBasePath $candidateBase
+    Assert-True ($behaviorCandidate.verificationMode -eq 'device-behavior') (
+        'Device behavior evidence did not promote the retained candidate'
+    )
+    Assert-True ($behaviorCandidate.evidenceFiles.Count -eq 1) (
+        'Device behavior evidence was not retained with the candidate'
+    )
+    Save-LeanTTYVerifiedCandidate `
+        -RepoRoot $repoRoot `
+        -HapPath $latestCandidate.hapPath `
+        -VerificationMode 'software' `
+        -CandidateBasePath $candidateBase | Out-Null
+    $nonDowngradedCandidate = Get-LeanTTYLatestVerifiedCandidate `
+        -RepoRoot $repoRoot `
+        -CandidateBasePath $candidateBase
+    Assert-True ($nonDowngradedCandidate.verificationMode -eq 'device-behavior') (
+        'A later software-only save downgraded device behavior evidence'
+    )
+
+    $legacyManifestPath = Join-Path $candidateDirectories[0].FullName 'manifest.json'
+    $legacyManifest = Get-Content -LiteralPath $legacyManifestPath -Raw | ConvertFrom-Json
+    $legacyManifest.schemaVersion = 1
+    $legacyManifest.verificationMode = 'device'
+    $legacyManifest.PSObject.Properties.Remove('evidenceFiles')
+    [IO.File]::WriteAllText(
+        $legacyManifestPath,
+        (ConvertTo-Json -InputObject $legacyManifest -Depth 4),
+        [Text.UTF8Encoding]::new($false)
+    )
+    $legacyRecord = @(Get-LeanTTYCandidateRecords -CandidateRoot $candidateRoot |
+        Where-Object { $_.manifestPath -eq $legacyManifestPath })
+    Assert-True ($legacyRecord.Count -eq 1 -and
+        $legacyRecord[0].verificationMode -eq 'device-deployed') (
+        'Legacy device candidate mode was not normalized to device-deployed'
+    )
+
+    $wslScript = Join-Path $PSScriptRoot 'rust-wsl.ps1'
+    . $wslScript
+    Assert-True (
+        (ConvertTo-LeanTTYWslPath -WindowsPath 'C:\src\project') -eq '/mnt/c/src/project'
+    ) 'WSL repository path conversion is incorrect'
+    Assert-True (
+        (ConvertTo-LeanTTYWslPath -WindowsPath 'D:\SDK\native sysroot') -eq
+        '/mnt/d/SDK/native sysroot'
+    ) 'WSL path conversion did not preserve spaces'
+
     $devBuildText = Get-Content -LiteralPath (
         Join-Path $PSScriptRoot 'dev-build.ps1'
     ) -Raw
     Assert-True (
         $devBuildText.Contains('Invoke-WithLeanTTYBuildLock')
     ) 'dev-build.ps1 is not protected by the repository build lock'
+
+    $verifyPcText = Get-Content -LiteralPath (
+        Join-Path $PSScriptRoot 'verify-pc.ps1'
+    ) -Raw
+    Assert-True (
+        $verifyPcText.Contains('[IO.Path]::GetTempPath()') -and
+        -not $verifyPcText.Contains("Join-Path `$repoRoot 'build\verification'")
+    ) 'verify-pc evidence would be deleted by its own clean build'
 
     $workerPath = Join-Path $testRoot 'lock-worker.ps1'
     $workerSource = @'

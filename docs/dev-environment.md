@@ -52,7 +52,8 @@ points share one lock across worktrees belonging to the same Git repository.
 Starting another writer waits for the active task instead of cleaning or
 rewriting Cargo, Hvigor or HAP outputs concurrently.
 
-`tools/verify-pc.ps1` retains its signed test HAP only after the gate succeeds.
+`tools/verify-pc.ps1` requires a clean committed tree and retains its signed test
+HAP only after the gate succeeds.
 Candidates are stored outside build output directories under the current
 user's local application data, keyed to the Git repository. Retention has one
 rule: keep the five most recently verified unique HAPs. There is no age-based
@@ -66,7 +67,9 @@ rebuilding:
 ```
 
 The candidate manifest records its SHA-256, Git commit/tree, checkout dirty
-state and whether verification included the physical device. Formal
+state, monotonic verification mode and attached local JSON evidence. The
+current modes are `software`, `device-deployed` and `device-behavior`; install
+and launch alone never claim behavior acceptance. Formal
 AppGallery production artifacts remain governed by
 [`release-process.md`](release-process.md) and are never added to this
 developer candidate store.
