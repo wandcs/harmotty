@@ -13,6 +13,9 @@ Before opening an issue, search existing issues and test the latest supported
 version when practical. Include the LeanTTY version or commit, HarmonyOS
 version, connection method and minimal reproduction steps.
 
+For current commands, host-key recovery, key handling and common failure
+messages, first check the [User Guide](docs/user-guide.md).
+
 Redact usernames, hostnames, IP addresses, device identifiers, terminal history,
 private keys, passwords, tokens and production logs.
 

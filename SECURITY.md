@@ -28,22 +28,35 @@ method shown on the GitHub profile rather than publishing the details.
 
 ## Security boundaries
 
-- Private keys are stored in the HarmonyOS application sandbox with restrictive
-  file permissions.
+- Verified private/public key pairs, OpenSSH configuration, trusted host keys
+  and essential settings use encrypted persistent HarmonyOS Asset Store
+  records. Application-private `.ssh` files are runtime projections, not the
+  long-term authority.
 - Passwords and passphrases are not intentionally persisted and sensitive Rust
   values are zeroized where supported.
 - Host keys are checked against OpenSSH-compatible `known_hosts` data.
 - The ArkWeb terminal uses a Content Security Policy and a validated bridge
   protocol.
-- Clipboard writes and reads originate from explicit application actions.
+- Clipboard reads occur for paste. Writes occur for local copy or a bounded
+  OSC 52 request; OSC 52 reads are rejected.
 - Signing keys and production credentials are kept outside the source
   repository.
+
+The detailed trust boundaries, protected assets and required evidence are in
+[the security model](docs/security-model.md). Data retention, ordinary-uninstall
+behavior and deletion limitations are disclosed in
+[the privacy policy](PRIVACY.md).
 
 ## Known limitations
 
 - Development builds use a local test-signing identity and are not official
   distribution artifacts.
 - ArkWeb/xterm.js currently requires CSP `unsafe-eval`.
+- Ordinary uninstall is not complete erasure of persistent LeanTTY assets; the
+  current source does not provide a one-step erase-all command.
+- On-device diagnostic logs can contain host endpoints, remote-controlled
+  titles, key paths/fingerprints and other operational metadata even though
+  LeanTTY does not upload them.
 - LeanTTY inherits security assumptions and update cadence from HarmonyOS,
   ArkWeb and its third-party dependencies.
 - Terminal output and remote applications are untrusted input; bugs in parsing,

@@ -60,6 +60,9 @@ and a physical PC.
 
 - Keep each change focused and explain the user-visible problem it solves.
 - Preserve the ownership model `App Shell → Tab → Pane → Session`.
+- Follow the current boundaries in [`docs/architecture.md`](docs/architecture.md)
+  and the evidence mapping in
+  [`docs/quality-strategy.md`](docs/quality-strategy.md).
 - Do not add x86_64 emulator support, mobile layouts, plugins or speculative
   abstraction layers.
 - Add or update tests for state machines, protocols and pure logic.

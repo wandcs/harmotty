@@ -1,0 +1,186 @@
+# SSH keyboard-interactive 与多方法认证技术方案
+
+> 状态：Implementing；产品范围已进入 1.1，协议细节与验证基线仍需在实现中闭合
+>
+> 目标 milestone：1.1.0
+>
+> 更新日期：2026-08-03
+>
+> 上位规则：[`project-principles.md`](../project-principles.md)
+>
+> 实现授权：仅以 [`next-work.md`](../next-work.md) 中对应活动工作为准
+
+> 命令面治理：[`command-system.md`](command-system.md)
+
+## 用户问题与目标
+
+LeanTTY 1.0 支持直接密码、未加密私钥和加密私钥，但当前认证路径不能正确表达标准
+SSH `keyboard-interactive`、authentication banner、一个请求中的多个提示、多轮回答，
+以及服务器要求多个认证方法时的部分成功。这会让 PAM、密码加动态验证码、私钥加
+动态验证码和私钥加密码等常见标准 SSH 环境无法可靠进入。
+
+本方案目标是让认证由服务器协议能力和当前 Session 的凭据共同驱动，在同一终端路径
+中安全完成标准 SSH 认证，不增加“启用 MFA”、厂商选择或验证码类型等产品概念。
+
+## 范围
+
+- 保持直接密码、未加密/加密 ed25519 与 RSA 私钥路径。
+- 支持 RFC 4256 `keyboard-interactive` 的 `name`、`instructions`、零个或多个 prompt、
+  每个 prompt 的 `echo` 标志以及连续多轮请求。
+- 单独处理 RFC 4252 authentication banner；它是只读提示，不是回答轮次。
+- 根据 `remaining_methods` 和 `partial_success` 继续服务器允许的下一因素。
+- 统一处理取消、超时、断线、Pane 关闭、重连 generation 变化和并行 Session。
+- 对不支持的方法、回答拒绝、协议异常和密码修改请求给出不同且可恢复的错误。
+
+## 非目标
+
+- 不集成厂商 MFA SDK，不生成、保存或同步 OTP 种子。
+- 不根据 `OTP:`、`Verification code:` 等提示文案猜测认证类型。
+- 不承诺未实际验证的堡垒机、Duo、JumpServer 或其他厂商兼容性。
+- 不支持 RFC 4252 密码修改请求；收到时明确报告当前版本不支持。
+- 不让认证回答进入命令历史、Preferences、持久资产、日志、遥测或 PTY 字节流。
+- 不建立 ArkTS 与 Rust 两套并行认证状态机。
+
+## 已知现状与证据边界
+
+当前 Rust/N-API/ArkTS 路径使用类似 `PASSWORD_PROMPT`、`AUTH:rejected` 的字符串事件，
+并以“私钥失败后提示密码”的分支组织认证。这不足以表达结构化 challenge、
+`partial_success` 和 `remaining_methods`。
+
+`russh 0.62.4` 提供相关客户端 API 是实现候选事实，不等于 LeanTTY 已经在 ARM64 HAP、
+受控服务端和物理 HarmonyOS PC 上完成互操作。实现前后的证据必须分开记录。
+
+## 用户交互
+
+认证方法不增加设置。用户继续运行 `ssh user@host` 或使用 Host/Identity 配置：
+
+1. TCP、密钥交换和主机校验完成后进入 `AUTHENTICATING`。
+2. 有可用私钥时先尝试私钥；没有私钥时优先尝试 `keyboard-interactive`，仅当服务器
+   不允许它而允许 `password` 时进入直接密码输入，避免 PAM-only 服务器重复问密码。
+3. 部分成功只表示一个因素完成，所有因素完成前不创建 PTY、不进入 `CONNECTED`。
+4. 一次 challenge 的 prompts 按服务器顺序逐项收集，收齐后一次提交同样数量回答。
+5. `echo=false` 使用掩码输入；`echo=true` 显示实际输入，并可能只留在当前 xterm 内存
+   scrollback，不能宣称其完全不出现在终端内容中。
+6. `Ctrl+C` 在任何认证输入阶段取消整个连接，不提交半成品回答。
+
+Banner 和服务器提示视为不可信文本：保留正常 Unicode 与必要换行，过滤 C0/C1、ESC
+和终端控制序列，不能借提示改变标题、剪贴板、模式或其他 Session。
+
+## 所有权与事件链
+
+```text
+SessionViewModel (当前 Pane 的输入交互)
+  ↕ structured N-API events/commands
+Rust Session (唯一认证状态机与 russh Handle)
+  ↕
+russh server negotiation
+```
+
+- Rust Session 独占方法协商、已完成因素、已尝试方法和唯一待处理 challenge。
+- `SshClient` 只转换结构化事件与回答，不决定下一认证方法。
+- `SessionViewModel` 只拥有当前 challenge 的展示、当前输入索引和尚未提交回答。
+- 认证信息不借用 WebView H2 Bridge，不混入远端 PTY 字节流。
+
+## Rust 认证状态机
+
+状态机输入包括当前凭据、`auth_banner`、`AuthResult`、
+`KeyboardInteractiveAuthResponse`、用户命令、取消、断开和超时。约束如下：
+
+1. `AuthResult::Success` 立即结束认证；`Failure` 必须读取
+   `remaining_methods + partial_success`。
+2. 私钥、直接密码和 `keyboard-interactive` 是协议方法，不由 UI 文案推断。
+3. 只选择服务器仍允许且当前阶段尚未失败的方法；一个阶段内不无界重试，新的部分
+   成功阶段可以按服务器要求继续合法方法。
+4. `InfoRequest` 的 `name`、`instructions`、`prompts` 与每个 `Prompt.echo` 全部保留；
+   回答数量必须精确相等。
+5. 对认证阶段、交互轮数、单轮提示数、字段长度和回答总长度设置明确上限；越界时
+   失败关闭，不截断后继续提交。
+6. 没有受支持的剩余方法时，返回安全的方法分类和可理解错误，不记录凭据或完整提示。
+
+用户发给 Rust 的命令应表达“本次输入”，而不是暗示一次调用完成整个认证：
+
+```text
+AuthCommand
+  DirectPassword(secret)
+  PrivateKey(path, passphrase)
+  KeyboardInteractiveResponses(roundId, responses[])
+```
+
+## 结构化边界
+
+```text
+AuthBanner
+  text
+
+AuthChallenge
+  roundId
+  name
+  instructions
+  prompts[]
+    text
+    echo
+```
+
+`roundId` 在一个 Session generation 内单调递增。回答 API 至少携带
+`sessionId + generation + roundId + responses[]`；Native 必须拒绝不存在的 Session、
+过期/重复/跨 Session 轮次、回答数量不匹配和 challenge 结束后的回答。
+
+## 秘密边界
+
+- 密码、私钥口令、OTP 和全部认证回答不得进入日志、错误快照、Preferences、命令
+  历史、持久资产、遥测或跨重启恢复。
+- Rust 的拥有型秘密在提交、失败、取消和超时后尽快 `zeroize`。
+- ArkTS 不能承诺物理内存清零；提交或取消后立即清空数组与引用，避免复制、拼接和
+  跨异步任务长期持有。
+- `echo=false` 回答不得以明文进入终端内容；`echo=true` 只允许按服务器要求出现在
+  当前终端输入与内存缓冲区，不进入其他存储。
+- 日志只记录认证方法类别、阶段和安全错误码，不记录服务器提示正文或任何回答。
+
+## 仍需讨论或在实现中确定
+
+- 各项协议上限的具体值，以及错误文案如何在安全与可诊断之间取平衡。
+- 直接密码与 `keyboard-interactive` 都被允许时的首次选择规则是否对现有服务器产生
+  额外往返；以受控基线和真实服务器兼容性决定，不凭直觉增加设置。
+- 零 prompt、多轮 prompt 和 banner 的具体终端排版，确保可读但不建立新 UI 面板。
+- russh 对密码修改请求和所有失败组合的可观察接口；缺失时应明确失败，不做文本猜测。
+- 受控 OpenSSH/russh 测试服务端的最小 fixture 与可复现启动方式。
+
+这些未决点不能改变已确认边界：服务器驱动、每 Session 唯一状态机、结构化事件、秘密
+不持久化和真机验证。
+
+## 验证门禁
+
+### 自动化
+
+- 现有密码、未加密/加密 ed25519 与 RSA 私钥及错误口令回归。
+- banner 的 Unicode/换行保留与控制序列过滤；banner 不创建轮次。
+- success、普通失败、部分成功及不同 `remaining_methods` 组合。
+- 单 prompt、多 prompt、混合 echo、零 prompt、多轮、空回答和 Unicode。
+- roundId 过期、重复、跨 Session、数量错误、长度/轮数上限和并行 Session。
+- 用户拒绝、错误回答、取消、超时、断线、Pane 关闭与 generation 变化。
+- 日志、错误快照、历史和 Preferences 不包含秘密。
+
+受控服务端至少覆盖 `password`、`password,keyboard-interactive`、
+`publickey,password`、`publickey,keyboard-interactive` 与多轮 interactive；测试凭据只
+存在于临时目录。
+
+### ARM64 构建
+
+Rust core、N-API typing、ArkTS 集成和干净 ARM64 native/debug HAP 均须通过，且不得
+引入未声明依赖或 x86_64 目标。
+
+### 物理 HarmonyOS PC
+
+- 直接密码、未加密/加密私钥回归。
+- PAM password、密码加 TOTP、私钥加 TOTP、私钥加密码。
+- banner、单轮/多轮、多提示、混合 echo、拒绝、不支持和取消。
+- 两个 Pane 并行认证、最小化/恢复、断网、超时、关闭 Pane 和重连。
+- 检查终端、历史、Preferences 与 hilog 的秘密边界。
+
+厂商名称只有在对应真实服务完成成功、取消和失败恢复矩阵后才能出现在兼容性声明中。
+
+## 裁剪与停止条件
+
+SSH 标准认证补全是 1.1 发布核心，不能以退回字符串提示、重复尝试或厂商特例降低
+正确性。若上游 API 缺口阻止可靠实现，应暂停 1.1 发布并收敛最小上游/本地修复，不能
+让 UI 猜测协议状态或先宣传不完整的 MFA 支持。

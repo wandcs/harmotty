@@ -40,6 +40,9 @@
 
 - Recorded the public AppGallery release of 1.0.1 and selected the authorized
   1.1.0 authentication and workspace-navigation scope.
+- Added current-source user, privacy, architecture, security and quality
+  baselines, plus an explicit mapping from vision outcomes to roadmap and
+  evidence paths.
 
 ## [1.0.1] - 2026-07-28
 

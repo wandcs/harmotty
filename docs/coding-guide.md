@@ -3,6 +3,11 @@
 This guide describes the stable implementation boundaries and verification
 rules for the current ARM64 HarmonyOS PC product.
 
+Read [`architecture.md`](architecture.md) for the current event chains and
+persistence model, [`security-model.md`](security-model.md) for trust
+boundaries, and [`quality-strategy.md`](quality-strategy.md) for the complete
+evidence mapping. This guide remains the concise coding discipline.
+
 ## Start with ownership
 
 The domain model is:
@@ -54,7 +59,7 @@ core state machine.
 | `leantty_ssh/leantty-ssh-core/` | Host-testable pure Rust policies |
 | `tools/web-terminal/` | xterm source assembly and policy tests |
 | `tools/` | ARM64 build, deployment and verification scripts |
-| `docs/` | Product principles, current work and stable manuals |
+| `docs/` | Product governance, user contract, architecture, quality, current work and stable manuals |
 
 Generated native libraries, HAP/APP packages, caches and signing material are
 not source and must remain untracked.
