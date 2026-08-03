@@ -31,9 +31,6 @@
 [`design/command-system.md`](design/command-system.md)。本节只实施其中已归属 1.1 的核心
 正确性；1.3 `put/get`、1.5 ProxyJump、1.6 Mosh 和 1.7 兼容/诊断能力均不提前实现。
 
-- [ ] 实现 `ssh-keygen -p -f identity`：旧口令和新口令只通过秘密输入交互获得，不进入
-  命令文本、历史、日志、Preferences 或持久资产元数据；验证旧口令后原子替换私钥，
-  保持公钥、identity、comment 和失败前内容不变，覆盖取消、错误旧口令和提交失败。
 - [ ] 实现 `ssh-keygen -F host|[host]:port`：查询 LeanTTY 唯一 `known_hosts`，覆盖明文、
   散列、逗号 host field、IPv4、IPv6、默认/非默认端口和多算法记录；只读查询不得改变
   文件或持久资产，并与现有 `-R` 使用同一 endpoint 规范化规则。

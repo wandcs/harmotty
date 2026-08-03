@@ -179,6 +179,26 @@ export class SshKeyManager {
     }
   }
 
+  static changeKeyPassphrase(
+    context: common.Context, keyName: string, oldPassphrase: string, newPassphrase: string
+  ): void {
+    let key: KeyPairInfo | null = SshKeyManager.findKeyByName(context, keyName)
+    if (key === null) {
+      throw new Error('Key not found or invalid: ' + keyName)
+    }
+    sshNative.sshChangePrivateKeyPassphrase(key.filePath, oldPassphrase, newPassphrase)
+    try {
+      DurableStateManager.captureKeyPair(context, keyName)
+    } catch (e) {
+      try {
+        sshNative.sshChangePrivateKeyPassphrase(key.filePath, newPassphrase, oldPassphrase)
+      } catch (rollbackError) {
+        throw new Error('Passphrase changed but durable retention and rollback failed: ' + rollbackError)
+      }
+      throw new Error('Failed to retain changed private key; the original passphrase remains active: ' + e)
+    }
+  }
+
   private static validateExportFileName(name: string): string | null {
     if (name.length === 0 || name === '.' || name === '..') {
       return 'Export file name must not be empty, "." or ".."'

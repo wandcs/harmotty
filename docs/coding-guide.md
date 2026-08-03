@@ -93,16 +93,15 @@ Public checks:
 
 ```powershell
 .\tools\check-public-source.ps1
-cargo fmt --check --manifest-path .\leantty_ssh\Cargo.toml
-cargo clippy --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
-cargo test --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core
+wsl.exe --cd . -- cargo fmt --check --manifest-path ./leantty_ssh/Cargo.toml
+wsl.exe --cd . -- cargo clippy --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
+wsl.exe --cd . -- cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
 node .\tools\web-terminal\test-terminal-policy.mjs
 ```
 
-The pinned Rust channel is Windows-specific. On a Windows host without MinGW
-GCC, run the pure-core test from a WSL shell at the mounted checkout with
-`cargo +stable test`; keep OHOS N-API and HAP verification on the Windows
-DevEco toolchain.
+Rust formatting, tests and compilation run in WSL. The maintainer scripts use
+the Windows DevEco SDK only for the OHOS target linker, HAP packaging and
+signing; they do not compile Rust with a native Windows toolchain.
 
 Maintainer application gate:
 

@@ -101,6 +101,24 @@ export default function interactionFixesTest() {
       expect(publicResult.keyName).assertEqual('~/.ssh/deploy')
     })
 
+    it('parsesOnlyTheSecretInputPassphraseChangeForm', 0, () => {
+      let standard: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -p -f deploy')
+      let reordered: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -f ~/.ssh/deploy -p')
+      expect(standard.kind).assertEqual(KeyCommandKind.KEY_PASSPHRASE_CHANGE)
+      expect(standard.keyName).assertEqual('deploy')
+      expect(reordered.kind).assertEqual(KeyCommandKind.KEY_PASSPHRASE_CHANGE)
+      expect(reordered.keyName).assertEqual('~/.ssh/deploy')
+      expect(CommandParser.parseSshKeygen('ssh-keygen -p').errorMessage.length > 0).assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -p -f one -f two').errorMessage.length > 0)
+        .assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -p -f deploy -N secret').errorMessage.length > 0)
+        .assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -p -f deploy extra').errorMessage.length > 0)
+        .assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -p -f deploy -y').errorMessage.length > 0)
+        .assertEqual(true)
+    })
+
     it('parsesExactOpenSshKnownHostRemovalTargets', 0, () => {
       let defaultPort: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -R server.example.com')
       let customPort: KeyCommandResult =

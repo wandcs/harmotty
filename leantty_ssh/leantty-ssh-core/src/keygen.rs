@@ -1,4 +1,5 @@
 use russh::keys::ssh_key::private::PrivateKey;
+use std::path::{Path, PathBuf};
 
 pub fn load_private_key(
     key_path: &str,
@@ -51,6 +52,151 @@ pub fn protect_private_key(key_path: &str) -> Result<(), String> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(key_path, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| format!("chmod private key failed: {}", e))?;
+    }
+    Ok(())
+}
+
+pub fn change_private_key_passphrase(
+    key_path: &str,
+    old_passphrase: &str,
+    new_passphrase: &str,
+) -> Result<(), String> {
+    change_private_key_passphrase_with_replace(
+        key_path,
+        old_passphrase,
+        new_passphrase,
+        |temporary_path, target_path| {
+            std::fs::rename(temporary_path, target_path)
+                .map_err(|error| format!("replace private key failed: {}", error))
+        },
+    )
+}
+
+fn change_private_key_passphrase_with_replace<F>(
+    key_path: &str,
+    old_passphrase: &str,
+    new_passphrase: &str,
+    replace: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&Path, &Path) -> Result<(), String>,
+{
+    use russh::keys::ssh_key::LineEnding;
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    let target_path = Path::new(key_path);
+    let original = std::fs::read_to_string(target_path)
+        .map_err(|error| format!("read private key failed: {}", error))?;
+    let parsed = PrivateKey::from_openssh(&original)
+        .map_err(|error| format!("parse private key failed: {}", error))?;
+    let private_key = if parsed.is_encrypted() {
+        parsed
+            .decrypt(old_passphrase)
+            .map_err(|_| "old passphrase is incorrect".to_string())?
+    } else {
+        if !old_passphrase.is_empty() {
+            return Err("old passphrase is incorrect".to_string());
+        }
+        parsed
+    };
+
+    let original_fingerprint = private_key
+        .fingerprint(russh::keys::HashAlg::Sha256)
+        .to_string();
+    let original_public_key = private_key.public_key().to_string();
+    let stored_key = if new_passphrase.is_empty() {
+        private_key
+    } else {
+        private_key
+            .encrypt(&mut rand::rng(), new_passphrase)
+            .map_err(|error| format!("key encryption failed: {}", error))?
+    };
+    let encoded = stored_key
+        .to_openssh(LineEnding::LF)
+        .map_err(|error| format!("private key encoding failed: {}", error))?;
+
+    let temporary_path = create_passphrase_temporary_path(target_path)?;
+    let write_result = (|| -> Result<(), String> {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options
+            .open(&temporary_path)
+            .map_err(|error| format!("create temporary private key failed: {}", error))?;
+        file.write_all(encoded.as_bytes())
+            .map_err(|error| format!("write temporary private key failed: {}", error))?;
+        file.flush()
+            .map_err(|error| format!("flush temporary private key failed: {}", error))?;
+        file.sync_all()
+            .map_err(|error| format!("sync temporary private key failed: {}", error))?;
+        drop(file);
+
+        let written = std::fs::read_to_string(&temporary_path)
+            .map_err(|error| format!("verify temporary private key failed: {}", error))?;
+        let written_key = PrivateKey::from_openssh(&written)
+            .map_err(|error| format!("verify temporary private key failed: {}", error))?;
+        let verified_key = if written_key.is_encrypted() {
+            written_key
+                .decrypt(new_passphrase)
+                .map_err(|error| format!("verify temporary private key failed: {}", error))?
+        } else {
+            written_key
+        };
+        if verified_key
+            .fingerprint(russh::keys::HashAlg::Sha256)
+            .to_string()
+            != original_fingerprint
+            || verified_key.public_key().to_string() != original_public_key
+        {
+            return Err("temporary private key changed key identity or comment".to_string());
+        }
+
+        replace(&temporary_path, target_path)?;
+        let _ = sync_parent_directory(target_path);
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&temporary_path);
+    }
+    write_result
+}
+
+fn create_passphrase_temporary_path(target_path: &Path) -> Result<PathBuf, String> {
+    let parent = target_path
+        .parent()
+        .ok_or_else(|| "private key path has no parent directory".to_string())?;
+    let file_name = target_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "private key path has an invalid file name".to_string())?;
+    for attempt in 0..100_u32 {
+        let candidate = parent.join(format!(
+            ".{}.ltty-passphrase-{}-{}.tmp",
+            file_name,
+            std::process::id(),
+            attempt
+        ));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("cannot allocate temporary private key path".to_string())
+}
+
+fn sync_parent_directory(target_path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let parent = target_path
+            .parent()
+            .ok_or_else(|| "private key path has no parent directory".to_string())?;
+        std::fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| format!("sync private key directory failed: {}", error))?;
     }
     Ok(())
 }
@@ -278,7 +424,10 @@ pub fn read_public_key_fingerprint(key_path: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{export_key_pair, generate_key_pair, inspect_private_key};
+    use super::{
+        change_private_key_passphrase, change_private_key_passphrase_with_replace,
+        export_key_pair, generate_key_pair, inspect_private_key, load_private_key,
+    };
 
     #[test]
     fn uses_requested_name_and_refuses_overwrite() {
@@ -404,6 +553,131 @@ mod tests {
             std::fs::read_to_string(downloads_dir.join("work.pub")).unwrap(),
             "existing"
         );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn changes_passphrase_without_changing_key_identity_or_comment() {
+        let root = std::env::temp_dir().join(format!(
+            "leantty-change-passphrase-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let root_text = root.to_string_lossy().to_string();
+        let generated =
+            generate_key_pair("ed25519", &root_text, "deploy", "old-secret", "test@host")
+                .unwrap();
+        let before = inspect_private_key(&generated.private_path).unwrap();
+        let before_bytes = std::fs::read(&generated.private_path).unwrap();
+        let before_public = std::fs::read(&generated.public_path).unwrap();
+
+        change_private_key_passphrase(&generated.private_path, "old-secret", "new-secret")
+            .unwrap();
+
+        let after = inspect_private_key(&generated.private_path).unwrap();
+        assert_eq!(after.fingerprint, before.fingerprint);
+        assert_eq!(after.public_key, before.public_key);
+        assert!(after.encrypted);
+        assert_ne!(std::fs::read(&generated.private_path).unwrap(), before_bytes);
+        assert_eq!(std::fs::read(&generated.public_path).unwrap(), before_public);
+        assert!(load_private_key(&generated.private_path, "old-secret").is_err());
+        let loaded = load_private_key(&generated.private_path, "new-secret").unwrap();
+        assert_eq!(loaded.comment().as_str().unwrap(), "test@host");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn supports_adding_and_removing_a_passphrase() {
+        let root = std::env::temp_dir().join(format!(
+            "leantty-add-remove-passphrase-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let root_text = root.to_string_lossy().to_string();
+        let generated = generate_key_pair("ed25519", &root_text, "deploy", "", "").unwrap();
+
+        change_private_key_passphrase(&generated.private_path, "", "new-secret").unwrap();
+        assert!(inspect_private_key(&generated.private_path).unwrap().encrypted);
+        change_private_key_passphrase(&generated.private_path, "new-secret", "").unwrap();
+        assert!(!inspect_private_key(&generated.private_path).unwrap().encrypted);
+        assert!(load_private_key(&generated.private_path, "").is_ok());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn changes_rsa_passphrase_without_changing_the_public_key() {
+        let root = std::env::temp_dir().join(format!(
+            "leantty-rsa-change-passphrase-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let root_text = root.to_string_lossy().to_string();
+        let generated =
+            generate_key_pair("rsa", &root_text, "deploy_rsa", "old-secret", "rsa@host")
+                .unwrap();
+        let public_before = std::fs::read(&generated.public_path).unwrap();
+
+        change_private_key_passphrase(&generated.private_path, "old-secret", "new-secret")
+            .unwrap();
+
+        let loaded = load_private_key(&generated.private_path, "new-secret").unwrap();
+        assert_eq!(loaded.comment().as_str().unwrap(), "rsa@host");
+        assert_eq!(std::fs::read(&generated.public_path).unwrap(), public_before);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn wrong_old_passphrase_leaves_private_key_unchanged() {
+        let root = std::env::temp_dir().join(format!(
+            "leantty-wrong-old-passphrase-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let root_text = root.to_string_lossy().to_string();
+        let generated =
+            generate_key_pair("ed25519", &root_text, "deploy", "old-secret", "").unwrap();
+        let before = std::fs::read(&generated.private_path).unwrap();
+
+        let error = change_private_key_passphrase(
+            &generated.private_path,
+            "wrong-secret",
+            "new-secret",
+        )
+        .unwrap_err();
+
+        assert!(error.contains("old passphrase is incorrect"));
+        assert_eq!(std::fs::read(&generated.private_path).unwrap(), before);
+        assert!(load_private_key(&generated.private_path, "old-secret").is_ok());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn replacement_failure_leaves_private_key_unchanged_and_removes_temporary_file() {
+        let root = std::env::temp_dir().join(format!(
+            "leantty-passphrase-commit-failure-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let root_text = root.to_string_lossy().to_string();
+        let generated = generate_key_pair("ed25519", &root_text, "deploy", "", "").unwrap();
+        let before = std::fs::read(&generated.private_path).unwrap();
+
+        let error = change_private_key_passphrase_with_replace(
+            &generated.private_path,
+            "",
+            "new-secret",
+            |_, _| Err("forced replacement failure".to_string()),
+        )
+        .unwrap_err();
+
+        assert!(error.contains("forced replacement failure"));
+        assert_eq!(std::fs::read(&generated.private_path).unwrap(), before);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
 
         let _ = std::fs::remove_dir_all(&root);
     }

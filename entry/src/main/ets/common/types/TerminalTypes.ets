@@ -4,7 +4,8 @@ export enum TerminalMode {
   CONNECTING = 2,
   CONNECTED = 3,
   HOST_KEY_INPUT = 4,
-  KEY_PASSPHRASE_INPUT = 5
+  KEY_PASSPHRASE_INPUT = 5,
+  KEY_PASSPHRASE_CHANGE_INPUT = 6
 }
 
 export enum SshSessionState {

@@ -7,7 +7,8 @@
 | OHOS NDK Clang | 15.0.4 | `native/llvm/bin/clang.exe` |
 | Hvigor | bundled with DevEco | `tools/hvigor/` |
 | JBR (Java) | 21.0.x | `jbr/bin/java.exe` |
-| Rust | 1.96.1 (stable-x86_64-pc-windows-gnu) | `rustup` managed |
+| WSL | 2 | Desktop-user default distribution |
+| Rust | stable 1.96+ for Linux | WSL `rustup` managed |
 | Node.js | 18.20.1 | bundled with DevEco |
 
 ## Build Targets
@@ -31,6 +32,8 @@
 Required for native build:
 - `DEVECO_HOME` — DevEco Studio install dir
 - `OHOS_NDK_HOME` — set by `build-native.ps1`
+- `LEANTTY_WSL_DISTRO` — optional WSL distribution override; the default
+  distribution is used when omitted
 
 Required for HAP build:
 - `DEVECO_SDK_HOME` — set by `build-all.ps1`
@@ -38,6 +41,11 @@ Required for HAP build:
 - `NODE_OPTIONS` — must be empty
 
 ## Build and verification workflow
+
+All Rust formatting, tests and compilation run in WSL. `build-native.ps1`
+translates repository and SDK paths, invokes WSL Cargo, and calls the Windows
+OHOS Clang/LLVM archive executables only through the checked-in WSL wrappers.
+Hvigor, signing and HDC remain Windows-side operations.
 
 All repository build, verification, deployment and release-package entry
 points share one lock across worktrees belonging to the same Git repository.

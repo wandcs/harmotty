@@ -77,8 +77,9 @@ Before building a release:
 - Run `tools/verify-pc.ps1` on the target HarmonyOS PC from the development
   checkout, then push the verified commit.
 - Confirm the trusted ArkTS suite and Rust `fmt --check` pass.
-- Use the clean ARM64 cross-build as the native integration gate; the current
-  Windows GNU host toolchain is not a release gate for Rust linking tests.
+- Use the clean ARM64 cross-build as the native integration gate. Rust
+  formatting, tests and compilation run in WSL; Windows supplies the DevEco
+  packaging tools and OHOS target linker, not the Rust host toolchain.
 - Confirm the release checkout is detached at the recorded GitHub commit and
   has no tracked modifications.
 - Update CHANGELOG with the release date.

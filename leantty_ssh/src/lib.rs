@@ -832,6 +832,18 @@ pub fn ssh_generate_key_pair(
 }
 
 #[napi]
+pub fn ssh_change_private_key_passphrase(
+    key_path: String,
+    mut old_passphrase: String,
+    mut new_passphrase: String,
+) -> Result<()> {
+    let result = keygen::change_private_key_passphrase(&key_path, &old_passphrase, &new_passphrase);
+    old_passphrase.zeroize();
+    new_passphrase.zeroize();
+    result.map_err(|error| napi_error(&error))
+}
+
+#[napi]
 pub fn ssh_export_key_pair(
     private_path: String,
     public_path: String,

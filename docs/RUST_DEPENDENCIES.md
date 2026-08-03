@@ -1,14 +1,14 @@
 # Rust Dependency License Inventory
 
-Generated and reviewed on 2026-07-26 from `leantty_ssh/Cargo.lock` with:
+Generated and reviewed on 2026-08-03 from `leantty_ssh/Cargo.lock` with:
 
 ```powershell
-cargo metadata --locked --offline `
+wsl.exe --cd . -- cargo metadata --locked --offline `
   --filter-platform aarch64-unknown-linux-ohos `
   --format-version 1
 ```
 
-The target-filtered graph contains 147 registry packages. Every package reports
+The target-filtered graph contains 150 registry packages. Every package reports
 a license expression or license file. Package build dependencies are included
 conservatively even when they are not linked into the final shared library.
 
@@ -34,6 +34,7 @@ conservatively even when they are not linked into the final shared library.
 `cbc 0.2.1`, `cc 1.2.67`, `cfg-if 1.0.4`, `chacha20 0.10.1`,
 `cipher 0.5.2`, `cmov 0.5.4`, `const-oid 0.10.2`, `cpubits 0.1.1`,
 `cpufeatures 0.3.0`, `crypto-bigint 0.7.5`, `crypto-common 0.2.2`,
+`crypto-primes 0.7.2`,
 `ctor 1.0.8`, `ctr 0.10.1`, `ctutils 0.4.2`, `delegate 0.13.5`,
 `der 0.8.1`, `des 0.9.0`, `digest 0.11.3`, `ecdsa 0.17.0`,
 `ed25519 3.0.0`, `elliptic-curve 0.14.1`, `enum_dispatch 0.3.13`,
@@ -51,10 +52,10 @@ conservatively even when they are not linked into the final shared library.
 `num-integer 0.1.46`, `num-traits 0.2.19`, `once_cell 1.21.4`,
 `p256 0.14.0`, `p384 0.14.0`, `p521 0.14.0`,
 `password-hash 0.6.1`, `pbkdf2 0.13.0`, `pem-rfc7468 1.0.0`,
-`phc 0.6.1`, `pin-project-lite 0.2.17`, `pkcs5 0.8.1`,
+`phc 0.6.1`, `pin-project-lite 0.2.17`, `pkcs1 0.8.0-rc.4`, `pkcs5 0.8.1`,
 `pkcs8 0.11.0`, `poly1305 0.9.1`, `polyval 0.7.2`,
 `primefield 0.14.0`, `primeorder 0.14.0`, `proc-macro2 1.0.106`,
-`quote 1.0.46`, `rand 0.10.2`, `rand_core 0.10.1`,
+`quote 1.0.46`, `rand 0.10.2`, `rand_core 0.10.1`, `rsa 0.10.0-rc.18`,
 `rfc6979 0.6.0`, `rustc_version 0.4.1`, `rustc-hash 2.1.3`,
 `rustversion 1.0.23`, `salsa20 0.11.0`, `scrypt 0.12.0`,
 `sec1 0.8.1`, `semver 1.0.28`, `serde 1.0.228`,

@@ -1,4 +1,2 @@
 [target.aarch64-unknown-linux-ohos]
-ar = "llvm-ar.exe"
-linker = "ohos-aarch64-clang.cmd"
 rustflags = ["-C", "link-arg=-fPIC", "-C", "link-arg=-shared"]

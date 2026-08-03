@@ -37,7 +37,8 @@ export enum KeyCommandKind {
   SSH_CONFIG = 12,
   KEYINFO = 13,
   KEYEXPORT = 14,
-  HOST_KEY_REMOVE = 15
+  HOST_KEY_REMOVE = 15,
+  KEY_PASSPHRASE_CHANGE = 16
 }
 
 export class KeyCommandResult {
@@ -248,9 +249,15 @@ export class CommandParser {
     }
     let publicMode: boolean = false
     let fingerprintMode: boolean = false
+    let passphraseMode: boolean = false
+    let keyTypeSpecified: boolean = false
+    let commentSpecified: boolean = false
+    let keyFileCount: number = 0
+    let unexpectedArgument: string = ''
     let i: number = 1
     while (i < parts.length) {
       if (parts[i] === '-t') {
+        keyTypeSpecified = true
         if (i + 1 >= parts.length) { result.errorMessage = 'ssh-keygen: missing type after -t'; return result }
         let keyType: string = parts[i + 1].toLowerCase()
         if (keyType === 'ed25519') { result.algorithm = KeyAlgorithm.ED25519 }
@@ -262,18 +269,35 @@ export class CommandParser {
         publicMode = true
       } else if (parts[i] === '-l') {
         fingerprintMode = true
+      } else if (parts[i] === '-p') {
+        if (passphraseMode) { result.errorMessage = 'ssh-keygen: duplicate option -p'; return result }
+        passphraseMode = true
       } else if (parts[i] === '-f') {
         if (i + 1 >= parts.length) { result.errorMessage = 'ssh-keygen: missing filename after -f'; return result }
+        keyFileCount += 1
         result.keyName = parts[i + 1]; i += 1
       } else if (parts[i] === '-C') {
+        commentSpecified = true
         if (i + 1 >= parts.length) { result.errorMessage = 'ssh-keygen: missing comment after -C'; return result }
         result.sourcePath = parts[i + 1]; i += 1
       } else if (parts[i].startsWith('-')) {
         result.errorMessage = 'ssh-keygen: unknown option ' + parts[i]; return result
+      } else {
+        unexpectedArgument = parts[i]
       }
       i += 1
     }
-    if (publicMode && fingerprintMode) {
+    if (passphraseMode) {
+      if (publicMode || fingerprintMode || keyTypeSpecified || commentSpecified) {
+        result.errorMessage = 'ssh-keygen: -p cannot be combined with key generation or inspection options'
+      } else if (keyFileCount !== 1 || result.keyName.length === 0) {
+        result.errorMessage = 'ssh-keygen: -p requires exactly one -f <identity>'
+      } else if (unexpectedArgument.length > 0) {
+        result.errorMessage = 'ssh-keygen: unexpected argument ' + unexpectedArgument
+      } else {
+        result.kind = KeyCommandKind.KEY_PASSPHRASE_CHANGE
+      }
+    } else if (publicMode && fingerprintMode) {
       result.errorMessage = 'ssh-keygen: -y and -l cannot be used together'
     } else if (publicMode || fingerprintMode) {
       if (result.keyName.length === 0) {

@@ -104,11 +104,22 @@ ssh-keygen -t ed25519 -f id_work -C work
 ssh-keygen -t rsa -f id_rsa_work -C work
 ```
 
-The current command generates Ed25519 or RSA-4096 keys and refuses to overwrite
+The generation command creates Ed25519 or RSA-4096 keys and refuses to overwrite
 an existing private or public file. It does not currently ask for a new key
 passphrase. An encrypted OpenSSH private key can be imported and will request
-its passphrase when used. Changing a key passphrase with `ssh-keygen -p` is
-planned for 1.1 and is not yet part of this current command contract.
+its passphrase when used.
+
+Change, add or remove the passphrase of a verified private key:
+
+```text
+ssh-keygen -p -f id_work
+```
+
+LeanTTY asks for the old passphrase, the new passphrase and confirmation through
+non-echoing terminal input. Leave the old passphrase empty for an unencrypted
+key, or leave the new passphrase empty to remove encryption. `Ctrl+C`, a wrong
+old passphrase, a confirmation mismatch or a commit failure leaves the existing
+key active. Passphrases are not accepted through command options.
 
 Inspect and manage verified keys:
 
@@ -167,7 +178,7 @@ fingerprint before accepting it.
 | `ssh [-p port] [-i identity] user@host` | Connect directly |
 | `ssh [-p port] [-i identity] host-name` | Connect through saved configuration |
 | `ssh -G host-name` | Show the supported effective configuration |
-| `ssh-keygen -t ...`, `-y`, `-l`, `-R` | Generate, inspect or maintain SSH assets |
+| `ssh-keygen -t ...`, `-y`, `-l`, `-p`, `-R` | Generate, inspect or maintain SSH assets |
 | `ssh-copy-id -i ...` | Install one public key |
 | `key list/import/export/rm` | Manage LeanTTY key pairs |
 | `host add/set/list/rm` | Manage LeanTTY Host entries |

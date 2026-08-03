@@ -52,9 +52,9 @@ Public and host-testable checks:
 
 ```powershell
 .\tools\check-public-source.ps1
-cargo fmt --check --manifest-path .\leantty_ssh\Cargo.toml
-cargo clippy --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
-cargo test --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core
+wsl.exe --cd . -- cargo fmt --check --manifest-path ./leantty_ssh/Cargo.toml
+wsl.exe --cd . -- cargo clippy --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
+wsl.exe --cd . -- cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
 node .\tools\web-terminal\test-terminal-policy.mjs
 ```
 

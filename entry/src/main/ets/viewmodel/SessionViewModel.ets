@@ -21,6 +21,13 @@ import { KnownHostsManager } from '../model/ssh/KnownHostsManager'
 
 export { TerminalMode } from '../common/types/TerminalTypes'
 
+enum KeyPassphraseChangeStage {
+  NONE = 0,
+  OLD_PASSPHRASE = 1,
+  NEW_PASSPHRASE = 2,
+  CONFIRM_NEW_PASSPHRASE = 3
+}
+
 export class SessionViewModel {
   private session: SshSession = new SshSession()
   private sshClient: SshClient = new SshClient()
@@ -44,6 +51,11 @@ export class SessionViewModel {
   private heartbeatTimerId: number = -1
   private pendingKeyPath: string = ''
   private pendingKeyPassphrase: string = ''
+  private keyPassphraseChangeStage: KeyPassphraseChangeStage = KeyPassphraseChangeStage.NONE
+  private keyPassphraseChangeKeyName: string = ''
+  private oldKeyPassphrase: string = ''
+  private newKeyPassphrase: string = ''
+  private confirmedKeyPassphrase: string = ''
   private privateKeyAttempted: boolean = false
   private context: common.Context | null = null
   private pendingKeypush: boolean = false
@@ -178,6 +190,7 @@ export class SessionViewModel {
     }
     this.session.setState(SshSessionState.DISCONNECTED)
     this.privateKeyAttempted = false
+    this.clearKeyPassphraseChangeState()
     this.setMode(TerminalMode.IDLE)
     this.releaseDisconnectedFlowControl()
     this.notifyStateChange()
@@ -492,6 +505,10 @@ export class SessionViewModel {
   }
 
   handleTerminalInput(data: string): void {
+    if (this.mode === TerminalMode.KEY_PASSPHRASE_CHANGE_INPUT && data === '\u0003') {
+      this.cancelKeyPassphraseChange()
+      return
+    }
     if (ConnectionControl.shouldInterrupt(this.mode, data)) {
       this.cancelPendingConnection()
       return
@@ -519,6 +536,11 @@ export class SessionViewModel {
 
     if (this.mode === TerminalMode.KEY_PASSPHRASE_INPUT) {
       this.handleKeyPassphraseInput(data)
+      return
+    }
+
+    if (this.mode === TerminalMode.KEY_PASSPHRASE_CHANGE_INPUT) {
+      this.handleKeyPassphraseChangeInput(data)
       return
     }
 
@@ -570,12 +592,28 @@ export class SessionViewModel {
     this.handleBufferedInput(data, this.pendingKeyPassphrase, (v) => { this.pendingKeyPassphrase = v }, () => { this.submitKeyPassphrase() }, '*')
   }
 
+  private handleKeyPassphraseChangeInput(data: string): void {
+    if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.OLD_PASSPHRASE) {
+      this.handleBufferedInput(data, this.oldKeyPassphrase, (value: string) => {
+        this.oldKeyPassphrase = value
+      }, () => { this.submitKeyPassphraseChangeStage() }, null)
+    } else if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.NEW_PASSPHRASE) {
+      this.handleBufferedInput(data, this.newKeyPassphrase, (value: string) => {
+        this.newKeyPassphrase = value
+      }, () => { this.submitKeyPassphraseChangeStage() }, null)
+    } else if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.CONFIRM_NEW_PASSPHRASE) {
+      this.handleBufferedInput(data, this.confirmedKeyPassphrase, (value: string) => {
+        this.confirmedKeyPassphrase = value
+      }, () => { this.submitKeyPassphraseChangeStage() }, null)
+    }
+  }
+
   private handleBufferedInput(
     data: string,
     buffer: string,
     setBuffer: (v: string) => void,
     onSubmit: () => void,
-    echo: string,
+    echo: string | null,
     textFilter?: (code: number) => boolean
   ): void {
     let actions: TerminalInputAction[] = TerminalInputParser.parse(data, false)
@@ -584,17 +622,22 @@ export class SessionViewModel {
       let action: TerminalInputAction = actions[i]
       if (action.kind === TerminalInputActionKind.SUBMIT) {
         onSubmit()
+        return
       } else if (action.kind === TerminalInputActionKind.BACKSPACE) {
         if (currentBuffer.length > 0) {
           currentBuffer = currentBuffer.substring(0, currentBuffer.length - 1)
           setBuffer(currentBuffer)
-          this.writeTerminal('\b \b')
+          if (echo !== null) {
+            this.writeTerminal('\b \b')
+          }
         }
       } else if (action.kind === TerminalInputActionKind.TEXT) {
         if (textFilter !== undefined && !textFilter(action.text.charCodeAt(0))) { continue }
         currentBuffer += action.text
         setBuffer(currentBuffer)
-        this.writeTerminal(echo.length > 0 ? echo : action.text)
+        if (echo !== null) {
+          this.writeTerminal(echo.length > 0 ? echo : action.text)
+        }
       }
     }
   }
@@ -761,6 +804,7 @@ export class SessionViewModel {
       },
       writeError: (msg: string) => { this.writeError(msg) },
       writeOutput: (text: string) => { this.writeTerminal(text) },
+      beginKeyPassphraseChange: (keyName: string) => { this.beginKeyPassphraseChange(keyName) },
       confirmKeyDelete: (name: string, fingerprint: string, onConfirm: () => void, onCancel: () => void) => {
         if (this.onConfirmKeyDelete === null) {
           this.writeError('Key deletion confirmation is unavailable.')
@@ -770,6 +814,80 @@ export class SessionViewModel {
       }
     }
     KeyCommandService.execute(result, ctx)
+  }
+
+  private beginKeyPassphraseChange(keyName: string): void {
+    this.clearKeyPassphraseChangeState()
+    this.keyPassphraseChangeKeyName = keyName
+    this.keyPassphraseChangeStage = KeyPassphraseChangeStage.OLD_PASSPHRASE
+    this.setMode(TerminalMode.KEY_PASSPHRASE_CHANGE_INPUT)
+    this.writeTerminal('\r\nOld passphrase (leave empty if none): ')
+  }
+
+  private submitKeyPassphraseChangeStage(): void {
+    if (this.mode !== TerminalMode.KEY_PASSPHRASE_CHANGE_INPUT) {
+      return
+    }
+    if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.OLD_PASSPHRASE) {
+      this.keyPassphraseChangeStage = KeyPassphraseChangeStage.NEW_PASSPHRASE
+      this.writeTerminal('\r\nNew passphrase (leave empty for none): ')
+      return
+    }
+    if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.NEW_PASSPHRASE) {
+      this.keyPassphraseChangeStage = KeyPassphraseChangeStage.CONFIRM_NEW_PASSPHRASE
+      this.writeTerminal('\r\nConfirm new passphrase: ')
+      return
+    }
+    if (this.keyPassphraseChangeStage !== KeyPassphraseChangeStage.CONFIRM_NEW_PASSPHRASE) {
+      return
+    }
+    if (this.newKeyPassphrase !== this.confirmedKeyPassphrase) {
+      this.clearKeyPassphraseChangeSecrets()
+      this.keyPassphraseChangeStage = KeyPassphraseChangeStage.OLD_PASSPHRASE
+      this.writeTerminal('\r\nPassphrases do not match. No changes were made.\r\n' +
+        'Old passphrase (leave empty if none): ')
+      return
+    }
+    if (this.context === null) {
+      this.clearKeyPassphraseChangeState()
+      this.setMode(TerminalMode.IDLE)
+      this.writeError('Key passphrase change failed: context not available')
+      return
+    }
+    let context: common.Context = this.context
+    let keyName: string = this.keyPassphraseChangeKeyName
+    let oldPassphrase: string = this.oldKeyPassphrase
+    let newPassphrase: string = this.newKeyPassphrase
+    this.clearKeyPassphraseChangeState()
+    try {
+      SshKeyManager.changeKeyPassphrase(context, keyName, oldPassphrase, newPassphrase)
+      this.setMode(TerminalMode.IDLE)
+      this.writeTerminal('\r\nPassphrase updated: ' + keyName + '\r\nltty> ')
+    } catch (e) {
+      this.setMode(TerminalMode.IDLE)
+      this.writeError('Key passphrase change failed: ' + e)
+    }
+    oldPassphrase = ''
+    newPassphrase = ''
+  }
+
+  private cancelKeyPassphraseChange(): void {
+    this.clearKeyPassphraseChangeState()
+    this.setMode(TerminalMode.IDLE)
+    this.writeTerminal('^C')
+    this.writePrompt()
+  }
+
+  private clearKeyPassphraseChangeSecrets(): void {
+    this.oldKeyPassphrase = ''
+    this.newKeyPassphrase = ''
+    this.confirmedKeyPassphrase = ''
+  }
+
+  private clearKeyPassphraseChangeState(): void {
+    this.clearKeyPassphraseChangeSecrets()
+    this.keyPassphraseChangeKeyName = ''
+    this.keyPassphraseChangeStage = KeyPassphraseChangeStage.NONE
   }
 
   static buildKeypushMarker(): string {

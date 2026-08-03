@@ -2,11 +2,12 @@
 .SYNOPSIS
   LeanTTY native cross-compilation
 .DESCRIPTION
-  Build leantty_ssh for the HarmonyOS PC ARM64 target.
-  Requires OHOS SDK/NDK from DevEco Studio.
+  Build leantty_ssh in WSL for the HarmonyOS PC ARM64 target, using the OHOS
+  SDK/NDK from DevEco Studio for linking.
 #>
 param(
     [string]$DevEcoHome = $env:DEVECO_HOME,
+    [string]$WslDistribution = $env:LEANTTY_WSL_DISTRO,
     [switch]$Force,
     [switch]$SkipCopy
 )
@@ -14,6 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
+. (Join-Path $PSScriptRoot 'rust-wsl.ps1')
 
 Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'build-native' -Action {
 # ── Detect DevEco Studio ──
@@ -57,13 +59,6 @@ foreach ($r in $required) {
 
 Write-Host "[build-native] DevEco: $deveco" -ForegroundColor Cyan
 
-# ── Cargo ──
-$cargo = (Get-Command cargo -ErrorAction SilentlyContinue)
-if (-not $cargo) {
-    $cb = Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'
-    if (Test-Path -LiteralPath $cb) { $cargo = $cb } else { throw 'cargo not found' }
-} else { $cargo = $cargo.Source }
-
 # ── Env ──
 $env:DEVECO_SDK_HOME = $sdkDir
 $env:OHOS_NDK_HOME = $ndkDir
@@ -79,6 +74,9 @@ $libsDir       = Join-Path $repoRoot 'entry\libs'
 $cargoLock     = Join-Path $repoRoot 'leantty_ssh\Cargo.lock'
 $toolchainToml = Join-Path $repoRoot 'rust-toolchain.toml'
 $cargoConfig   = Join-Path $repoRoot '.cargo\config.toml'
+$rustWslScript = Join-Path $PSScriptRoot 'rust-wsl.ps1'
+$clangWslWrapper = Join-Path $PSScriptRoot 'ohos-aarch64-clang-wsl.sh'
+$arWslWrapper = Join-Path $PSScriptRoot 'ohos-aarch64-ar-wsl.sh'
 
 # ── Content hash check ──
 function Get-SourceHash {
@@ -89,7 +87,10 @@ function Get-SourceHash {
         $buildScript,
         $coreManifest,
         $toolchainToml,
-        $cargoConfig
+        $cargoConfig,
+        $rustWslScript,
+        $clangWslWrapper,
+        $arWslWrapper
     )) {
         if (Test-Path -LiteralPath $inputFile) {
             $inputs += (Get-FileHash -LiteralPath $inputFile -Algorithm SHA256).Hash
@@ -137,19 +138,32 @@ foreach ($t in $targets) {
     }
     Write-Host "[build-native] Building $target ..." -ForegroundColor Yellow
     $targetKey = $target.Replace('-', '_')
-    $wrapper = Join-Path $PSScriptRoot 'ohos-aarch64-clang.cmd'
-    Set-Item -Path "env:CC_$targetKey" -Value $wrapper
-    Set-Item -Path "env:AR_$targetKey" -Value (Join-Path $llvmBin 'llvm-ar.exe')
-    Remove-Item -Path "env:CFLAGS_$targetKey" -ErrorAction SilentlyContinue
-
-    Push-Location (Split-Path $cargoManifest -Parent)
-    try {
-        & $cargo build --manifest-path $cargoManifest --target $target --release --locked
-        if ($LASTEXITCODE -ne 0) { throw "Cargo build failed for $target" }
-        [void]$rebuiltTargets.Add($target)
-    } finally {
-        Pop-Location
+    $wslNdkDir = ConvertTo-LeanTTYWslPath -WindowsPath $ndkDir -Distribution $WslDistribution
+    $wslClangWrapper = ConvertTo-LeanTTYWslPath `
+        -WindowsPath (Join-Path $PSScriptRoot 'ohos-aarch64-clang-wsl.sh') `
+        -Distribution $WslDistribution
+    $wslArWrapper = ConvertTo-LeanTTYWslPath `
+        -WindowsPath (Join-Path $PSScriptRoot 'ohos-aarch64-ar-wsl.sh') `
+        -Distribution $WslDistribution
+    $rustEnvironment = @{
+        OHOS_NDK_HOME = $wslNdkDir
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER = $wslClangWrapper
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_AR = $wslArWrapper
+        "CC_$targetKey" = $wslClangWrapper
+        "AR_$targetKey" = $wslArWrapper
     }
+    Invoke-LeanTTYRustWsl `
+        -RepoRoot $repoRoot `
+        -Distribution $WslDistribution `
+        -Environment $rustEnvironment `
+        -CargoArguments @(
+            'build',
+            '--manifest-path', './leantty_ssh/Cargo.toml',
+            '--target', $target,
+            '--release',
+            '--locked'
+        )
+    [void]$rebuiltTargets.Add($target)
 }
 
 # ── Verify & copy ──

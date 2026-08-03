@@ -20,6 +20,7 @@ foreach ($scriptName in @(
         'build-native.ps1',
         'build-lock.ps1',
         'candidate-store.ps1',
+        'rust-wsl.ps1',
         'test-build-workflows.ps1',
         'build-all.ps1',
         'dev-build.ps1',
@@ -44,6 +45,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Build workflow regression tests failed' }
 
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
 . (Join-Path $PSScriptRoot 'candidate-store.ps1')
+. (Join-Path $PSScriptRoot 'rust-wsl.ps1')
 Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'verify-pc' -Action {
 $generatedNativePath = 'entry/libs/arm64-v8a/libleantty_ssh.so'
 $trackedNative = @(git -C $repoRoot ls-files -- $generatedNativePath)
@@ -126,9 +128,9 @@ if ([int]$arkTsTestSummaryMatch.Groups['failure'].Value -ne 0 -or
 }
 Write-Host 'Trusted ArkTS unit tests passed.' -ForegroundColor Green
 
-$cargoManifest = Join-Path $repoRoot 'leantty_ssh\Cargo.toml'
-& cargo fmt --manifest-path $cargoManifest -- --check
-if ($LASTEXITCODE -ne 0) { throw 'Rust formatting check failed' }
+Invoke-LeanTTYRustWsl `
+    -RepoRoot $repoRoot `
+    -CargoArguments @('fmt', '--manifest-path', './leantty_ssh/Cargo.toml', '--', '--check')
 Write-Host 'Rust formatting passed; ARM64 compilation is verified by the HAP build.' -ForegroundColor Green
 
 if ($SkipDevice) {

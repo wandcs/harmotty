@@ -26,7 +26,7 @@ LeanTTY currently targets ARM64 HarmonyOS PC only.
 Required tools:
 
 - DevEco Studio and HarmonyOS SDK API 6.1.1 (24)
-- Rust 1.96+ and the `aarch64-unknown-linux-ohos` target
+- WSL 2 with Rust 1.96+ and the `aarch64-unknown-linux-ohos` target
 - Node.js for the Web terminal policy tests
 - PowerShell
 
@@ -35,20 +35,21 @@ Useful commands:
 ```powershell
 # Public checks that do not require DevEco or a device
 .\tools\check-public-source.ps1
-cargo fmt --check --manifest-path .\leantty_ssh\Cargo.toml
-cargo test --locked --manifest-path .\leantty_ssh\Cargo.toml -p leantty-ssh-core
+wsl.exe --cd . -- cargo fmt --check --manifest-path ./leantty_ssh/Cargo.toml
+wsl.exe --cd . -- cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
 node .\tools\web-terminal\test-terminal-policy.mjs
 
 # Full maintainer gate
 .\tools\verify-pc.ps1
 ```
 
-The repository pins a Windows GNU Rust toolchain for the HarmonyOS build. If
-MinGW GCC is not installed on Windows, run the pure-core test from a WSL shell
-opened at the mounted checkout:
+LeanTTY runs Rust formatting, tests and compilation in WSL. The maintainer
+scripts invoke WSL automatically; the Windows DevEco SDK supplies only the
+OHOS target linker and archive tools. To run a Rust check manually, open WSL at
+the mounted checkout or prefix the command with `wsl.exe --cd . --`:
 
 ```bash
-cargo +stable test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
+cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
 ```
 
 Public CI checks source policy, Rust core behavior and Web terminal policy.

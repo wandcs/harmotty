@@ -1,5 +1,5 @@
 [toolchain]
-channel = "stable-x86_64-pc-windows-gnu"
+channel = "stable"
 components = ["rustfmt", "clippy"]
 targets = [
     "aarch64-unknown-linux-ohos",

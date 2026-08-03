@@ -4,6 +4,12 @@
 
 ### Development
 
+- Added `ssh-keygen -p -f <identity>` with non-echoing old/new passphrase
+  prompts, verified atomic private-key replacement, durable retention and
+  rollback on retention failure without changing the public key or comment.
+- Made WSL the explicit host for Rust formatting, tests and ARM64 compilation;
+  the PowerShell build gate now invokes WSL and uses the Windows OHOS NDK only
+  for the target linker and archive tools.
 - Added `key export <key-name> [<file-name>]` to copy a verified OpenSSH
   private/public key pair directly to Downloads under an optional basename,
   failing without overwrite when either destination name already exists.
@@ -24,6 +30,9 @@
 
 ### Fixed
 
+- Enabled the existing `russh` RSA feature so the advertised RSA-4096 key
+  generation and passphrase-change paths use the supported implementation
+  instead of failing with an unknown-algorithm error.
 - Added bounded session-memory checkpoints so a terminal surface rebuilt after
   the app enters the background can recover its screen and scrollback even when
   SSH disconnects; physical ARM64 PC lifecycle validation remains pending.
