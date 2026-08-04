@@ -57,10 +57,6 @@
 技术边界与验收细节：
 [`design/ssh-authentication.md`](design/ssh-authentication.md)。
 
-- [ ] 建立受控 SSH 服务端基线，覆盖现有密码、未加密/加密私钥，以及
-  `password,keyboard-interactive`、`publickey,password`、
-  `publickey,keyboard-interactive` 和多轮 `keyboard-interactive`；测试凭据只存在于
-  临时目录。
 - [ ] 在 Rust Session 中建立唯一认证状态机，按 `remaining_methods` 与
   `partial_success` 处理方法和阶段；支持 authentication banner、名称、说明、零个或
   多个 prompt、逐项 echo 规则和多轮回答，不根据厂商提示文字猜测认证类型。

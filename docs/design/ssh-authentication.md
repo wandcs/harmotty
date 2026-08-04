@@ -47,8 +47,15 @@ SSH `keyboard-interactive`、authentication banner、一个请求中的多个提
 并以“私钥失败后提示密码”的分支组织认证。这不足以表达结构化 challenge、
 `partial_success` 和 `remaining_methods`。
 
-`russh 0.62.4` 提供相关客户端 API 是实现候选事实，不等于 LeanTTY 已经在 ARM64 HAP、
-受控服务端和物理 HarmonyOS PC 上完成互操作。实现前后的证据必须分开记录。
+`russh 0.62.4` 提供相关客户端 API 是实现候选事实，不等于 LeanTTY 已经在 ARM64 HAP
+和物理 HarmonyOS PC 上完成互操作。仓库现已提供独立的受控 russh 服务端和 OpenSSH
+端到端协议基线；这证明测试场景可重现，不证明 LeanTTY 客户端已经实现或通过互操作。
+
+受控服务端位于 `leantty_ssh/ssh-auth-fixture`，不属于默认构建成员，不进入 native 库
+或 HAP。运行 `tools/start-ssh-auth-fixture.ps1` 时才会在系统临时目录生成随机凭据，
+进程结束即删除。服务端按测试用户名提供直接密码、直接公钥、密码后 interactive、
+公钥后密码、公钥后 interactive 和多轮 interactive；`test-e2e.sh` 使用 OpenSSH 逐项
+验证未加密/加密私钥、partial success、多提示混合 echo 和多轮协议行为。
 
 ## 用户交互
 
@@ -143,8 +150,6 @@ AuthChallenge
   额外往返；以受控基线和真实服务器兼容性决定，不凭直觉增加设置。
 - 零 prompt、多轮 prompt 和 banner 的具体终端排版，确保可读但不建立新 UI 面板。
 - russh 对密码修改请求和所有失败组合的可观察接口；缺失时应明确失败，不做文本猜测。
-- 受控 OpenSSH/russh 测试服务端的最小 fixture 与可复现启动方式。
-
 这些未决点不能改变已确认边界：服务器驱动、每 Session 唯一状态机、结构化事件、秘密
 不持久化和真机验证。
 

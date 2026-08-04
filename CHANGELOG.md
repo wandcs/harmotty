@@ -4,6 +4,11 @@
 
 ### Development
 
+- Added a repository-only controlled SSH authentication fixture for password,
+  encrypted and unencrypted keys, partial-success method chains, mixed-echo
+  prompts and multi-round keyboard-interactive acceptance. Runtime credentials
+  are generated in a temporary directory and the fixture is excluded from the
+  production native library and HAP build.
 - Closed the engineering device-text injection gate with exact command
   readback before Enter, deterministic coverage that rejects the historical
   `echo` to `eho` corruption, and a physical ARM64 HarmonyOS PC probe that
