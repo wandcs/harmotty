@@ -298,7 +298,11 @@ foreach ($scriptName in @(
             $content.Contains("'failure-fixture-stderr.txt'") -and
             $content.Contains("'[REDACTED]'") -and
             $content.Contains('Device auth input delivery length mismatch') -and
-            $content.Contains('deliveryLengthVerifiedBeforeSubmit = $true') -and
+            $content.Contains('Submit-FocusedDeviceCommand') -and
+            $content.Contains('Activate-RegressionWindow') -and
+            $content.Contains('Focus-ActiveCommandInput') -and
+            -not $content.Contains('Device command character delivery failed') -and
+            $content.Contains('secretDeliveryLengthVerifiedBeforeSubmit = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
@@ -308,6 +312,10 @@ foreach ($scriptName in @(
             $content.Contains("'publickey-unencrypted'") -and
             $content.Contains("'publickey-then-password'") -and
             $content.Contains("'publickey-then-keyboard-interactive'") -and
+            $content.Contains("'keyboard-interactive-zero-prompt'") -and
+            $content.Contains("'unsupported-method-error-and-recovery'") -and
+            $content.Contains('AUTH:no supported authentication method is available') -and
+            $content.Contains("'-RunSeconds', '1200'") -and
             $content.Contains("'publickey-encrypted-passphrase'") -and
             $content.Contains("'parallel-pane-independent-authentication'") -and
             $content.Contains("'minimize-restore-hidden-answer-continuity'") -and

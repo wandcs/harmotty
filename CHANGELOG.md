@@ -9,10 +9,14 @@
   recovery, unencrypted/encrypted public keys, key-to-password and
   key-to-keyboard-interactive chains, parallel Pane authentication,
   minimize/restore continuity, and process-stop cleanup during hidden input. It
-  uses runtime-only fixture credentials and disposable keys, paced per-key raw
-  events with pre-submit delivery-count checks, layout/log leakage checks, an
-  exact HDC reverse mapping and verified cleanup; no test entry or logic enters
-  the HAP.
+  uses runtime-only fixture credentials and disposable keys, foreground
+  reactivation, paced per-key raw events, secret pre-submit delivery-count
+  checks, layout/log leakage checks, an exact HDC reverse mapping and verified
+  cleanup; no test entry or logic enters the HAP.
+- Added controlled zero-prompt keyboard-interactive and unsupported-method
+  acceptance cases, including automatic empty-response submission, explicit
+  error classification and a successful recovery connection without retaining
+  authentication state.
 - Made the native SSH lifecycle tests executable in WSL through a dev-only
   dynamic N-API symbol mode. The regression gate now covers authentication
   exchange success/failure, response and exchange timeouts, cancellation,

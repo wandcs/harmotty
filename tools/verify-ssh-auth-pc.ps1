@@ -180,16 +180,46 @@ function Submit-AuthValue {
     Start-Sleep -Milliseconds 150
 }
 
+function Focus-ActiveCommandInput {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    Activate-RegressionWindow
+    $layout = Get-LeanTTYDeviceLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory $LayoutName)
+    $nodes = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+    $focusedNodes = @($nodes | Where-Object { [string]$_.attributes.focused -eq 'true' })
+    if ($focusedNodes.Count -eq 1) {
+        $inputNode = $focusedNodes[0]
+    } elseif ($nodes.Count -eq 1) {
+        $inputNode = $nodes[0]
+    } else {
+        throw 'Unable to identify the active terminal input before command submission'
+    }
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$inputNode.attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to focus the terminal before command submission' }
+}
+
+function Submit-FocusedDeviceCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$Command,
+        [Parameter(Mandatory = $true)][string]$LayoutName
+    )
+    Focus-ActiveCommandInput -LayoutName $LayoutName
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+}
+
 function Start-AuthCommand {
     param(
         [Parameter(Mandatory = $true)][string]$User,
         [string]$Identity = ''
     )
     $identityOption = if ([string]::IsNullOrWhiteSpace($Identity)) { '' } else { " -i $Identity" }
-    Submit-LeanTTYDeviceCommand `
-        -Hdc $hdc `
-        -Target $Target `
-        -Command "ssh -p $FixturePort$identityOption $User@127.0.0.1"
+    Submit-FocusedDeviceCommand `
+        -Command "ssh -p $FixturePort$identityOption $User@127.0.0.1" `
+        -LayoutName 'layout-command-focus.json'
 }
 
 function Close-FixtureShell {
@@ -375,7 +405,9 @@ function Remove-DisposableAuthKey {
     }
     Clear-LeanTTYDeviceInput -Hdc $hdc -Target $Target
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-LeanTTYDeviceCommand -Hdc $hdc -Target $Target -Command "key rm $keyName"
+    Submit-FocusedDeviceCommand `
+        -Command "key rm $keyName" `
+        -LayoutName "$LayoutPrefix-focus.json"
     Invoke-DeleteKeyDialog -LayoutName "$LayoutPrefix-dialog.json"
     Wait-AuthLog -Pattern 'KEY_DELETE result=success'
     if (Test-LeanTTYDeviceKeyFilesPresent `
@@ -463,7 +495,7 @@ function Write-AuthEvidence {
             secretInjection = 'runtime-generated-printable-ascii'
             textChunkCharacters = 1
             interChunkPacingMilliseconds = 10
-            deliveryLengthVerifiedBeforeSubmit = $true
+            secretDeliveryLengthVerifiedBeforeSubmit = $true
             interPromptSettleMilliseconds = 150
             fixedDelayUsedAsVerdict = $false
             paneRouting = 'sorted-terminal-input-accessibility-nodes'
@@ -476,6 +508,8 @@ function Write-AuthEvidence {
             'publickey-unencrypted',
             'publickey-then-password',
             'publickey-then-keyboard-interactive',
+            'keyboard-interactive-zero-prompt',
+            'unsupported-method-error-and-recovery',
             'publickey-encrypted-passphrase',
             'parallel-pane-independent-authentication',
             'minimize-restore-hidden-answer-continuity',
@@ -500,7 +534,7 @@ try {
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
         (Join-Path $PSScriptRoot 'start-ssh-auth-fixture.ps1'),
         '-ListenAddress', "0.0.0.0:$FixturePort",
-        '-RunSeconds', '600',
+        '-RunSeconds', '1200',
         '-ControlDirectory', $fixtureControl
     )
     if (-not [string]::IsNullOrWhiteSpace($Distribution)) {
@@ -549,10 +583,9 @@ try {
     $deviceTransport = Get-HdcTargetTransport -Hdc $hdc -Target $Target
     if ($deviceAbi -notmatch 'arm64-v8a') { throw "Device is not ARM64: $deviceAbi" }
     Clear-LeanTTYDeviceInput -Hdc $hdc -Target $Target
-    Submit-LeanTTYDeviceCommand `
-        -Hdc $hdc `
-        -Target $Target `
-        -Command "ssh-keygen -R [127.0.0.1]:$FixturePort"
+    Submit-FocusedDeviceCommand `
+        -Command "ssh-keygen -R [127.0.0.1]:$FixturePort" `
+        -LayoutName 'layout-preflight-command-focus.json'
     Start-Sleep -Milliseconds 500
     Add-AuthCheck -Name 'fixture-and-device-preflight' -DurationMs $preflight.ElapsedMilliseconds
 
@@ -605,10 +638,9 @@ try {
 
     Start-AuthStage -Name 'generated-disposable-auth-key'
     $keyCleanupRequired = $true
-    Submit-LeanTTYDeviceCommand `
-        -Hdc $hdc `
-        -Target $Target `
-        -Command "ssh-keygen -t ed25519 -f $keyName -C regression"
+    Submit-FocusedDeviceCommand `
+        -Command "ssh-keygen -t ed25519 -f $keyName -C regression" `
+        -LayoutName 'layout-key-generate-command-focus.json'
     Wait-AuthLog -Pattern 'Key generated:'
     Complete-AuthStage -Name 'generated-disposable-auth-key'
 
@@ -636,8 +668,29 @@ try {
     Close-FixtureShell
     Complete-AuthStage -Name 'publickey-then-keyboard-interactive'
 
+    Start-AuthStage -Name 'keyboard-interactive-zero-prompt'
+    Start-AuthCommand -User 'kbdint-zero'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'keyboard-interactive-zero-prompt'
+
+    Start-AuthStage -Name 'unsupported-method-error-and-recovery'
+    Start-AuthCommand -User 'unsupported'
+    Wait-AuthLog -Pattern 'rust event: AUTH:no supported authentication method is available'
+    Assert-NoSecretExposure -LayoutName 'layout-unsupported-method.json'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-unsupported-recovery-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'unsupported-method-error-and-recovery'
+
     Start-AuthStage -Name 'encrypted-disposable-auth-key'
-    Submit-LeanTTYDeviceCommand -Hdc $hdc -Target $Target -Command "ssh-keygen -p -f $keyName"
+    Submit-FocusedDeviceCommand `
+        -Command "ssh-keygen -p -f $keyName" `
+        -LayoutName 'layout-key-passphrase-command-focus.json'
     Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE stage=new'
@@ -717,10 +770,9 @@ try {
     $keyCleanupRequired = $false
     Complete-AuthStage -Name 'deleted-disposable-auth-key'
 
-    Submit-LeanTTYDeviceCommand `
-        -Hdc $hdc `
-        -Target $Target `
-        -Command "ssh-keygen -R [127.0.0.1]:$FixturePort"
+    Submit-FocusedDeviceCommand `
+        -Command "ssh-keygen -R [127.0.0.1]:$FixturePort" `
+        -LayoutName 'layout-final-known-hosts-command-focus.json'
     Start-Sleep -Milliseconds 500
     $scenarioResult = 'passed'
 } catch {

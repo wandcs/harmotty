@@ -56,7 +56,8 @@ try {
     $wslReadyPath = ConvertTo-LeanTTYWslPath -WindowsPath $readyPath -Distribution $Distribution
     Write-Host "Temporary fixture directory: $fixtureDirectory" -ForegroundColor Yellow
     Write-Host 'Credentials are available only in server-credentials while this process is running.'
-    Write-Host 'Users: password, publickey, password-kbdint, publickey-password, publickey-kbdint, kbdint-multiround'
+    Write-Host ('Users: password, publickey, password-kbdint, publickey-password, ' +
+        'publickey-kbdint, kbdint-multiround, kbdint-zero, unsupported')
     Write-Host 'Stop with Ctrl+C; temporary credentials will be removed.'
 
     Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -Distribution $Distribution -CargoArguments @(

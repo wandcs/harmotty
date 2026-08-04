@@ -55,18 +55,20 @@ challenge 和 `sessionId + generation + roundId`，UI 不再根据私钥失败�
 受控服务端位于 `leantty_ssh/ssh-auth-fixture`，不属于默认构建成员，不进入 native 库
 或 HAP。运行 `tools/start-ssh-auth-fixture.ps1` 时才会在系统临时目录生成随机凭据，
 进程结束即删除。服务端按测试用户名提供直接密码、直接公钥、密码后 interactive、
-公钥后密码、公钥后 interactive 和多轮 interactive；`test-e2e.sh` 使用 OpenSSH 逐项
-验证未加密/加密私钥、partial success、多提示混合 echo 和多轮协议行为。物理 ARM64
+公钥后密码、公钥后 interactive、多轮 interactive、零 prompt 与不支持方法；
+`test-e2e.sh` 使用 OpenSSH 逐项验证未加密/加密私钥、partial success、多提示混合
+echo、多轮和零 prompt 协议行为。物理 ARM64
 HarmonyOS PC 已使用同一夹具验证直接密码、未加密/加密私钥、密码后 interactive、
-公钥后密码、公钥后 interactive、多轮 interactive、混合 echo、banner、取消、两个
-Pane 并行认证和同一进程最小化/恢复期间隐藏回答连续性；真实服务、断网与错误矩阵仍是
-发布门禁。
+公钥后密码、公钥后 interactive、多轮 interactive、零 prompt 自动提交、不支持方法
+失败后恢复、混合 echo、banner、取消、两个 Pane 并行认证和同一进程最小化/恢复期间
+隐藏回答连续性；真实服务、断网与其余错误矩阵仍是发布门禁。
 
 `tools/verify-ssh-auth-pc.ps1` 将这些主路径固化为保留候选验收：脚本
 只在系统临时目录生成凭据，通过可清理的 HDC reverse 映射让设备标准 `ssh` 命令连接
 仓库夹具，并使用原始按键、结构化非秘密日志与 accessibility layout 覆盖直接密码、
 密码后 mixed-echo interactive、多轮错误恢复、未加密/加密公钥、公钥后密码、公钥后
-interactive，以及隐藏回答期间进程停止后的清理。一次性密钥由应用标准 `ssh-keygen`
+interactive、零 prompt 自动提交、不支持方法的明确失败与恢复，以及隐藏回答期间进程
+停止后的清理。一次性密钥由应用标准 `ssh-keygen`
 路径创建、加密并删除；两个 Pane 通过现有分屏、焦点和独立 Session 路径并行完成不同
 认证链；最小化/恢复通过 HarmonyOS 系统窗口按钮、可见性事件和同一进程 ID 验证隐藏
 回答连续性。脚本独立检查沙箱文件已清理，不要求 HAP 内存在验收入口；真实服务、断网
