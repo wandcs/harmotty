@@ -154,8 +154,9 @@ Every automated physical scenario MUST:
   disposable device state;
 - locate UI controls from current layout semantics and native bounds, not stale
   screenshots or Windows-scaled coordinates;
-- verify injected terminal command text through the focused accessibility node
-  before Enter, so an IME or focus error cannot silently change the command;
+- inject terminal commands as deterministic numeric physical-key events, cover
+  the complete printable-ASCII mapping, and require the command's structured
+  result or actual side effect before proceeding;
 - generate disposable names and secrets at runtime, keep secret input non-echoing
   and scan captured layouts/logs for disclosure;
 - wait on observable state or a non-secret structured log marker; fixed sleeps
@@ -172,9 +173,10 @@ Every automated physical scenario MUST:
   the application sandbox and forbid evidence promotion when cleanup fails.
 
 Physical keyboard injection MAY be used only when the script verifies the
-focused application and the exact resulting input. Direct key injection without
-readback is insufficient for text acceptance because the active IME can consume
-or transform it.
+focused application, uses the covered numeric key mapping without an IME text
+path, and verifies the resulting operation. ArkWeb's accessibility textarea is
+useful for focus preflight and disclosure scans, but is not exact input evidence:
+on the target PC it can omit rendered digits and diverge from the native buffer.
 
 ## Result classification
 

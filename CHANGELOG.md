@@ -9,7 +9,10 @@
   `echo` to `eho` corruption, and a physical ARM64 HarmonyOS PC probe that
   preserved `echo` and representative ASCII inputs exactly. Local `Ctrl+C`
   now clears the native command line, so device automation no longer mistakes
-  xterm's hidden accessibility textarea for application input state.
+  xterm's hidden accessibility textarea for application input state. Physical
+  scenarios now inject complete printable ASCII as deterministic raw key events
+  and judge commands by structured results, avoiding both `uitest` failures
+  after `Ctrl+C` and accessibility readback that omits rendered digits.
 - Added OpenSSH-compatible `ssh-keygen -F` lookup for the single LeanTTY
   `known_hosts` authority, including plain, hashed, comma-separated, IPv4,
   IPv6, non-default-port and multi-algorithm records without changing assets.

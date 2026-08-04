@@ -246,6 +246,76 @@ function Assert-LeanTTYLayoutExcludesValues {
     }
 }
 
+function ConvertTo-LeanTTYDeviceTextKeyCommand {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    if ($Text -notmatch '^[\x20-\x7E]*$') {
+        throw 'Device regression text must be printable ASCII'
+    }
+    $punctuation = @{
+        32 = @(2050, $false)
+        33 = @(2001, $true)
+        34 = @(2063, $true)
+        35 = @(2003, $true)
+        36 = @(2004, $true)
+        37 = @(2005, $true)
+        38 = @(2007, $true)
+        39 = @(2063, $false)
+        40 = @(2009, $true)
+        41 = @(2000, $true)
+        42 = @(2008, $true)
+        43 = @(2058, $true)
+        44 = @(2043, $false)
+        45 = @(2057, $false)
+        46 = @(2044, $false)
+        47 = @(2064, $false)
+        58 = @(2062, $true)
+        59 = @(2062, $false)
+        60 = @(2043, $true)
+        61 = @(2058, $false)
+        62 = @(2044, $true)
+        63 = @(2064, $true)
+        64 = @(2002, $true)
+        91 = @(2059, $false)
+        92 = @(2061, $false)
+        93 = @(2060, $false)
+        94 = @(2006, $true)
+        95 = @(2057, $true)
+        96 = @(2056, $false)
+        123 = @(2059, $true)
+        124 = @(2061, $true)
+        125 = @(2060, $true)
+        126 = @(2056, $true)
+    }
+    $parts = [Collections.Generic.List[string]]::new()
+    $parts.Add('uinput -K')
+    foreach ($character in $Text.ToCharArray()) {
+        $ascii = [int]$character
+        $keyCode = 0
+        $shift = $false
+        if ($ascii -ge 97 -and $ascii -le 122) {
+            $keyCode = 2017 + $ascii - 97
+        } elseif ($ascii -ge 65 -and $ascii -le 90) {
+            $keyCode = 2017 + $ascii - 65
+            $shift = $true
+        } elseif ($ascii -ge 48 -and $ascii -le 57) {
+            $keyCode = 2000 + $ascii - 48
+        } elseif ($punctuation.ContainsKey($ascii)) {
+            $mapping = $punctuation[$ascii]
+            $keyCode = [int]$mapping[0]
+            $shift = [bool]$mapping[1]
+        } else {
+            throw "Device regression text contains unsupported ASCII code: $ascii"
+        }
+        if ($shift) {
+            $parts.Add("-d 2047 -d $keyCode -u $keyCode -u 2047")
+        } else {
+            $parts.Add("-d $keyCode -u $keyCode")
+        }
+    }
+    return $parts -join ' '
+}
+
 function Invoke-LeanTTYDeviceText {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
@@ -253,12 +323,9 @@ function Invoke-LeanTTYDeviceText {
         [Parameter(Mandatory = $true)][string]$Text
     )
 
-    if ($Text -notmatch '^[\x20-\x7E]*$' -or $Text.Contains("'")) {
-        throw 'Device regression text must be printable ASCII without a single quote'
-    }
-    $shellCommand = "uitest uiInput text '$Text'"
+    $shellCommand = ConvertTo-LeanTTYDeviceTextKeyCommand -Text $Text
     & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS UI text injection failed' }
+    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
 }
 
 function Invoke-LeanTTYDeviceKey {
@@ -322,16 +389,10 @@ function Submit-LeanTTYDeviceCommand {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
         [Parameter(Mandatory = $true)][string]$Target,
-        [Parameter(Mandatory = $true)][string]$Command,
-        [Parameter(Mandatory = $true)][string]$LayoutPath
+        [Parameter(Mandatory = $true)][string]$Command
     )
 
     Invoke-LeanTTYDeviceText -Hdc $Hdc -Target $Target -Text $Command
-    $layout = Get-LeanTTYDeviceLayout -Hdc $Hdc -Target $Target -LocalPath $LayoutPath
-    $actual = Get-LeanTTYTerminalInputText -Layout $layout
-    if ($actual -ne $Command) {
-        throw "Injected terminal command differs from the requested command: $actual"
-    }
     Invoke-LeanTTYDeviceKey -Hdc $Hdc -Target $Target -KeyCode 2054
 }
 
