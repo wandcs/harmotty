@@ -1,4 +1,4 @@
-import { HostKeyChangedInfo, SshClient, SshClientEvent } from '../model/ssh/SshClient'
+import { AuthChallengeInfo, AuthPromptInfo, HostKeyChangedInfo, SshClient, SshClientEvent } from '../model/ssh/SshClient'
 import util from '@ohos.util'
 import { SshConnectOptions } from '../common/types/SshTypes'
 import { SshSession, SshSessionState } from '../model/ssh/SshSession'
@@ -56,7 +56,10 @@ export class SessionViewModel {
   private oldKeyPassphrase: string = ''
   private newKeyPassphrase: string = ''
   private confirmedKeyPassphrase: string = ''
-  private privateKeyAttempted: boolean = false
+  private authChallenge: AuthChallengeInfo | null = null
+  private authPromptIndex: number = 0
+  private authResponseBuffer: string = ''
+  private authResponses: string[] = []
   private context: common.Context | null = null
   private pendingKeypush: boolean = false
   private perfInputBuffer: string = ''
@@ -151,7 +154,7 @@ export class SessionViewModel {
   }
 
   async connect(host: string, port: number, username: string): Promise<void> {
-    this.privateKeyAttempted = false
+    this.clearAuthChallenge()
     this.setMode(TerminalMode.CONNECTING)
     this.session.setState(SshSessionState.CONNECTING)
     this.session.setHostname(host)
@@ -172,6 +175,13 @@ export class SessionViewModel {
       opts.port = port
       opts.username = username
       opts.knownHostsPath = this.knownHostsPath
+      if (!this.pendingKeypush) {
+        let key: KeyPairInfo | null = this.resolvePrivateKey()
+        if (key !== null) {
+          opts.privateKeyPath = key.filePath
+          opts.privateKeyRequiresPassphrase = key.hasPassphrase
+        }
+      }
       await this.sshClient.connect(opts)
       this.logger.info('SSH connect initiated: ' + host)
     } catch (e) {
@@ -189,7 +199,7 @@ export class SessionViewModel {
       await this.sshClient.disconnect()
     }
     this.session.setState(SshSessionState.DISCONNECTED)
-    this.privateKeyAttempted = false
+    this.clearAuthChallenge()
     let cancelledKeyPassphraseChange: boolean =
       this.keyPassphraseChangeStage !== KeyPassphraseChangeStage.NONE
     this.clearKeyPassphraseChangeState()
@@ -219,7 +229,7 @@ export class SessionViewModel {
     this.passwordBuffer = ''
     this.hostKeyBuffer = ''
     this.pendingKeyPassphrase = ''
-    this.privateKeyAttempted = false
+    this.clearAuthChallenge()
     this.clearKeypushState()
     this.session.setState(SshSessionState.DISCONNECTED)
     this.setMode(TerminalMode.IDLE)
@@ -273,17 +283,24 @@ export class SessionViewModel {
       case SshClientEvent.PASSWORD_PROMPT:
         this.session.setState(SshSessionState.AUTHENTICATING)
         this.notifyStateChange()
-        if (!this.pendingKeypush && !this.privateKeyAttempted) {
-          let key: KeyPairInfo | null = this.resolvePrivateKey()
-          if (key !== null) {
-            this.privateKeyAttempted = true
-            this.tryKeyAuth(key.filePath, key.hasPassphrase)
-            return
-          }
-        }
         this.setMode(TerminalMode.PASSWORD_INPUT)
         this.passwordBuffer = ''
         this.writeTerminal('Password: ')
+        break
+      case SshClientEvent.PRIVATE_KEY_PASSPHRASE_PROMPT:
+        this.session.setState(SshSessionState.AUTHENTICATING)
+        this.notifyStateChange()
+        this.pendingKeyPassphrase = ''
+        this.setMode(TerminalMode.KEY_PASSPHRASE_INPUT)
+        this.writeTerminal('\r\nThe key at ' + data + ' is encrypted.\r\nEnter passphrase: ')
+        break
+      case SshClientEvent.AUTH_BANNER:
+        this.session.setState(SshSessionState.AUTHENTICATING)
+        this.notifyStateChange()
+        this.writeAuthenticationText(data)
+        break
+      case SshClientEvent.AUTH_CHALLENGE:
+        this.beginAuthChallenge()
         break
       case SshClientEvent.HOST_KEY_PROMPT:
         this.hostKeyBuffer = ''
@@ -297,6 +314,7 @@ export class SessionViewModel {
         this.onHostKeyChanged(data)
         break
       case SshClientEvent.CONNECTED:
+        this.clearAuthChallenge()
         this.setMode(TerminalMode.CONNECTED)
         this.onSshConnected()
         break
@@ -389,6 +407,7 @@ export class SessionViewModel {
   }
 
   private onSshClose(exitCode: number): void {
+    this.clearAuthChallenge()
     if (this.pendingKeypush) {
       this.failKeypush('Connection closed before key installation completed.')
       return
@@ -409,6 +428,7 @@ export class SessionViewModel {
   }
 
   private onSshError(errorDetail: string): void {
+    this.clearAuthChallenge()
     if (this.pendingKeypush) {
       this.failKeypush('Key installation failed: ' + errorDetail)
       return
@@ -544,6 +564,11 @@ export class SessionViewModel {
       return
     }
 
+    if (this.mode === TerminalMode.AUTH_CHALLENGE_INPUT) {
+      this.handleAuthChallengeInput(data)
+      return
+    }
+
     if (this.mode === TerminalMode.KEY_PASSPHRASE_CHANGE_INPUT) {
       this.handleKeyPassphraseChangeInput(data)
       return
@@ -599,6 +624,21 @@ export class SessionViewModel {
 
   private handleKeyPassphraseInput(data: string): void {
     this.handleBufferedInput(data, this.pendingKeyPassphrase, (v) => { this.pendingKeyPassphrase = v }, () => { this.submitKeyPassphrase() }, '*')
+  }
+
+  private handleAuthChallengeInput(data: string): void {
+    if (this.authChallenge === null || this.authPromptIndex >= this.authChallenge.prompts.length) {
+      this.onSshError('Invalid keyboard-interactive prompt state')
+      return
+    }
+    let prompt: AuthPromptInfo = this.authChallenge.prompts[this.authPromptIndex]
+    this.handleBufferedInput(
+      data,
+      this.authResponseBuffer,
+      (value: string) => { this.authResponseBuffer = value },
+      () => { this.submitAuthChallengeResponse() },
+      prompt.echo ? '' : '*'
+    )
   }
 
   private handleKeyPassphraseChangeInput(data: string): void {
@@ -1026,18 +1066,83 @@ export class SessionViewModel {
     return SshKeyManager.findDefaultKey(this.context)
   }
 
-  private tryKeyAuth(keyPath: string, requiresPassphrase: boolean): void {
-    if (requiresPassphrase) {
-      this.pendingKeyPath = keyPath
-      this.pendingKeyPassphrase = ''
-      this.setMode(TerminalMode.KEY_PASSPHRASE_INPUT)
-      this.writeTerminal('\r\nThe key at ' + keyPath + ' is encrypted.\r\nEnter passphrase: ')
+  private writeAuthenticationText(value: string): void {
+    if (value.length === 0) {
       return
     }
-    if (this.sshClient.authPrivateKey(keyPath, '')) {
+    let normalized: string = value.replace(/\r?\n/g, '\r\n')
+    this.writeTerminal('\r\n' + normalized)
+    if (!normalized.endsWith('\r\n')) {
+      this.writeTerminal('\r\n')
+    }
+  }
+
+  private beginAuthChallenge(): void {
+    let challenge: AuthChallengeInfo | null = this.sshClient.takePendingAuthChallenge()
+    if (challenge === null) {
+      this.onSshError('Missing keyboard-interactive challenge')
+      return
+    }
+    this.clearAuthChallenge()
+    this.authChallenge = challenge
+    this.session.setState(SshSessionState.AUTHENTICATING)
+    this.notifyStateChange()
+    this.writeAuthenticationText(challenge.name)
+    this.writeAuthenticationText(challenge.instructions)
+    if (challenge.prompts.length === 0) {
+      this.submitCompletedAuthChallenge()
+      return
+    }
+    this.setMode(TerminalMode.AUTH_CHALLENGE_INPUT)
+    this.writeTerminal(challenge.prompts[0].text)
+  }
+
+  private submitAuthChallengeResponse(): void {
+    if (this.authChallenge === null || this.authPromptIndex >= this.authChallenge.prompts.length) {
+      this.onSshError('Invalid keyboard-interactive response state')
+      return
+    }
+    this.authResponses.push(this.authResponseBuffer)
+    this.authResponseBuffer = ''
+    this.authPromptIndex++
+    this.writeTerminal('\r\n')
+    if (this.authPromptIndex < this.authChallenge.prompts.length) {
+      this.writeTerminal(this.authChallenge.prompts[this.authPromptIndex].text)
+      return
+    }
+    this.submitCompletedAuthChallenge()
+  }
+
+  private submitCompletedAuthChallenge(): void {
+    if (this.authChallenge === null) {
+      this.onSshError('Missing keyboard-interactive response context')
+      return
+    }
+    let roundId: number = this.authChallenge.roundId
+    let responses: string[] = this.authResponses
+    this.authChallenge = null
+    this.authPromptIndex = 0
+    this.authResponseBuffer = ''
+    this.authResponses = []
+    let submitted: boolean = this.sshClient.authKeyboardInteractiveResponses(roundId, responses)
+    for (let i = 0; i < responses.length; i++) {
+      responses[i] = ''
+    }
+    responses.length = 0
+    if (submitted) {
       this.setMode(TerminalMode.CONNECTING)
       this.notifyStateChange()
     }
+  }
+
+  private clearAuthChallenge(): void {
+    this.authResponseBuffer = ''
+    for (let i = 0; i < this.authResponses.length; i++) {
+      this.authResponses[i] = ''
+    }
+    this.authResponses = []
+    this.authPromptIndex = 0
+    this.authChallenge = null
   }
 
   private submitKeyPassphrase(): void {
@@ -1047,7 +1152,7 @@ export class SessionViewModel {
     this.writeTerminal('\r\n')
     let pass: string = this.pendingKeyPassphrase
     this.pendingKeyPassphrase = ''
-    if (this.sshClient.authPrivateKey(this.pendingKeyPath, pass)) {
+    if (this.sshClient.authPrivateKeyPassphrase(pass)) {
       this.setMode(TerminalMode.CONNECTING)
       this.notifyStateChange()
     }

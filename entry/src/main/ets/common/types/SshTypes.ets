@@ -25,9 +25,8 @@ export class SshConnectOptions {
   host: string
   port: number
   username: string
-  password: string
   privateKeyPath: string
-  passphrase: string
+  privateKeyRequiresPassphrase: boolean
   knownHostsPath: string
   connectTimeoutMs: number
 
@@ -35,9 +34,8 @@ export class SshConnectOptions {
     this.host = ''
     this.port = 22
     this.username = ''
-    this.password = ''
     this.privateKeyPath = ''
-    this.passphrase = ''
+    this.privateKeyRequiresPassphrase = false
     this.knownHostsPath = ''
     this.connectTimeoutMs = 15000
   }

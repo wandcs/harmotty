@@ -11,6 +11,10 @@ use napi_ohos::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallM
 use napi_ohos::{Error, Result, Status};
 use zeroize::Zeroize;
 
+use leantty_ssh_core::authentication::{
+    sanitize_server_text, AuthAction, AuthChallenge, AuthFailure, AuthMethodKind, AuthPrompt,
+    AuthStateMachine,
+};
 use leantty_ssh_core::keygen::{self};
 use leantty_ssh_core::known_hosts::{find_known_host_entries, remove_known_host_entries};
 use leantty_ssh_core::AuthMethod;
@@ -24,17 +28,87 @@ type DisconnectSender = tokio::sync::mpsc::Sender<()>;
 type OutputPauseSender = tokio::sync::mpsc::Sender<bool>;
 type JsCallback = Arc<ThreadsafeFunction<String, (), String, Status, false, false, 64>>;
 type JsDataCallback = Arc<ThreadsafeFunction<Uint8Array, (), Uint8Array, Status, false, false, 64>>;
+type JsAuthCallback = Arc<ThreadsafeFunction<AuthEvent, (), AuthEvent, Status, false, false, 64>>;
+
+#[napi(object)]
+pub struct AuthPromptEvent {
+    pub text: String,
+    pub echo: bool,
+}
+
+#[napi(object)]
+pub struct AuthEvent {
+    pub kind: String,
+    pub session_id: String,
+    pub generation: u32,
+    pub round_id: u32,
+    pub text: String,
+    pub name: String,
+    pub instructions: String,
+    pub prompts: Vec<AuthPromptEvent>,
+}
+
+impl AuthEvent {
+    fn simple(kind: &str, session_id: u32, generation: u32) -> Self {
+        Self {
+            kind: kind.to_string(),
+            session_id: session_id.to_string(),
+            generation,
+            round_id: 0,
+            text: String::new(),
+            name: String::new(),
+            instructions: String::new(),
+            prompts: Vec::new(),
+        }
+    }
+
+    fn banner(session_id: u32, generation: u32, text: &str) -> Self {
+        Self {
+            kind: "banner".to_string(),
+            session_id: session_id.to_string(),
+            generation,
+            round_id: 0,
+            text: sanitize_server_text(text),
+            name: String::new(),
+            instructions: String::new(),
+            prompts: Vec::new(),
+        }
+    }
+
+    fn challenge(session_id: u32, generation: u32, challenge: AuthChallenge) -> Self {
+        Self {
+            kind: "challenge".to_string(),
+            session_id: session_id.to_string(),
+            generation,
+            round_id: challenge.round_id,
+            text: String::new(),
+            name: challenge.name,
+            instructions: challenge.instructions,
+            prompts: challenge
+                .prompts
+                .into_iter()
+                .map(|prompt| AuthPromptEvent {
+                    text: prompt.text,
+                    echo: prompt.echo,
+                })
+                .collect(),
+        }
+    }
+}
 
 const FINAL_DELIVERY_RETRY_ATTEMPTS: u32 = 128;
 const FINAL_DELIVERY_RETRY_DELAY: Duration = Duration::from_millis(16);
 const SSH_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 const SSH_KEEPALIVE_MAX: usize = 3;
+const AUTH_EXCHANGE_TIMEOUT: Duration = Duration::from_secs(30);
+const AUTH_RESPONSE_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn build_client_config() -> russh::client::Config {
-    let mut config = russh::client::Config::default();
-    config.keepalive_interval = Some(SSH_KEEPALIVE_INTERVAL);
-    config.keepalive_max = SSH_KEEPALIVE_MAX;
-    config
+    russh::client::Config {
+        keepalive_interval: Some(SSH_KEEPALIVE_INTERVAL),
+        keepalive_max: SSH_KEEPALIVE_MAX,
+        ..Default::default()
+    }
 }
 
 #[derive(Default)]
@@ -80,6 +154,7 @@ impl OutputDeliveryMetrics {
 }
 
 struct ShellSession {
+    generation: u32,
     write_tx: WriteSender,
     resize_tx: ResizeSender,
     disconnect_tx: DisconnectSender,
@@ -135,21 +210,47 @@ fn send_control(callback: &JsCallback, event: &str) {
     let _ = try_send_callback(callback, event.to_string(), "control");
 }
 
+fn send_auth_event(callback: &JsAuthCallback, event: AuthEvent) -> bool {
+    let status = callback.call(event, ThreadsafeFunctionCallMode::Blocking);
+    if status != Status::Ok {
+        eprintln!("[LTTY_SSH] callback=auth status={}", status);
+        return false;
+    }
+    true
+}
+
 fn should_flush_immediately(pending_empty: bool, decoded_len: usize) -> bool {
     pending_empty && decoded_len > 0 && decoded_len <= 256
 }
 
 struct ClientHandler {
+    session_id: u32,
+    generation: u32,
     host: String,
     port: u16,
     known_hosts_path: PathBuf,
     host_key_rx: tokio::sync::mpsc::Receiver<bool>,
     connect_progress_tx: tokio::sync::mpsc::Sender<ConnectProgress>,
     control_callback: JsCallback,
+    auth_callback: JsAuthCallback,
 }
 
 impl russh::client::Handler for ClientHandler {
     type Error = russh::Error;
+
+    async fn auth_banner(
+        &mut self,
+        banner: &str,
+        _session: &mut russh::client::Session,
+    ) -> std::result::Result<(), Self::Error> {
+        if !send_auth_event(
+            &self.auth_callback,
+            AuthEvent::banner(self.session_id, self.generation, banner),
+        ) {
+            return Err(russh::Error::SendError);
+        }
+        Ok(())
+    }
 
     async fn check_server_key(
         &mut self,
@@ -252,6 +353,408 @@ enum ConnectWaitResult<T, E> {
     Cancelled,
 }
 
+enum AuthWaitResult {
+    Command(AuthMethod),
+    Cancelled,
+    TimedOut,
+}
+
+enum AuthExchangeResult<T, E> {
+    Completed(T),
+    Failed(E),
+    Cancelled,
+    TimedOut,
+}
+
+async fn wait_for_auth_exchange<F, T, E>(
+    exchange: F,
+    timeout: Duration,
+    disconnect_rx: &mut tokio::sync::mpsc::Receiver<()>,
+) -> AuthExchangeResult<T, E>
+where
+    F: Future<Output = std::result::Result<T, E>>,
+{
+    tokio::select! {
+      result = exchange => match result {
+        Ok(value) => AuthExchangeResult::Completed(value),
+        Err(error) => AuthExchangeResult::Failed(error),
+      },
+      _ = disconnect_rx.recv() => AuthExchangeResult::Cancelled,
+      _ = tokio::time::sleep(timeout) => AuthExchangeResult::TimedOut,
+    }
+}
+
+async fn wait_for_auth_command(
+    auth_rx: &mut tokio::sync::mpsc::Receiver<AuthMethod>,
+    disconnect_rx: &mut tokio::sync::mpsc::Receiver<()>,
+) -> AuthWaitResult {
+    tokio::select! {
+      command = auth_rx.recv() => match command {
+        Some(command) => AuthWaitResult::Command(command),
+        None => AuthWaitResult::Cancelled,
+      },
+      _ = disconnect_rx.recv() => AuthWaitResult::Cancelled,
+      _ = tokio::time::sleep(AUTH_RESPONSE_TIMEOUT) => AuthWaitResult::TimedOut,
+    }
+}
+
+fn auth_method_kinds(methods: &russh::MethodSet) -> Vec<AuthMethodKind> {
+    methods
+        .iter()
+        .filter_map(|method| match method {
+            russh::MethodKind::PublicKey => Some(AuthMethodKind::PublicKey),
+            russh::MethodKind::Password => Some(AuthMethodKind::Password),
+            russh::MethodKind::KeyboardInteractive => Some(AuthMethodKind::KeyboardInteractive),
+            _ => None,
+        })
+        .collect()
+}
+
+fn auth_failure_message(failure: AuthFailure) -> &'static str {
+    match failure {
+        AuthFailure::NoSupportedMethod => "no supported authentication method is available",
+        AuthFailure::Rejected => "authentication was rejected",
+        AuthFailure::UnexpectedCredential => "unexpected authentication credential",
+        AuthFailure::UnexpectedChallenge => "unexpected keyboard-interactive challenge",
+        AuthFailure::StaleChallenge => "stale keyboard-interactive response",
+        AuthFailure::ResponseCountMismatch => {
+            "keyboard-interactive response count does not match prompts"
+        }
+        AuthFailure::ProtocolLimitExceeded => "authentication protocol limit exceeded",
+    }
+}
+
+enum AuthenticationOutcome {
+    Authenticated,
+    Cancelled,
+    Failed(String),
+}
+
+async fn authenticate_private_key(
+    ssh: &mut russh::client::Handle<ClientHandler>,
+    user: &str,
+    key_path: &str,
+    passphrase: &str,
+) -> std::result::Result<russh::client::AuthResult, String> {
+    let key = keygen::load_private_key(key_path, passphrase)
+        .map_err(|error| format!("private key could not be loaded: {error}"))?;
+    let wrapped = russh::keys::key::PrivateKeyWithHashAlg::new(Arc::new(key), None);
+    ssh.authenticate_publickey(user, wrapped)
+        .await
+        .map_err(|error| format!("public-key authentication failed: {error}"))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_authentication(
+    session_id: u32,
+    generation: u32,
+    user: &str,
+    private_key_path: &str,
+    private_key_requires_passphrase: bool,
+    ssh: &mut russh::client::Handle<ClientHandler>,
+    auth_callback: &JsAuthCallback,
+    auth_rx: &mut tokio::sync::mpsc::Receiver<AuthMethod>,
+    disconnect_rx: &mut tokio::sync::mpsc::Receiver<()>,
+) -> AuthenticationOutcome {
+    let mut state = AuthStateMachine::new(
+        !private_key_path.is_empty(),
+        private_key_requires_passphrase,
+    );
+    let mut result = match wait_for_auth_exchange(
+        ssh.authenticate_none(user),
+        AUTH_EXCHANGE_TIMEOUT,
+        disconnect_rx,
+    )
+    .await
+    {
+        AuthExchangeResult::Completed(result) => result,
+        AuthExchangeResult::Failed(error) => {
+            return AuthenticationOutcome::Failed(format!(
+                "authentication negotiation failed: {error}"
+            ));
+        }
+        AuthExchangeResult::Cancelled => return AuthenticationOutcome::Cancelled,
+        AuthExchangeResult::TimedOut => {
+            return AuthenticationOutcome::Failed("authentication exchange timed out".to_string());
+        }
+    };
+
+    loop {
+        let (remaining_methods, partial_success) = match result {
+            russh::client::AuthResult::Success => return AuthenticationOutcome::Authenticated,
+            russh::client::AuthResult::Failure {
+                ref remaining_methods,
+                partial_success,
+            } => (auth_method_kinds(remaining_methods), partial_success),
+        };
+        let action = state.select_next_method(&remaining_methods, partial_success);
+        eprintln!(
+            "[LTTY_SSH] session={} stage=auth_select action={:?} partial_success={}",
+            session_id, action, partial_success
+        );
+
+        match action {
+            AuthAction::AttemptPublicKey => {
+                result = match wait_for_auth_exchange(
+                    authenticate_private_key(ssh, user, private_key_path, ""),
+                    AUTH_EXCHANGE_TIMEOUT,
+                    disconnect_rx,
+                )
+                .await
+                {
+                    AuthExchangeResult::Completed(result) => result,
+                    AuthExchangeResult::Failed(error) => {
+                        return AuthenticationOutcome::Failed(error);
+                    }
+                    AuthExchangeResult::Cancelled => return AuthenticationOutcome::Cancelled,
+                    AuthExchangeResult::TimedOut => {
+                        return AuthenticationOutcome::Failed(
+                            "authentication exchange timed out".to_string(),
+                        );
+                    }
+                };
+            }
+            AuthAction::RequestPrivateKeyPassphrase => {
+                if !send_auth_event(
+                    auth_callback,
+                    AuthEvent::simple("private_key_passphrase", session_id, generation),
+                ) {
+                    return AuthenticationOutcome::Failed(
+                        "authentication callback delivery failed".to_string(),
+                    );
+                }
+                let mut command = match wait_for_auth_command(auth_rx, disconnect_rx).await {
+                    AuthWaitResult::Command(command) => command,
+                    AuthWaitResult::Cancelled => return AuthenticationOutcome::Cancelled,
+                    AuthWaitResult::TimedOut => {
+                        return AuthenticationOutcome::Failed(
+                            "authentication response timed out".to_string(),
+                        );
+                    }
+                };
+                let passphrase = match &mut command {
+                    AuthMethod::PrivateKeyPassphrase(passphrase) => passphrase,
+                    _ => {
+                        return AuthenticationOutcome::Failed(
+                            auth_failure_message(AuthFailure::UnexpectedCredential).to_string(),
+                        );
+                    }
+                };
+                if let AuthAction::Fail(failure) = state.submit_private_key_passphrase() {
+                    return AuthenticationOutcome::Failed(
+                        auth_failure_message(failure).to_string(),
+                    );
+                }
+                result = match wait_for_auth_exchange(
+                    authenticate_private_key(ssh, user, private_key_path, passphrase.as_str()),
+                    AUTH_EXCHANGE_TIMEOUT,
+                    disconnect_rx,
+                )
+                .await
+                {
+                    AuthExchangeResult::Completed(result) => result,
+                    AuthExchangeResult::Failed(error) => {
+                        return AuthenticationOutcome::Failed(error);
+                    }
+                    AuthExchangeResult::Cancelled => return AuthenticationOutcome::Cancelled,
+                    AuthExchangeResult::TimedOut => {
+                        return AuthenticationOutcome::Failed(
+                            "authentication exchange timed out".to_string(),
+                        );
+                    }
+                };
+            }
+            AuthAction::RequestPassword => {
+                if !send_auth_event(
+                    auth_callback,
+                    AuthEvent::simple("password", session_id, generation),
+                ) {
+                    return AuthenticationOutcome::Failed(
+                        "authentication callback delivery failed".to_string(),
+                    );
+                }
+                let mut command = match wait_for_auth_command(auth_rx, disconnect_rx).await {
+                    AuthWaitResult::Command(command) => command,
+                    AuthWaitResult::Cancelled => return AuthenticationOutcome::Cancelled,
+                    AuthWaitResult::TimedOut => {
+                        return AuthenticationOutcome::Failed(
+                            "authentication response timed out".to_string(),
+                        );
+                    }
+                };
+                let password = match &mut command {
+                    AuthMethod::Password(password) => password,
+                    _ => {
+                        return AuthenticationOutcome::Failed(
+                            auth_failure_message(AuthFailure::UnexpectedCredential).to_string(),
+                        );
+                    }
+                };
+                if let Err(failure) = state.submit_password() {
+                    return AuthenticationOutcome::Failed(
+                        auth_failure_message(failure).to_string(),
+                    );
+                }
+                result = match wait_for_auth_exchange(
+                    ssh.authenticate_password(user, password.as_str()),
+                    AUTH_EXCHANGE_TIMEOUT,
+                    disconnect_rx,
+                )
+                .await
+                {
+                    AuthExchangeResult::Completed(result) => result,
+                    AuthExchangeResult::Failed(error) => {
+                        return AuthenticationOutcome::Failed(format!(
+                            "password authentication failed: {error}"
+                        ));
+                    }
+                    AuthExchangeResult::Cancelled => return AuthenticationOutcome::Cancelled,
+                    AuthExchangeResult::TimedOut => {
+                        return AuthenticationOutcome::Failed(
+                            "authentication exchange timed out".to_string(),
+                        );
+                    }
+                };
+            }
+            AuthAction::StartKeyboardInteractive => {
+                let mut response = match wait_for_auth_exchange(
+                    ssh.authenticate_keyboard_interactive_start(user, None::<String>),
+                    AUTH_EXCHANGE_TIMEOUT,
+                    disconnect_rx,
+                )
+                .await
+                {
+                    AuthExchangeResult::Completed(response) => response,
+                    AuthExchangeResult::Failed(error) => {
+                        return AuthenticationOutcome::Failed(format!(
+                            "keyboard-interactive authentication failed: {error}"
+                        ));
+                    }
+                    AuthExchangeResult::Cancelled => return AuthenticationOutcome::Cancelled,
+                    AuthExchangeResult::TimedOut => {
+                        return AuthenticationOutcome::Failed(
+                            "authentication exchange timed out".to_string(),
+                        );
+                    }
+                };
+                loop {
+                    match response {
+                        russh::client::KeyboardInteractiveAuthResponse::Success => {
+                            return AuthenticationOutcome::Authenticated;
+                        }
+                        russh::client::KeyboardInteractiveAuthResponse::Failure {
+                            remaining_methods,
+                            partial_success,
+                        } => {
+                            result = russh::client::AuthResult::Failure {
+                                remaining_methods,
+                                partial_success,
+                            };
+                            break;
+                        }
+                        russh::client::KeyboardInteractiveAuthResponse::InfoRequest {
+                            name,
+                            instructions,
+                            prompts,
+                        } => {
+                            let prompts = prompts
+                                .into_iter()
+                                .map(|prompt| AuthPrompt {
+                                    text: prompt.prompt,
+                                    echo: prompt.echo,
+                                })
+                                .collect();
+                            let challenge =
+                                match state.present_challenge(name, instructions, prompts) {
+                                    AuthAction::PresentChallenge(challenge) => challenge,
+                                    AuthAction::Fail(failure) => {
+                                        return AuthenticationOutcome::Failed(
+                                            auth_failure_message(failure).to_string(),
+                                        );
+                                    }
+                                    _ => {
+                                        return AuthenticationOutcome::Failed(
+                                            auth_failure_message(AuthFailure::UnexpectedChallenge)
+                                                .to_string(),
+                                        );
+                                    }
+                                };
+                            if !send_auth_event(
+                                auth_callback,
+                                AuthEvent::challenge(session_id, generation, challenge),
+                            ) {
+                                return AuthenticationOutcome::Failed(
+                                    "authentication callback delivery failed".to_string(),
+                                );
+                            }
+                            let mut command =
+                                match wait_for_auth_command(auth_rx, disconnect_rx).await {
+                                    AuthWaitResult::Command(command) => command,
+                                    AuthWaitResult::Cancelled => {
+                                        return AuthenticationOutcome::Cancelled;
+                                    }
+                                    AuthWaitResult::TimedOut => {
+                                        return AuthenticationOutcome::Failed(
+                                            "authentication response timed out".to_string(),
+                                        );
+                                    }
+                                };
+                            let (round_id, responses) = match &mut command {
+                                AuthMethod::KeyboardInteractiveResponses {
+                                    round_id,
+                                    responses,
+                                } => (*round_id, responses),
+                                _ => {
+                                    return AuthenticationOutcome::Failed(
+                                        auth_failure_message(AuthFailure::UnexpectedCredential)
+                                            .to_string(),
+                                    );
+                                }
+                            };
+                            if let Err(failure) = state.validate_responses(round_id, responses) {
+                                return AuthenticationOutcome::Failed(
+                                    auth_failure_message(failure).to_string(),
+                                );
+                            }
+                            let responses = std::mem::take(responses);
+                            response = match wait_for_auth_exchange(
+                                ssh.authenticate_keyboard_interactive_respond(responses),
+                                AUTH_EXCHANGE_TIMEOUT,
+                                disconnect_rx,
+                            )
+                            .await
+                            {
+                                AuthExchangeResult::Completed(response) => response,
+                                AuthExchangeResult::Failed(error) => {
+                                    return AuthenticationOutcome::Failed(format!(
+                                        "keyboard-interactive response failed: {error}"
+                                    ));
+                                }
+                                AuthExchangeResult::Cancelled => {
+                                    return AuthenticationOutcome::Cancelled;
+                                }
+                                AuthExchangeResult::TimedOut => {
+                                    return AuthenticationOutcome::Failed(
+                                        "authentication exchange timed out".to_string(),
+                                    );
+                                }
+                            };
+                        }
+                    }
+                }
+            }
+            AuthAction::Fail(failure) => {
+                return AuthenticationOutcome::Failed(auth_failure_message(failure).to_string());
+            }
+            AuthAction::PresentChallenge(_) => {
+                return AuthenticationOutcome::Failed(
+                    auth_failure_message(AuthFailure::UnexpectedChallenge).to_string(),
+                );
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum ConnectProgress {
     WaitingForUser,
@@ -293,16 +796,21 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_session(
     session_id: u32,
+    generation: u32,
     host: String,
     port: u16,
     user: String,
+    private_key_path: String,
+    private_key_requires_passphrase: bool,
     known_hosts_path: String,
     connect_timeout: Duration,
     data_callback: JsDataCallback,
     close_callback: JsCallback,
     control_callback: JsCallback,
+    auth_callback: JsAuthCallback,
     mut receivers: SessionReceivers,
 ) {
     let _cleanup_guard = SessionCleanupGuard(session_id);
@@ -314,6 +822,8 @@ async fn run_session(
     let config = Arc::new(build_client_config());
     let (connect_progress_tx, mut connect_progress_rx) = tokio::sync::mpsc::channel(2);
     let handler = ClientHandler {
+        session_id,
+        generation,
         host: host.clone(),
         port,
         known_hosts_path: PathBuf::from(known_hosts_path),
@@ -321,8 +831,9 @@ async fn run_session(
             .host_key_rx
             .take()
             .expect("host key receiver must exist"),
-        connect_progress_tx: connect_progress_tx,
+        connect_progress_tx,
         control_callback: control_callback.clone(),
+        auth_callback: auth_callback.clone(),
     };
     let connect = russh::client::connect(config, (host.as_str(), port), handler);
     let mut ssh = match wait_for_connect(
@@ -356,69 +867,29 @@ async fn run_session(
 
     eprintln!("[LTTY_SSH] session={} stage=kex_complete", session_id);
 
-    loop {
-        send_control(&control_callback, "PASSWORD_PROMPT");
-        let auth_method = tokio::select! {
-          method = receivers.auth_rx.recv() => method,
-          _ = receivers.disconnect_rx.recv() => {
+    match run_authentication(
+        session_id,
+        generation,
+        &user,
+        &private_key_path,
+        private_key_requires_passphrase,
+        &mut ssh,
+        &auth_callback,
+        &mut receivers.auth_rx,
+        &mut receivers.disconnect_rx,
+    )
+    .await
+    {
+        AuthenticationOutcome::Authenticated => {}
+        AuthenticationOutcome::Cancelled => {
             let _ = ssh
-              .disconnect(russh::Disconnect::ByApplication, "", "")
-              .await;
+                .disconnect(russh::Disconnect::ByApplication, "", "")
+                .await;
             return;
-          }
-        };
-
-        let auth_method = match auth_method {
-            Some(value) => value,
-            None => return,
-        };
-
-        match auth_method {
-            AuthMethod::Password(mut password) => {
-                let result = ssh.authenticate_password(&user, &password).await;
-                password.zeroize();
-                match result {
-                    Ok(value) if value.success() => break,
-                    Ok(_) => {
-                        send_control(&control_callback, "AUTH:rejected");
-                        return;
-                    }
-                    Err(error) => {
-                        send_control(&control_callback, &format!("AUTH:{}", error));
-                        return;
-                    }
-                }
-            }
-            AuthMethod::PrivateKey {
-                key_path,
-                mut passphrase,
-            } => {
-                let key_result = keygen::load_private_key(&key_path, &passphrase);
-                passphrase.zeroize();
-                match key_result {
-                    Ok(key) => {
-                        let wrapped =
-                            russh::keys::key::PrivateKeyWithHashAlg::new(Arc::new(key), None);
-                        match ssh.authenticate_publickey(&user, wrapped).await {
-                            Ok(result) if result.success() => break,
-                            Ok(_) => {
-                                eprintln!(
-                                    "[LTTY_SSH] session={} stage=key_rejected fallback=password",
-                                    session_id
-                                );
-                            }
-                            Err(error) => {
-                                send_control(&control_callback, &format!("AUTH:{}", error));
-                                return;
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        send_control(&control_callback, &format!("KEY_ERROR:{}", error));
-                        return;
-                    }
-                }
-            }
+        }
+        AuthenticationOutcome::Failed(error) => {
+            send_control(&control_callback, &format!("AUTH:{error}"));
+            return;
         }
     }
 
@@ -599,15 +1070,20 @@ async fn run_session(
 }
 
 #[napi]
+#[allow(clippy::too_many_arguments)]
 pub fn ssh_connect(
     host: String,
     port: u32,
     user: String,
+    private_key_path: String,
+    private_key_requires_passphrase: bool,
     known_hosts_path: String,
     connect_timeout_ms: u32,
+    generation: u32,
     on_data: Function<'_, Uint8Array, ()>,
     on_close: Function<'_, String, ()>,
     on_control: Function<'_, String, ()>,
+    on_auth: Function<'_, AuthEvent, ()>,
 ) -> Result<String> {
     if host.trim().is_empty() {
         return Err(napi_error("host must not be empty"));
@@ -623,6 +1099,9 @@ pub fn ssh_connect(
     }
     if connect_timeout_ms == 0 {
         return Err(napi_error("connect timeout must be positive"));
+    }
+    if generation == 0 {
+        return Err(napi_error("generation must be positive"));
     }
 
     let data_callback = Arc::new(
@@ -643,6 +1122,12 @@ pub fn ssh_connect(
             .max_queue_size::<64>()
             .build()?,
     );
+    let auth_callback = Arc::new(
+        on_auth
+            .build_threadsafe_function::<AuthEvent>()
+            .max_queue_size::<64>()
+            .build()?,
+    );
 
     let (write_tx, write_rx) = tokio::sync::mpsc::channel(4096);
     let (resize_tx, resize_rx) = tokio::sync::mpsc::channel(8);
@@ -658,6 +1143,7 @@ pub fn ssh_connect(
         .insert(
             session_id,
             ShellSession {
+                generation,
                 write_tx,
                 resize_tx,
                 disconnect_tx,
@@ -678,14 +1164,18 @@ pub fn ssh_connect(
 
     spawn(run_session(
         session_id,
+        generation,
         host,
         port as u16,
         user,
+        private_key_path,
+        private_key_requires_passphrase,
         known_hosts_path,
         Duration::from_millis(connect_timeout_ms as u64),
         data_callback,
         close_callback,
         control_callback,
+        auth_callback,
         receivers,
     ));
 
@@ -699,7 +1189,7 @@ fn parse_session_id(session_id: &str) -> Result<u32> {
 }
 
 #[napi]
-pub fn ssh_auth_password(session_id: String, password: String) -> Result<()> {
+pub fn ssh_auth_password(session_id: String, generation: u32, password: String) -> Result<()> {
     let id = parse_session_id(&session_id)?;
     let sessions = get_sessions()
         .lock()
@@ -707,6 +1197,9 @@ pub fn ssh_auth_password(session_id: String, password: String) -> Result<()> {
     let session = sessions
         .get(&id)
         .ok_or_else(|| napi_error("session not found"))?;
+    if session.generation != generation {
+        return Err(napi_error("stale authentication generation"));
+    }
     session
         .auth_tx
         .try_send(AuthMethod::Password(password))
@@ -714,9 +1207,9 @@ pub fn ssh_auth_password(session_id: String, password: String) -> Result<()> {
 }
 
 #[napi]
-pub fn ssh_auth_private_key(
+pub fn ssh_auth_private_key_passphrase(
     session_id: String,
-    key_path: String,
+    generation: u32,
     passphrase: String,
 ) -> Result<()> {
     let id = parse_session_id(&session_id)?;
@@ -726,11 +1219,37 @@ pub fn ssh_auth_private_key(
     let session = sessions
         .get(&id)
         .ok_or_else(|| napi_error("session not found"))?;
+    if session.generation != generation {
+        return Err(napi_error("stale authentication generation"));
+    }
     session
         .auth_tx
-        .try_send(AuthMethod::PrivateKey {
-            key_path,
-            passphrase,
+        .try_send(AuthMethod::PrivateKeyPassphrase(passphrase))
+        .map_err(|error| napi_error(&format!("send failed: {}", error)))
+}
+
+#[napi]
+pub fn ssh_auth_keyboard_interactive_responses(
+    session_id: String,
+    generation: u32,
+    round_id: u32,
+    responses: Vec<String>,
+) -> Result<()> {
+    let id = parse_session_id(&session_id)?;
+    let sessions = get_sessions()
+        .lock()
+        .map_err(|_| napi_error("session map lock poisoned"))?;
+    let session = sessions
+        .get(&id)
+        .ok_or_else(|| napi_error("session not found"))?;
+    if session.generation != generation {
+        return Err(napi_error("stale authentication generation"));
+    }
+    session
+        .auth_tx
+        .try_send(AuthMethod::KeyboardInteractiveResponses {
+            round_id,
+            responses,
         })
         .map_err(|error| napi_error(&format!("send failed: {}", error)))
 }
@@ -927,8 +1446,9 @@ pub fn ssh_protect_private_key(key_path: String) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_client_config, should_flush_immediately, wait_for_connect, ConnectProgress,
-        ConnectWaitResult, OutputDeliveryMetrics, SSH_KEEPALIVE_INTERVAL, SSH_KEEPALIVE_MAX,
+        build_client_config, should_flush_immediately, wait_for_auth_exchange, wait_for_connect,
+        AuthExchangeResult, ConnectProgress, ConnectWaitResult, OutputDeliveryMetrics,
+        AUTH_EXCHANGE_TIMEOUT, SSH_KEEPALIVE_INTERVAL, SSH_KEEPALIVE_MAX,
     };
     use napi_ohos::Status;
     use std::future::pending;
@@ -987,6 +1507,34 @@ mod tests {
         assert_eq!(config.keepalive_max, SSH_KEEPALIVE_MAX);
         assert_eq!(SSH_KEEPALIVE_INTERVAL, Duration::from_secs(30));
         assert_eq!(SSH_KEEPALIVE_MAX, 3);
+        assert_eq!(AUTH_EXCHANGE_TIMEOUT, Duration::from_secs(30));
+    }
+
+    #[tokio::test]
+    async fn stalled_auth_exchange_times_out() {
+        let (_disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel(1);
+        let result = wait_for_auth_exchange(
+            pending::<std::result::Result<(), ()>>(),
+            Duration::from_millis(1),
+            &mut disconnect_rx,
+        )
+        .await;
+
+        assert!(matches!(result, AuthExchangeResult::TimedOut));
+    }
+
+    #[tokio::test]
+    async fn stalled_auth_exchange_can_be_cancelled() {
+        let (disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel(1);
+        disconnect_tx.send(()).await.unwrap();
+        let result = wait_for_auth_exchange(
+            pending::<std::result::Result<(), ()>>(),
+            Duration::from_secs(1),
+            &mut disconnect_rx,
+        )
+        .await;
+
+        assert!(matches!(result, AuthExchangeResult::Cancelled));
     }
 
     #[tokio::test]

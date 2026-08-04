@@ -1,11 +1,15 @@
 import { SshErrorCode, SshError, SshConnectOptions } from '../../common/types/SshTypes'
 import { Logger } from '../../common/logger/Logger'
 import sshNative from 'libleantty_ssh.so'
+import type { AuthEvent as NativeAuthEvent, AuthPromptEvent as NativeAuthPromptEvent } from 'libleantty_ssh.so'
 
 export { SshErrorCode, SshError, SshConnectOptions } from '../../common/types/SshTypes'
 
 export enum SshClientEvent {
   PASSWORD_PROMPT = 'PASSWORD_PROMPT',
+  PRIVATE_KEY_PASSPHRASE_PROMPT = 'PRIVATE_KEY_PASSPHRASE_PROMPT',
+  AUTH_BANNER = 'AUTH_BANNER',
+  AUTH_CHALLENGE = 'AUTH_CHALLENGE',
   HOST_KEY_PROMPT = 'HOST_KEY_PROMPT',
   HOST_KEY_CHANGED = 'HOST_KEY_CHANGED',
   CONNECTED = 'CONNECTED',
@@ -13,6 +17,18 @@ export enum SshClientEvent {
   CLOSE = 'CLOSE',
   ERROR = 'ERROR',
   WARNING = 'WARNING'
+}
+
+export class AuthPromptInfo {
+  text: string = ''
+  echo: boolean = false
+}
+
+export class AuthChallengeInfo {
+  roundId: number = 0
+  name: string = ''
+  instructions: string = ''
+  prompts: AuthPromptInfo[] = []
 }
 
 export class HostKeyChangedInfo {
@@ -24,13 +40,27 @@ export class HostKeyChangedInfo {
 }
 
 export class SshClient {
+  private static nextGeneration: number = 1
   private sessionId: string = ''
+  private generation: number = 0
   private connected: boolean = false
   private waitingAuth: boolean = false
   private pendingKnownHostLine: string = ''
+  private privateKeyPath: string = ''
+  private pendingAuthChallenge: AuthChallengeInfo | null = null
   private eventCallback: ((event: SshClientEvent, data: string) => void) | null = null
   private dataCallback: ((data: Uint8Array) => void) | null = null
   private logger: Logger = new Logger('SshClient')
+
+  static isCurrentAuthEvent(
+    expectedSessionId: string,
+    expectedGeneration: number,
+    eventSessionId: string,
+    eventGeneration: number
+  ): boolean {
+    return expectedSessionId.length > 0 && eventSessionId === expectedSessionId &&
+      eventGeneration === expectedGeneration
+  }
 
   async connect(options: SshConnectOptions): Promise<void> {
     if (this.sessionId.length > 0) {
@@ -39,12 +69,21 @@ export class SshClient {
     }
 
     try {
+      this.generation = SshClient.nextGeneration
+      SshClient.nextGeneration++
+      if (SshClient.nextGeneration > 4294967295) {
+        SshClient.nextGeneration = 1
+      }
+      this.privateKeyPath = options.privateKeyPath
       let id: string = sshNative.sshConnect(
         options.host,
         options.port,
         options.username,
+        options.privateKeyPath,
+        options.privateKeyRequiresPassphrase,
         options.knownHostsPath,
         options.connectTimeoutMs,
+        this.generation,
         (data: Uint8Array) => {
           if (this.dataCallback !== null) {
             this.dataCallback(data)
@@ -61,6 +100,9 @@ export class SshClient {
         },
         (event: string) => {
           this.handleRustEvent(event)
+        },
+        (event: NativeAuthEvent) => {
+          this.handleNativeAuthEvent(event)
         }
       )
       this.sessionId = id
@@ -77,7 +119,8 @@ export class SshClient {
       return false
     }
     try {
-      sshNative.sshAuthPassword(this.sessionId, password)
+      sshNative.sshAuthPassword(this.sessionId, this.generation, password)
+      this.waitingAuth = false
       this.logger.info('Auth password sent')
       return true
     } catch (e) {
@@ -87,21 +130,47 @@ export class SshClient {
     }
   }
 
-  authPrivateKey(keyPath: string, passphrase: string): boolean {
-    if (this.sessionId.length === 0) {
-      this.reportError(new SshError(SshErrorCode.SessionClosed, 'Session not active', '', 'client'))
+  authPrivateKeyPassphrase(passphrase: string): boolean {
+    if (!this.waitingAuth || this.sessionId.length === 0) {
+      this.reportError(new SshError(SshErrorCode.SessionClosed, 'Not waiting for a key passphrase', '', 'client'))
       return false
     }
     try {
-      sshNative.sshAuthPrivateKey(this.sessionId, keyPath, passphrase)
-      this.waitingAuth = true
-      this.logger.info('Auth private key sent: ' + keyPath)
+      sshNative.sshAuthPrivateKeyPassphrase(this.sessionId, this.generation, passphrase)
+      this.waitingAuth = false
+      this.logger.info('Private-key passphrase sent')
       return true
     } catch (e) {
-      this.logger.error('sshAuthPrivateKey failed: ' + e)
-      this.reportError(new SshError(SshErrorCode.Internal, 'Private key auth request failed', '' + e, 'client'))
+      this.logger.error('sshAuthPrivateKeyPassphrase failed: ' + e)
+      this.reportError(new SshError(SshErrorCode.Internal, 'Private-key passphrase request failed', '' + e, 'client'))
       return false
     }
+  }
+
+  authKeyboardInteractiveResponses(roundId: number, responses: string[]): boolean {
+    if (!this.waitingAuth || this.sessionId.length === 0) {
+      this.reportError(new SshError(SshErrorCode.SessionClosed, 'Not waiting for authentication responses', '', 'client'))
+      return false
+    }
+    try {
+      sshNative.sshAuthKeyboardInteractiveResponses(
+        this.sessionId, this.generation, roundId, responses
+      )
+      this.waitingAuth = false
+      this.pendingAuthChallenge = null
+      this.logger.info('Keyboard-interactive responses sent, roundId=' + roundId.toString())
+      return true
+    } catch (e) {
+      this.logger.error('sshAuthKeyboardInteractiveResponses failed: ' + e)
+      this.reportError(new SshError(SshErrorCode.Internal, 'Authentication response request failed', '' + e, 'client'))
+      return false
+    }
+  }
+
+  takePendingAuthChallenge(): AuthChallengeInfo | null {
+    let challenge: AuthChallengeInfo | null = this.pendingAuthChallenge
+    this.pendingAuthChallenge = null
+    return challenge
   }
 
   verifyHostKey(accepted: boolean): boolean {
@@ -171,6 +240,7 @@ export class SshClient {
     }
     this.connected = false
     this.waitingAuth = false
+    this.pendingAuthChallenge = null
     this.sessionId = ''
   }
 
@@ -223,10 +293,7 @@ export class SshClient {
 
   private handleRustEvent(event: string): void {
     this.logger.info('rust event: ' + event)
-    if (event === 'PASSWORD_PROMPT') {
-      this.waitingAuth = true
-      this.emitEvent(SshClientEvent.PASSWORD_PROMPT, '')
-    } else if (event === 'CONNECTED') {
+    if (event === 'CONNECTED') {
       this.waitingAuth = false
       this.connected = true
       this.logger.info('SSH connected')
@@ -261,6 +328,53 @@ export class SshClient {
     }
   }
 
+  private handleNativeAuthEvent(event: NativeAuthEvent): void {
+    if (!SshClient.isCurrentAuthEvent(
+      this.sessionId, this.generation, event.sessionId, event.generation
+    )) {
+      this.logger.warn('Rejected stale native auth event, kind=' + event.kind)
+      return
+    }
+    this.logger.info('native auth event kind=' + event.kind)
+    if (event.kind === 'banner') {
+      this.emitEvent(SshClientEvent.AUTH_BANNER, event.text)
+      return
+    }
+    if (event.kind === 'password') {
+      this.waitingAuth = true
+      this.emitEvent(SshClientEvent.PASSWORD_PROMPT, '')
+      return
+    }
+    if (event.kind === 'private_key_passphrase') {
+      this.waitingAuth = true
+      this.emitEvent(SshClientEvent.PRIVATE_KEY_PASSPHRASE_PROMPT, this.privateKeyPath)
+      return
+    }
+    if (event.kind === 'challenge') {
+      if (!Number.isInteger(event.roundId) || event.roundId < 1) {
+        this.handleError('AUTH:Invalid keyboard-interactive round')
+        return
+      }
+      let challenge: AuthChallengeInfo = new AuthChallengeInfo()
+      challenge.roundId = event.roundId
+      challenge.name = event.name
+      challenge.instructions = event.instructions
+      challenge.prompts = []
+      for (let i = 0; i < event.prompts.length; i++) {
+        let nativePrompt: NativeAuthPromptEvent = event.prompts[i]
+        let prompt: AuthPromptInfo = new AuthPromptInfo()
+        prompt.text = nativePrompt.text
+        prompt.echo = nativePrompt.echo
+        challenge.prompts.push(prompt)
+      }
+      this.pendingAuthChallenge = challenge
+      this.waitingAuth = true
+      this.emitEvent(SshClientEvent.AUTH_CHALLENGE, '')
+      return
+    }
+    this.handleError('AUTH:Unknown native authentication event')
+  }
+
   private emitEvent(event: SshClientEvent, data: string): void {
     if (this.eventCallback !== null) {
       this.eventCallback(event, data)
@@ -279,6 +393,7 @@ export class SshClient {
   private handleClose(exitCode: number): void {
     this.connected = false
     this.waitingAuth = false
+    this.pendingAuthChallenge = null
     this.sessionId = ''
     this.emitEvent(SshClientEvent.CLOSE, exitCode.toString())
   }
@@ -286,6 +401,7 @@ export class SshClient {
   private handleError(errorStr: string): void {
     this.connected = false
     this.waitingAuth = false
+    this.pendingAuthChallenge = null
     this.sessionId = ''
     let code: SshErrorCode = SshErrorCode.Internal
     let detail: string = errorStr
