@@ -169,6 +169,10 @@ AuthChallenge
 
 ### 自动化
 
+- Native 宿主测试通过仅在 `dev-dependencies` 启用的 `napi-ohos/dyn-symbols` 运行；统一
+  回归同时检查 production `normal,build` 依赖树不含 `dyn-symbols` 或 `noop`，ARM64
+  production native 仍按真实 N-API 链接。当前已执行认证交换成功/失败、交换超时、回答
+  超时、取消、generation 拒绝和两条独立 Session 回答通道隔离测试。
 - 现有密码、未加密/加密 ed25519 与 RSA 私钥及错误口令回归。
 - banner 的 Unicode/换行保留与控制序列过滤；banner 不创建轮次。
 - success、普通失败、部分成功及不同 `remaining_methods` 组合。

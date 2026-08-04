@@ -4,6 +4,11 @@
 
 ### Development
 
+- Made the native SSH lifecycle tests executable in WSL through a dev-only
+  dynamic N-API symbol mode. The regression gate now covers authentication
+  exchange success/failure, response and exchange timeouts, cancellation,
+  generation rejection and parallel-session channel isolation, while asserting
+  that test-only symbol features are absent from the production dependency tree.
 - Added structured SSH keyboard-interactive and multi-method authentication across
   Rust, N-API and ArkTS. The per-session state machine follows server-provided
   remaining methods and partial success, supports banners, mixed-echo multi-prompt
