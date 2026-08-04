@@ -773,6 +773,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "leantty-ssh-auth-fixture"
+version = "0.0.0"
+dependencies = [
+ "rand",
+ "russh",
+ "tokio",
+ "zeroize",
+]
+
+[[package]]
 name = "leantty-ssh-core"
 version = "1.0.1"
 dependencies = [

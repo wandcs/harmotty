@@ -217,6 +217,27 @@ Invoke-RegressionCheck -Name 'rust-core-tests-wsl' -Action {
     )
 }
 
+Invoke-RegressionCheck -Name 'ssh-auth-fixture-tests-wsl' -Action {
+    Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
+        'test', '--locked', '--manifest-path', './leantty_ssh/Cargo.toml',
+        '-p', 'leantty-ssh-auth-fixture'
+    )
+}
+
+Invoke-RegressionCheck -Name 'ssh-auth-fixture-clippy-wsl' -Action {
+    Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
+        'clippy', '--locked', '--manifest-path', './leantty_ssh/Cargo.toml',
+        '-p', 'leantty-ssh-auth-fixture', '--all-targets', '--', '-D', 'warnings'
+    )
+}
+
+Invoke-RegressionCheck -Name 'ssh-auth-fixture-e2e-wsl' -Action {
+    $wslRepoRoot = ConvertTo-LeanTTYWslPath -WindowsPath $repoRoot
+    $wslPrefix = Get-LeanTTYWslPrefix
+    & wsl.exe @wslPrefix --cd $wslRepoRoot -- env RUSTUP_TOOLCHAIN=stable bash ./leantty_ssh/ssh-auth-fixture/test-e2e.sh
+    if ($LASTEXITCODE -ne 0) { throw 'SSH authentication fixture end-to-end tests failed' }
+}
+
 Invoke-RegressionCheck -Name 'git-diff-check' -Action {
     & git -C $repoRoot diff --check
     if ($LASTEXITCODE -ne 0) { throw 'Unstaged diff check failed' }

@@ -1,0 +1,12 @@
+[package]
+name = "leantty-ssh-auth-fixture"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+rand = { version = "0.10", features = ["sys_rng"] }
+russh = { version = "0.62", default-features = false, features = ["ring", "rsa"] }
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "time"] }
+zeroize = "1"

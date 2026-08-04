@@ -8,7 +8,7 @@ repository  = "https://github.com/wandcs/leantty"
 authors     = ["LeanTTY Contributors"]
 
 [workspace]
-members = ["leantty-ssh-core"]
+members = ["leantty-ssh-core", "ssh-auth-fixture"]
 default-members = ["."]
 resolver = "2"
 
