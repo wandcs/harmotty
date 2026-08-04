@@ -70,11 +70,17 @@ rustup target add aarch64-unknown-linux-ohos
 # Build only
 .\tools\build-all.ps1
 
+# Mandatory software regression gate
+.\tools\test-regression.ps1
+
 # Normal maintainer loop: build, test-sign, install and launch
 .\tools\dev-pc.ps1
 
-# Important checkpoint: tests, clean ARM64 build and real-PC deployment
+# Clean committed candidate: tests, ARM64 build and real-PC deployment
 .\tools\verify-pc.ps1
+
+# Named physical behavior scenario against the retained candidate
+.\tools\verify-key-passphrase-pc.ps1
 ```
 
 Device deployment requires a local signing configuration and certificate.

@@ -89,14 +89,10 @@ not source and must remain untracked.
 
 ## Verification
 
-Public checks:
+Mandatory software regression gate:
 
 ```powershell
-.\tools\check-public-source.ps1
-wsl.exe --cd . -- cargo fmt --check --manifest-path ./leantty_ssh/Cargo.toml
-wsl.exe --cd . -- cargo clippy --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
-wsl.exe --cd . -- cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
-node .\tools\web-terminal\test-terminal-policy.mjs
+.\tools\test-regression.ps1
 ```
 
 Rust formatting, tests and compilation run in WSL. The maintainer scripts use
@@ -108,11 +104,14 @@ Maintainer application gate:
 ```powershell
 .\tools\dev-pc.ps1
 .\tools\verify-pc.ps1
+.\tools\verify-key-passphrase-pc.ps1
 ```
 
 Automated tests prove pure logic and protocol behavior. ARM64 builds prove
-target integration. Only a physical HarmonyOS PC proves focus, keyboard,
-clipboard, windows, persistence, terminal interaction and SSH lifecycle.
+target integration. Install and launch prove only deployment. A named scenario
+against the same retained HAP is required to prove focus, keyboard, clipboard,
+windows, persistence, terminal interaction or SSH lifecycle. Follow the full
+mandatory sequence in [`quality-strategy.md`](quality-strategy.md).
 
 ## Change discipline
 

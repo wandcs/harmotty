@@ -33,20 +33,20 @@ Required tools:
 Useful commands:
 
 ```powershell
-# Public checks that do not require DevEco or a device
-.\tools\check-public-source.ps1
-wsl.exe --cd . -- cargo fmt --check --manifest-path ./leantty_ssh/Cargo.toml
-wsl.exe --cd . -- cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
-node .\tools\web-terminal\test-terminal-policy.mjs
+# Mandatory software regression gate
+.\tools\test-regression.ps1
 
-# Full maintainer gate
+# Clean ARM64 candidate build and physical-PC deployment
 .\tools\verify-pc.ps1
+
+# Feature-owned behavior acceptance for the exact retained candidate
+.\tools\verify-key-passphrase-pc.ps1
 ```
 
 LeanTTY runs Rust formatting, tests and compilation in WSL. The maintainer
 scripts invoke WSL automatically; the Windows DevEco SDK supplies only the
 OHOS target linker and archive tools. To run a Rust check manually, open WSL at
-the mounted checkout or prefix the command with `wsl.exe --cd . --`:
+the mounted checkout:
 
 ```bash
 cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
@@ -56,6 +56,11 @@ Public CI checks source policy, Rust core behavior and Web terminal policy.
 DevEco compilation, signed HAP deployment and device-visible interaction remain
 maintainer gates because they require the HarmonyOS SDK, local signing material
 and a physical PC.
+
+All changes must follow the mandatory sequence and evidence classification in
+[`docs/quality-strategy.md`](docs/quality-strategy.md). Installation and launch
+record only `device-deployed`; changed device behavior is accepted only after a
+named scenario promotes the same clean retained HAP to `device-behavior`.
 
 ## Change rules
 
@@ -89,6 +94,10 @@ A pull request should include:
 4. Real-PC evidence when the behavior is device-visible.
 5. Screenshots only when they materially help review, with personal data
    redacted.
+
+For application changes, include the retained candidate SHA-256, its
+verification mode and the local evidence file names. Do not paste private
+device identifiers, host details or raw logs.
 
 Small, reviewable pull requests are preferred. There is no mechanical line
 limit, but unrelated refactoring should be split out.

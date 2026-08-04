@@ -190,7 +190,12 @@ export class SessionViewModel {
     }
     this.session.setState(SshSessionState.DISCONNECTED)
     this.privateKeyAttempted = false
+    let cancelledKeyPassphraseChange: boolean =
+      this.keyPassphraseChangeStage !== KeyPassphraseChangeStage.NONE
     this.clearKeyPassphraseChangeState()
+    if (cancelledKeyPassphraseChange) {
+      this.logger.info('KEY_PASSPHRASE_CHANGE result=disconnected')
+    }
     this.setMode(TerminalMode.IDLE)
     this.releaseDisconnectedFlowControl()
     this.notifyStateChange()
@@ -821,6 +826,7 @@ export class SessionViewModel {
     this.keyPassphraseChangeKeyName = keyName
     this.keyPassphraseChangeStage = KeyPassphraseChangeStage.OLD_PASSPHRASE
     this.setMode(TerminalMode.KEY_PASSPHRASE_CHANGE_INPUT)
+    this.logger.info('KEY_PASSPHRASE_CHANGE stage=old')
     this.writeTerminal('\r\nOld passphrase (leave empty if none): ')
   }
 
@@ -830,11 +836,13 @@ export class SessionViewModel {
     }
     if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.OLD_PASSPHRASE) {
       this.keyPassphraseChangeStage = KeyPassphraseChangeStage.NEW_PASSPHRASE
+      this.logger.info('KEY_PASSPHRASE_CHANGE stage=new')
       this.writeTerminal('\r\nNew passphrase (leave empty for none): ')
       return
     }
     if (this.keyPassphraseChangeStage === KeyPassphraseChangeStage.NEW_PASSPHRASE) {
       this.keyPassphraseChangeStage = KeyPassphraseChangeStage.CONFIRM_NEW_PASSPHRASE
+      this.logger.info('KEY_PASSPHRASE_CHANGE stage=confirm')
       this.writeTerminal('\r\nConfirm new passphrase: ')
       return
     }
@@ -844,6 +852,7 @@ export class SessionViewModel {
     if (this.newKeyPassphrase !== this.confirmedKeyPassphrase) {
       this.clearKeyPassphraseChangeSecrets()
       this.keyPassphraseChangeStage = KeyPassphraseChangeStage.OLD_PASSPHRASE
+      this.logger.info('KEY_PASSPHRASE_CHANGE result=mismatch stage=old')
       this.writeTerminal('\r\nPassphrases do not match. No changes were made.\r\n' +
         'Old passphrase (leave empty if none): ')
       return
@@ -851,6 +860,7 @@ export class SessionViewModel {
     if (this.context === null) {
       this.clearKeyPassphraseChangeState()
       this.setMode(TerminalMode.IDLE)
+      this.logger.warn('KEY_PASSPHRASE_CHANGE result=failure reason=context')
       this.writeError('Key passphrase change failed: context not available')
       return
     }
@@ -862,9 +872,11 @@ export class SessionViewModel {
     try {
       SshKeyManager.changeKeyPassphrase(context, keyName, oldPassphrase, newPassphrase)
       this.setMode(TerminalMode.IDLE)
+      this.logger.info('KEY_PASSPHRASE_CHANGE result=success')
       this.writeTerminal('\r\nPassphrase updated: ' + keyName + '\r\nltty> ')
     } catch (e) {
       this.setMode(TerminalMode.IDLE)
+      this.logger.warn('KEY_PASSPHRASE_CHANGE result=failure reason=native')
       this.writeError('Key passphrase change failed: ' + e)
     }
     oldPassphrase = ''
@@ -874,6 +886,7 @@ export class SessionViewModel {
   private cancelKeyPassphraseChange(): void {
     this.clearKeyPassphraseChangeState()
     this.setMode(TerminalMode.IDLE)
+    this.logger.info('KEY_PASSPHRASE_CHANGE result=cancelled')
     this.writeTerminal('^C')
     this.writePrompt()
   }

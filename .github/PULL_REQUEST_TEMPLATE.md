@@ -10,16 +10,23 @@ failure mode. Write “none” when applicable.
 
 ## Verification
 
-- [ ] Public source policy check passes.
-- [ ] Relevant automated tests pass.
-- [ ] Rust formatting passes when Rust changed.
-- [ ] ArkTS/HAP build was verified by a maintainer when application code changed.
-- [ ] Physical ARM64 HarmonyOS PC behavior was verified when the change affects
-      focus, keyboard, clipboard, windows, persistence, terminal interaction or
-      SSH lifecycle.
+- [ ] `tools/test-regression.ps1` passes.
+- [ ] Relevant focused positive, negative and recovery tests pass.
+- [ ] A clean ARM64 HAP candidate was retained when application code changed.
+- [ ] A named physical scenario passed against that exact HAP when the change
+      affects focus, keyboard, clipboard, windows, persistence, terminal
+      interaction or SSH lifecycle.
+- [ ] Required remote checks pass without administrative bypass.
 - [ ] Documentation and release notes were updated when needed.
 
 List commands and concise results:
+
+```text
+
+```
+
+Candidate SHA-256 / mode / evidence file names (write “not applicable” for a
+documentation-only change):
 
 ```text
 

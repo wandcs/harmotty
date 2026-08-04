@@ -62,7 +62,8 @@ function Get-LeanTTYCandidateRecords {
         try {
             $manifest = Get-Content -LiteralPath $manifestPath -Raw |
                 ConvertFrom-Json
-            if ([int]$manifest.schemaVersion -ne 1) {
+            $schemaVersion = [int]$manifest.schemaVersion
+            if ($schemaVersion -notin @(1, 2)) {
                 throw 'Unsupported schema version'
             }
             $manifestHash = [string]$manifest.sha256
@@ -75,8 +76,27 @@ function Get-LeanTTYCandidateRecords {
                 throw 'Unexpected candidate HAP name'
             }
             $verificationMode = [string]$manifest.verificationMode
-            if ($verificationMode -notin @('software', 'device')) {
+            if ($verificationMode -eq 'device') {
+                $verificationMode = 'device-deployed'
+            }
+            if ($verificationMode -notin @('software', 'device-deployed', 'device-behavior')) {
                 throw 'Unexpected candidate verification mode'
+            }
+            $evidenceFiles = @()
+            if ($schemaVersion -ge 2 -and $null -ne $manifest.evidenceFiles) {
+                foreach ($evidenceFile in @($manifest.evidenceFiles)) {
+                    $evidenceName = [string]$evidenceFile
+                    if ($evidenceName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\.json$') {
+                        throw 'Unexpected candidate evidence file name'
+                    }
+                    $evidencePath = Assert-LeanTTYCandidatePath `
+                        -CandidateRoot $CandidateRoot `
+                        -Path (Join-Path $directory.FullName (Join-Path 'evidence' $evidenceName))
+                    if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) {
+                        throw "Candidate evidence is missing: $evidencePath"
+                    }
+                    $evidenceFiles += $evidencePath
+                }
             }
             $verifiedAtValue = $manifest.verifiedAt
             if ($verifiedAtValue -is [DateTimeOffset]) {
@@ -104,6 +124,7 @@ function Get-LeanTTYCandidateRecords {
             gitCommit = [string]$manifest.git.commit
             gitTree = [string]$manifest.git.tree
             gitDirty = [bool]$manifest.git.dirty
+            evidenceFiles = @($evidenceFiles)
         }
     }
 
@@ -133,8 +154,9 @@ function Save-LeanTTYVerifiedCandidate {
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [Parameter(Mandatory = $true)][string]$HapPath,
         [Parameter(Mandatory = $true)]
-        [ValidateSet('software', 'device')]
+        [ValidateSet('software', 'device-deployed', 'device-behavior')]
         [string]$VerificationMode,
+        [string[]]$EvidencePaths = @(),
         [string]$CandidateBasePath = ''
     )
 
@@ -162,6 +184,22 @@ function Save-LeanTTYVerifiedCandidate {
     $candidateHap = Join-Path $candidateDirectory $candidateHapName
     $manifestPath = Join-Path $candidateDirectory 'manifest.json'
 
+    $modeRank = @{
+        software = 1
+        'device-deployed' = 2
+        'device-behavior' = 3
+    }
+    $existingManifest = $null
+    if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+        $existingManifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $existingMode = [string]$existingManifest.verificationMode
+        if ($existingMode -eq 'device') { $existingMode = 'device-deployed' }
+        if ($modeRank.ContainsKey($existingMode) -and
+            $modeRank[$existingMode] -gt $modeRank[$VerificationMode]) {
+            $VerificationMode = $existingMode
+        }
+    }
+
     $gitCommit = (& git -C $RepoRoot rev-parse HEAD 2>&1).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve candidate Git commit' }
     $gitTree = (& git -C $RepoRoot rev-parse 'HEAD^{tree}' 2>&1).Trim()
@@ -169,18 +207,52 @@ function Save-LeanTTYVerifiedCandidate {
     $gitStatus = @(git -C $RepoRoot status --porcelain --untracked-files=all 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve candidate Git dirty state' }
 
+    $manifestEvidenceFiles = [Collections.Generic.List[string]]::new()
+    if ($null -ne $existingManifest -and $null -ne $existingManifest.evidenceFiles) {
+        foreach ($existingEvidence in @($existingManifest.evidenceFiles)) {
+            $manifestEvidenceFiles.Add([string]$existingEvidence)
+        }
+    }
+    foreach ($evidencePath in @($EvidencePaths)) {
+        $resolvedEvidence = [IO.Path]::GetFullPath($evidencePath)
+        if (-not (Test-Path -LiteralPath $resolvedEvidence -PathType Leaf)) {
+            throw "Candidate evidence file is missing: $resolvedEvidence"
+        }
+        if ([IO.Path]::GetExtension($resolvedEvidence) -ne '.json') {
+            throw "Candidate evidence must be JSON: $resolvedEvidence"
+        }
+        $evidenceName = Split-Path $resolvedEvidence -Leaf
+        if ($evidenceName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\.json$') {
+            throw "Candidate evidence file name is unsafe: $evidenceName"
+        }
+        if (-not $manifestEvidenceFiles.Contains($evidenceName)) {
+            $manifestEvidenceFiles.Add($evidenceName)
+        }
+    }
+
+    $gitManifest = if ($null -ne $existingManifest) {
+        [ordered]@{
+            commit = [string]$existingManifest.git.commit
+            tree = [string]$existingManifest.git.tree
+            dirty = [bool]$existingManifest.git.dirty
+        }
+    } else {
+        [ordered]@{
+            commit = $gitCommit
+            tree = $gitTree
+            dirty = ($gitStatus.Count -gt 0)
+        }
+    }
+
     $manifest = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         verifiedAt = [DateTimeOffset]::UtcNow.ToString('o')
         verificationMode = $VerificationMode
         hapFile = $candidateHapName
         sha256 = $hapHash
         size = (Get-Item -LiteralPath $sourceHap).Length
-        git = [ordered]@{
-            commit = $gitCommit
-            tree = $gitTree
-            dirty = ($gitStatus.Count -gt 0)
-        }
+        git = $gitManifest
+        evidenceFiles = @($manifestEvidenceFiles)
     }
 
     $temporaryDirectory = Assert-LeanTTYCandidatePath `
@@ -191,6 +263,23 @@ function Save-LeanTTYVerifiedCandidate {
         $temporaryHap = Join-Path $temporaryDirectory $candidateHapName
         $temporaryManifest = Join-Path $temporaryDirectory 'manifest.json'
         Copy-Item -LiteralPath $sourceHap -Destination $temporaryHap
+        if ($manifestEvidenceFiles.Count -gt 0) {
+            $temporaryEvidenceDirectory = Join-Path $temporaryDirectory 'evidence'
+            New-Item -ItemType Directory -Path $temporaryEvidenceDirectory -Force | Out-Null
+            if ($null -ne $existingManifest) {
+                $existingEvidenceDirectory = Join-Path $candidateDirectory 'evidence'
+                foreach ($existingEvidence in @($existingManifest.evidenceFiles)) {
+                    $existingEvidencePath = Join-Path $existingEvidenceDirectory ([string]$existingEvidence)
+                    if (Test-Path -LiteralPath $existingEvidencePath -PathType Leaf) {
+                        Copy-Item -LiteralPath $existingEvidencePath -Destination $temporaryEvidenceDirectory
+                    }
+                }
+            }
+            foreach ($evidencePath in @($EvidencePaths)) {
+                Copy-Item -LiteralPath ([IO.Path]::GetFullPath($evidencePath)) `
+                    -Destination $temporaryEvidenceDirectory -Force
+            }
+        }
         [IO.File]::WriteAllText(
             $temporaryManifest,
             (ConvertTo-Json -InputObject $manifest -Depth 4),
@@ -200,6 +289,14 @@ function Save-LeanTTYVerifiedCandidate {
         if (Test-Path -LiteralPath $candidateDirectory -PathType Container) {
             Copy-Item -LiteralPath $temporaryHap -Destination $candidateHap -Force
             Copy-Item -LiteralPath $temporaryManifest -Destination $manifestPath -Force
+            $temporaryEvidenceDirectory = Join-Path $temporaryDirectory 'evidence'
+            if (Test-Path -LiteralPath $temporaryEvidenceDirectory -PathType Container) {
+                $candidateEvidenceDirectory = Join-Path $candidateDirectory 'evidence'
+                New-Item -ItemType Directory -Path $candidateEvidenceDirectory -Force | Out-Null
+                Get-ChildItem -LiteralPath $temporaryEvidenceDirectory -File | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination $candidateEvidenceDirectory -Force
+                }
+            }
         } else {
             Move-Item -LiteralPath $temporaryDirectory -Destination $candidateDirectory
         }

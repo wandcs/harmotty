@@ -425,8 +425,8 @@ pub fn read_public_key_fingerprint(key_path: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        change_private_key_passphrase, change_private_key_passphrase_with_replace,
-        export_key_pair, generate_key_pair, inspect_private_key, load_private_key,
+        change_private_key_passphrase, change_private_key_passphrase_with_replace, export_key_pair,
+        generate_key_pair, inspect_private_key, load_private_key,
     };
 
     #[test]
@@ -559,28 +559,30 @@ mod tests {
 
     #[test]
     fn changes_passphrase_without_changing_key_identity_or_comment() {
-        let root = std::env::temp_dir().join(format!(
-            "leantty-change-passphrase-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("leantty-change-passphrase-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let root_text = root.to_string_lossy().to_string();
         let generated =
-            generate_key_pair("ed25519", &root_text, "deploy", "old-secret", "test@host")
-                .unwrap();
+            generate_key_pair("ed25519", &root_text, "deploy", "old-secret", "test@host").unwrap();
         let before = inspect_private_key(&generated.private_path).unwrap();
         let before_bytes = std::fs::read(&generated.private_path).unwrap();
         let before_public = std::fs::read(&generated.public_path).unwrap();
 
-        change_private_key_passphrase(&generated.private_path, "old-secret", "new-secret")
-            .unwrap();
+        change_private_key_passphrase(&generated.private_path, "old-secret", "new-secret").unwrap();
 
         let after = inspect_private_key(&generated.private_path).unwrap();
         assert_eq!(after.fingerprint, before.fingerprint);
         assert_eq!(after.public_key, before.public_key);
         assert!(after.encrypted);
-        assert_ne!(std::fs::read(&generated.private_path).unwrap(), before_bytes);
-        assert_eq!(std::fs::read(&generated.public_path).unwrap(), before_public);
+        assert_ne!(
+            std::fs::read(&generated.private_path).unwrap(),
+            before_bytes
+        );
+        assert_eq!(
+            std::fs::read(&generated.public_path).unwrap(),
+            before_public
+        );
         assert!(load_private_key(&generated.private_path, "old-secret").is_err());
         let loaded = load_private_key(&generated.private_path, "new-secret").unwrap();
         assert_eq!(loaded.comment().as_str().unwrap(), "test@host");
@@ -599,9 +601,17 @@ mod tests {
         let generated = generate_key_pair("ed25519", &root_text, "deploy", "", "").unwrap();
 
         change_private_key_passphrase(&generated.private_path, "", "new-secret").unwrap();
-        assert!(inspect_private_key(&generated.private_path).unwrap().encrypted);
+        assert!(
+            inspect_private_key(&generated.private_path)
+                .unwrap()
+                .encrypted
+        );
         change_private_key_passphrase(&generated.private_path, "new-secret", "").unwrap();
-        assert!(!inspect_private_key(&generated.private_path).unwrap().encrypted);
+        assert!(
+            !inspect_private_key(&generated.private_path)
+                .unwrap()
+                .encrypted
+        );
         assert!(load_private_key(&generated.private_path, "").is_ok());
 
         let _ = std::fs::remove_dir_all(&root);
@@ -616,16 +626,17 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let root_text = root.to_string_lossy().to_string();
         let generated =
-            generate_key_pair("rsa", &root_text, "deploy_rsa", "old-secret", "rsa@host")
-                .unwrap();
+            generate_key_pair("rsa", &root_text, "deploy_rsa", "old-secret", "rsa@host").unwrap();
         let public_before = std::fs::read(&generated.public_path).unwrap();
 
-        change_private_key_passphrase(&generated.private_path, "old-secret", "new-secret")
-            .unwrap();
+        change_private_key_passphrase(&generated.private_path, "old-secret", "new-secret").unwrap();
 
         let loaded = load_private_key(&generated.private_path, "new-secret").unwrap();
         assert_eq!(loaded.comment().as_str().unwrap(), "rsa@host");
-        assert_eq!(std::fs::read(&generated.public_path).unwrap(), public_before);
+        assert_eq!(
+            std::fs::read(&generated.public_path).unwrap(),
+            public_before
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -642,12 +653,9 @@ mod tests {
             generate_key_pair("ed25519", &root_text, "deploy", "old-secret", "").unwrap();
         let before = std::fs::read(&generated.private_path).unwrap();
 
-        let error = change_private_key_passphrase(
-            &generated.private_path,
-            "wrong-secret",
-            "new-secret",
-        )
-        .unwrap_err();
+        let error =
+            change_private_key_passphrase(&generated.private_path, "wrong-secret", "new-secret")
+                .unwrap_err();
 
         assert!(error.contains("old passphrase is incorrect"));
         assert_eq!(std::fs::read(&generated.private_path).unwrap(), before);

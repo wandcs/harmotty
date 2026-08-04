@@ -4,6 +4,15 @@
 
 ### Development
 
+- Established a mandatory regression standard with one local software gate,
+  monotonic retained-candidate evidence modes and self-driven physical-PC
+  scenarios that verify injected input, observable state, negative paths and
+  secret non-disclosure without rebuilding the accepted HAP. Physical scenarios
+  now preflight telemetry, report stage timing, clear input from observed state
+  and independently record verified disposable-state cleanup while using a
+  bounded, automatically restored screen-timeout lease. A dedicated test PC can
+  also recover from lock using a repository-external local plaintext credential
+  that is converted to non-secret physical-key events only after a lock error.
 - Added `ssh-keygen -p -f <identity>` with non-echoing old/new passphrase
   prompts, verified atomic private-key replacement, durable retention and
   rollback on retention failure without changing the public key or comment.

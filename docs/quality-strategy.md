@@ -1,15 +1,43 @@
-# LeanTTY Quality and Verification Strategy
+# LeanTTY Regression Test Standard
 
-> Status: cross-version engineering baseline
+> Status: mandatory cross-version engineering standard
 >
-> Last updated: 2026-08-03
+> Last updated: 2026-08-04
 >
 > Product acceptance: [`vision-acceptance.md`](vision-acceptance.md)
 
-This document defines how LeanTTY turns its reliability and trust principles
-into repeatable evidence. It contains no active task list. Feature-specific
-acceptance belongs in one technical design; current executable gaps belong only
-in [`next-work.md`](next-work.md).
+This document is the single authority for how every LeanTTY change is tested.
+It turns the reliability and trust principles into repeatable evidence. `MUST`,
+`MUST NOT`, `SHOULD` and `MAY` are normative. It contains no active task list:
+feature-specific acceptance belongs in one technical design, while executable
+gaps belong only in [`next-work.md`](next-work.md).
+
+## Mandatory workflow
+
+Every code change MUST use this sequence:
+
+1. Before implementation, map the affected event chains to the
+   [change-to-evidence matrix](#change-to-evidence-matrix). Add or update tests
+   and device scenarios for every newly exposed failure mode.
+2. During implementation, run focused tests as often as useful. All Rust
+   formatting, compilation, clippy and tests MUST run in WSL; Windows supplies
+   the OHOS SDK tools but is not a Rust build host.
+3. Before committing, run `tools/test-regression.ps1`. A failed or interrupted
+   run is not a pass.
+4. Commit the intended change so the device candidate has an exact, clean Git
+   identity. Run `tools/verify-pc.ps1` to execute the software gate again,
+   perform one clean ARM64 HAP build and retain the exact signed candidate.
+5. For device-visible behavior, run the applicable `verify-*-pc.ps1` scenario
+   against that retained HAP without rebuilding it. The scenario MUST verify
+   the changed behavior, relevant negative/recovery paths and secret/privacy
+   boundaries, not merely install and launch.
+6. Report the candidate SHA-256, verification mode, commands, concise results
+   and evidence paths in the pull request. Required remote checks MUST pass.
+   Administrative bypasses are not routine acceptance evidence.
+
+Documentation-only changes MAY stop after the mapped documentation gate. A
+design or task MUST explicitly justify any omitted layer; convenience, a small
+diff or a previously successful build is not a justification.
 
 ## Quality model
 
@@ -37,7 +65,7 @@ these permanent areas.
 | Build-workflow tests | Locking, candidate retention and script control-flow policy | Product interaction |
 | Public CI | Secret scan, public-source checks, Rust fmt/clippy/tests and Web policy on clean hosted runners | DevEco build, signing or physical-PC behavior |
 | Clean ARM64 HAP build | ArkTS, N-API, Rust and packaged resources integrate for the only supported ABI | Focus, clipboard, lifecycle or SSH interoperability |
-| Signed install and launch | The selected test candidate can be installed and started on the target PC | The changed behavior works |
+| Signed install and launch | The selected test candidate can be installed and started on the target PC (`device-deployed`) | The changed behavior works |
 | Physical-PC scenario | Device-visible event chain and real lifecycle behavior | Uncovered servers, networks or long-term use |
 | Production manifest/signature | Exact commit, ABI, artifact hashes, signature and package identity | AppGallery approval or user outcome |
 | Real-use/vision review | Sustained primary-device outcome and continued unique value | Future releases without renewed evidence |
@@ -48,31 +76,117 @@ are not substitutes for a physical interaction result.
 
 ## Standard commands
 
-Public and host-testable checks:
+Mandatory software regression gate:
 
 ```powershell
-.\tools\check-public-source.ps1
-wsl.exe --cd . -- cargo fmt --check --manifest-path ./leantty_ssh/Cargo.toml
-wsl.exe --cd . -- cargo clippy --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core --all-targets -- -D warnings
-wsl.exe --cd . -- cargo test --locked --manifest-path ./leantty_ssh/Cargo.toml -p leantty-ssh-core
-node .\tools\web-terminal\test-terminal-policy.mjs
+.\tools\test-regression.ps1
 ```
 
-Maintainer loops:
+Clean candidate build/deployment and current feature-specific physical scenario:
 
 ```powershell
 .\tools\dev-pc.ps1
 .\tools\verify-pc.ps1
+.\tools\verify-key-passphrase-pc.ps1
 ```
 
-`verify-pc.ps1` performs fresh PowerShell syntax checks, build-workflow
-regressions, generated-native source policy, Web terminal policy, trusted ArkTS
-tests, Rust formatting, a clean ARM64 debug build and—unless `-SkipDevice` is
-used—signed install and launch on a physical PC. It retains the verified HAP and
-records SHA-256, Git commit/tree, dirty state and whether the device path ran.
+`test-regression.ps1` runs public-source policy, workflow/helper tests, Web
+terminal policy, trusted ArkTS tests, WSL Rust fmt/clippy/core tests and diff
+checks. It writes a local JSON result under `build/verification/` even when a
+check fails.
 
-Public CI additionally runs secret scanning, Rust clippy and pure-core tests.
-Neither the script nor CI automatically proves the manual scenario matrix.
+`verify-pc.ps1` reruns that gate, verifies generated-native source policy,
+performs a clean ARM64 debug build and—unless `-SkipDevice` is used—installs and
+launches the signed HAP on a physical PC. It retains the exact HAP outside the
+volatile build tree with its SHA-256, Git identity and software evidence.
+
+`dev-pc.ps1` is the fast development loop, not an acceptance gate.
+`verify-key-passphrase-pc.ps1` is the first feature-owned physical scenario. It
+installs an already retained clean candidate, drives real application state,
+records JSON evidence and never rebuilds the HAP.
+
+Public CI independently repeats the public subset. Neither CI nor a clean HAP
+automatically proves a physical scenario.
+
+## Candidate and evidence states
+
+Retained candidates use only these monotonic modes:
+
+| Mode | Meaning |
+| --- | --- |
+| `software` | Mandatory software gate and exact clean ARM64 HAP build passed |
+| `device-deployed` | The same HAP was installed and launched on a physical ARM64 HarmonyOS PC |
+| `device-behavior` | One or more named physical behavior scenarios passed against the same HAP |
+
+A later lower-layer run MUST NOT downgrade a candidate. `device-deployed` MUST
+NOT be described as physical behavior acceptance. Physical behavior evidence
+MUST NOT promote a dirty candidate: commit first, rebuild once, then test that
+unchanged HAP. Source, dependency, packaged resource, signature, HAP, relevant
+platform or affected server changes invalidate the corresponding evidence.
+
+Evidence files are machine-local and MUST NOT contain credentials, passphrases,
+private keys, fixed device identifiers, private host addresses or unredacted
+logs. Physical evidence MUST identify both the tested candidate and the clean
+committed automation harness when they come from different commits. Public
+summaries carry only the minimum redacted identity and result.
+
+## Physical automation protocol
+
+The maintainer agent owns routine device acceptance whenever the connected PC
+and repository tools make it objectively possible. It MUST inspect device state,
+drive the scenario and read logs/layouts itself. User validation is requested
+only for an objective blocker such as a locked device without its dedicated
+local test credential, a disconnected device, missing permission, unavailable
+controlled server or a necessarily subjective judgment.
+
+Every automated physical scenario MUST:
+
+- resolve a ready physical ARM64 PC at runtime and never commit its identifier;
+- install an exact retained candidate and record its SHA-256 before interaction;
+- acquire a bounded screen-timeout override before launch and restore the prior
+  device policy in `finally`, so unattended execution cannot silently relock;
+- when HarmonyOS explicitly reports a locked screen, unlock only the dedicated
+  test PC from a current-user plaintext credential stored outside the repository;
+  inject numeric physical-key events without putting plaintext in commands,
+  logs or evidence, and never type a credential on an already unlocked device;
+- preflight every control and observation channel, including application PID,
+  structured logs, layout capture and focused terminal input, before creating
+  disposable device state;
+- locate UI controls from current layout semantics and native bounds, not stale
+  screenshots or Windows-scaled coordinates;
+- verify injected terminal command text through the focused accessibility node
+  before Enter, so an IME or focus error cannot silently change the command;
+- generate disposable names and secrets at runtime, keep secret input non-echoing
+  and scan captured layouts/logs for disclosure;
+- wait on observable state or a non-secret structured log marker; fixed sleeps
+  MAY pace polling but MUST NOT decide success;
+- derive input cleanup from current accessibility state, use the minimum bounded
+  key events and verify the resulting empty state instead of sending a fixed
+  high-count key loop;
+- cover the positive path plus applicable rejection, cancellation, retry,
+  recovery and cleanup paths;
+- report stage start/pass progress and duration so a stalled boundary is visible;
+- write a machine-readable pass/fail record, including per-stage timing and the
+  cleanup outcome, and capture bounded diagnostic artifacts on failure; and
+- remove disposable device state in `finally`, independently verify absence in
+  the application sandbox and forbid evidence promotion when cleanup fails.
+
+Physical keyboard injection MAY be used only when the script verifies the
+focused application and the exact resulting input. Direct key injection without
+readback is insufficient for text acceptance because the active IME can consume
+or transform it.
+
+## Result classification
+
+- **Pass:** every required assertion completed for one exact evidence identity.
+- **Product failure:** the application produced an incorrect observable result.
+- **Infrastructure failure:** the device, server, SDK, signing, transport or
+  harness could not establish the required precondition.
+- **Invalid/interrupted:** the candidate changed, evidence identity is missing,
+  cleanup makes the result ambiguous, or the run stopped early.
+
+Only **Pass** counts as acceptance. Infrastructure failures must be repaired and
+rerun; they must not be relabeled as product passes or product regressions.
 
 ## Change-to-evidence matrix
 
