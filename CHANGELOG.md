@@ -4,6 +4,19 @@
 
 ### Development
 
+- Added fixed workspace keyboard navigation: `Ctrl+Tab` and
+  `Ctrl+Shift+Tab` cycle connected tabs in visual order while restoring each
+  tab's active Pane, and `Ctrl+Alt+Left/Right` focuses the corresponding Pane
+  only when a split exists. Exact modifier matching preserves ordinary terminal
+  input and single-Pane pass-through.
+- Extended the repository-only SSH fixture with exact input-byte reporting for
+  workspace navigation acceptance. A three-tab, dual-Pane physical-PC matrix
+  verifies forward/reverse wrapping, active-Pane restoration and plain Tab or
+  single-Pane shortcut delivery without adding production HAP logic.
+- Added an explicit diagnostic-HAP mode to physical SSH authentication
+  verification. Diagnostic evidence is marked unretained and can never promote
+  a release candidate; static checks also guard command-history and Preferences
+  boundaries for authentication input.
 - Added a retained-candidate physical-PC SSH authentication harness for direct
   password, password-to-keyboard-interactive mixed echo, multi-round wrong-answer
   recovery, unencrypted/encrypted public keys, key-to-password and

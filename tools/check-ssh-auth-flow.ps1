@@ -5,11 +5,13 @@ $authStatePath = Join-Path $repoRoot 'leantty_ssh\leantty-ssh-core\src\authentic
 $rustPath = Join-Path $repoRoot 'leantty_ssh\src\lib.rs'
 $sshClientPath = Join-Path $repoRoot 'entry\src\main\ets\model\ssh\SshClient.ets'
 $viewModelPath = Join-Path $repoRoot 'entry\src\main\ets\viewmodel\SessionViewModel.ets'
+$preferencesPath = Join-Path $repoRoot 'entry\src\main\ets\model\settings\UserPreferences.ets'
 
 $authState = Get-Content -Raw -LiteralPath $authStatePath
 $rust = Get-Content -Raw -LiteralPath $rustPath
 $sshClient = Get-Content -Raw -LiteralPath $sshClientPath
 $viewModel = Get-Content -Raw -LiteralPath $viewModelPath
+$preferences = Get-Content -Raw -LiteralPath $preferencesPath
 
 function Assert-Contains {
   param(
@@ -99,7 +101,23 @@ Assert-Contains -Source $viewModel -Boundary 'Session authentication input' -Mar
   'this.authResponses[i] = '''''
   'responses[i] = '''''
   'this.sshClient.authKeyboardInteractiveResponses(roundId, responses)'
+  'let actions: TerminalInputAction[] = TerminalInputParser.parse(data, false)'
+  'this.commandBarVm.addToHistory(cmd)'
 )
+
+if ([regex]::Matches($viewModel, '\.addToHistory\(').Count -ne 1) {
+  throw 'Only submitted local commands may enter command history.'
+}
+
+Assert-Contains -Source $preferences -Boundary 'Local preferences projection' -Markers @(
+  "const TERMINAL_FONT_SIZE_KEY: string = 'terminal_font_size'"
+  'UserPreferences.store.putSync(TERMINAL_FONT_SIZE_KEY, fontSize)'
+)
+
+if ([regex]::Matches($preferences, '\.putSync\(').Count -ne 1 -or
+    $preferences -match '(?i)password|passphrase|token|authresponse|challenge') {
+  throw 'Local Preferences must remain a font-size-only projection.'
+}
 
 if ($rust.Contains('send_control(&control_callback, "PASSWORD_PROMPT")') -or
     $rust.Contains('stage=key_rejected fallback=password') -or

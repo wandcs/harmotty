@@ -3,7 +3,7 @@ import { CommandParser, CommandParseResult, KeyCommandKind, KeyCommandResult } f
 import { SshConfig } from '../main/ets/model/ssh/SshConfig'
 import { SshClient } from '../main/ets/model/ssh/SshClient'
 import { BridgeMessage, BridgeProtocol } from '../main/ets/model/bridge/BridgeProtocol'
-import { InteractionPolicy } from '../main/ets/model/ui/InteractionPolicy'
+import { InteractionPolicy, WorkspaceNavigationAction } from '../main/ets/model/ui/InteractionPolicy'
 import { KeyCodeMap } from '../main/ets/common/constants/KeyCodeMap'
 import { TerminalOutputBuffer } from '../main/ets/model/terminal/TerminalOutputBuffer'
 import {
@@ -462,6 +462,58 @@ export default function interactionFixesTest() {
       expect(tab).assertEqual('\t')
       expect(actions.length).assertEqual(1)
       expect(actions[0].kind).assertEqual(TerminalInputActionKind.TAB)
+    })
+
+    it('matchesOnlyExactCtrlTabWorkspaceNavigation', 0, () => {
+      expect(InteractionPolicy.workspaceNavigationAction(2049, true, false, false))
+        .assertEqual(WorkspaceNavigationAction.NEXT_TAB)
+      expect(InteractionPolicy.workspaceNavigationAction(2049, true, false, true))
+        .assertEqual(WorkspaceNavigationAction.PREVIOUS_TAB)
+      expect(InteractionPolicy.workspaceNavigationAction(2049, false, false, false))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+      expect(InteractionPolicy.workspaceNavigationAction(2049, false, false, true))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+      expect(InteractionPolicy.workspaceNavigationAction(2049, true, true, false))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+      expect(InteractionPolicy.workspaceNavigationAction(2015, true, false, false))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+    })
+
+    it('matchesOnlyExactCtrlAltPaneNavigation', 0, () => {
+      expect(InteractionPolicy.workspaceNavigationAction(2014, true, true, false))
+        .assertEqual(WorkspaceNavigationAction.FOCUS_LEFT_PANE)
+      expect(InteractionPolicy.workspaceNavigationAction(2015, true, true, false))
+        .assertEqual(WorkspaceNavigationAction.FOCUS_RIGHT_PANE)
+      expect(InteractionPolicy.workspaceNavigationAction(2014, false, true, false))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+      expect(InteractionPolicy.workspaceNavigationAction(2015, true, false, false))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+      expect(InteractionPolicy.workspaceNavigationAction(2014, true, true, true))
+        .assertEqual(WorkspaceNavigationAction.NONE)
+    })
+
+    it('consumesPaneNavigationOnlyForTheFixedTwoPaneLayout', 0, () => {
+      expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.FOCUS_LEFT_PANE, 1))
+        .assertEqual(-1)
+      expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.FOCUS_RIGHT_PANE, 1))
+        .assertEqual(-1)
+      expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.FOCUS_LEFT_PANE, 2))
+        .assertEqual(0)
+      expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.FOCUS_RIGHT_PANE, 2))
+        .assertEqual(1)
+      expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.NEXT_TAB, 2))
+        .assertEqual(-1)
+    })
+
+    it('wrapsWorkspaceTabsInVisualOrder', 0, () => {
+      expect(InteractionPolicy.wrappedTabIndex(0, 0, 1)).assertEqual(-1)
+      expect(InteractionPolicy.wrappedTabIndex(0, 1, 1)).assertEqual(0)
+      expect(InteractionPolicy.wrappedTabIndex(0, 3, 1)).assertEqual(1)
+      expect(InteractionPolicy.wrappedTabIndex(2, 3, 1)).assertEqual(0)
+      expect(InteractionPolicy.wrappedTabIndex(2, 3, -1)).assertEqual(1)
+      expect(InteractionPolicy.wrappedTabIndex(0, 3, -1)).assertEqual(2)
+      expect(InteractionPolicy.wrappedTabIndex(-1, 3, 1)).assertEqual(0)
+      expect(InteractionPolicy.wrappedTabIndex(-1, 3, -1)).assertEqual(2)
     })
 
     it('keepsCursorPositionWhenEditingAPastedLocalCommand', 0, () => {
