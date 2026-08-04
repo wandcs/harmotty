@@ -12,7 +12,7 @@ use napi_ohos::{Error, Result, Status};
 use zeroize::Zeroize;
 
 use leantty_ssh_core::keygen::{self};
-use leantty_ssh_core::known_hosts::remove_known_host_entries;
+use leantty_ssh_core::known_hosts::{find_known_host_entries, remove_known_host_entries};
 use leantty_ssh_core::AuthMethod;
 
 static NEXT_SESSION_ID: AtomicU32 = AtomicU32::new(1);
@@ -863,6 +863,30 @@ pub fn ssh_read_public_key(key_path: String) -> Result<String> {
 pub struct KnownHostsRemovalResult {
     pub content: String,
     pub removed: u32,
+}
+
+#[napi(object)]
+pub struct KnownHostsQueryResult {
+    pub output: String,
+    pub found: u32,
+}
+
+#[napi]
+pub fn ssh_find_known_host_entries(
+    content: String,
+    host: String,
+    port: u32,
+) -> Result<KnownHostsQueryResult> {
+    let port = u16::try_from(port)
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| napi_error("known_hosts port must be between 1 and 65535"))?;
+    let result =
+        find_known_host_entries(&content, &host, port).map_err(|error| napi_error(&error))?;
+    Ok(KnownHostsQueryResult {
+        output: result.output,
+        found: result.found,
+    })
 }
 
 #[napi]

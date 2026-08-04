@@ -1,6 +1,8 @@
 use data_encoding::BASE64;
 use hmac::{Hmac, KeyInit, Mac};
-use leantty_ssh_core::known_hosts::{format_known_hosts_target, remove_known_host_entries};
+use leantty_ssh_core::known_hosts::{
+    find_known_host_entries, format_known_hosts_target, remove_known_host_entries,
+};
 use sha1::Sha1;
 
 #[test]
@@ -124,6 +126,80 @@ fn removes_a_hashed_non_default_port_without_matching_the_default_port() {
         result.content,
         "server.example.com ssh-ed25519 AAAA-default\n"
     );
+}
+
+#[test]
+fn finds_plain_shared_and_hashed_records_without_changing_content() {
+    let salt = b"fixed query salt";
+    let hashed_target = hash_target("server.example.com", salt);
+    let content = format!(
+        concat!(
+            "# retained comment\r\n",
+            "server.example.com ssh-ed25519 AAAA-ed25519\r\n",
+            "other.example,server.example.com ssh-rsa AAAA-shared\r\n",
+            "{hashed_target} ecdsa-sha2-nistp256 AAAA-hashed\r\n",
+            "[server.example.com]:2222 ssh-ed25519 AAAA-port\r\n",
+            "other.example ssh-ed25519 AAAA-other"
+        ),
+        hashed_target = hashed_target
+    );
+    let original = content.clone();
+
+    let result = find_known_host_entries(&content, "server.example.com", 22).unwrap();
+
+    assert_eq!(content, original);
+    assert_eq!(result.found, 3);
+    assert_eq!(
+        result.output,
+        format!(
+            concat!(
+                "# Host server.example.com found: line 2\n",
+                "server.example.com ssh-ed25519 AAAA-ed25519\n",
+                "# Host server.example.com found: line 3\n",
+                "other.example,server.example.com ssh-rsa AAAA-shared\n",
+                "# Host server.example.com found: line 4\n",
+                "{hashed_target} ecdsa-sha2-nistp256 AAAA-hashed\n"
+            ),
+            hashed_target = hashed_target
+        )
+    );
+}
+
+#[test]
+fn finds_ipv4_ipv6_and_non_default_ports_as_exact_endpoints() {
+    let content = concat!(
+        "192.0.2.10 ssh-ed25519 AAAA-ipv4\n",
+        "2001:db8::10 ssh-ed25519 AAAA-ipv6-default\n",
+        "[2001:db8::10]:2200 ssh-rsa AAAA-ipv6-port\n",
+        "[server.example.com]:2222 ssh-ed25519 AAAA-host-port\n",
+    );
+
+    let ipv4 = find_known_host_entries(content, "192.0.2.10", 22).unwrap();
+    let ipv6_default = find_known_host_entries(content, "2001:db8::10", 22).unwrap();
+    let ipv6_port = find_known_host_entries(content, "2001:db8::10", 2200).unwrap();
+    let host_port = find_known_host_entries(content, "server.example.com", 2222).unwrap();
+
+    assert_eq!(ipv4.found, 1);
+    assert!(ipv4.output.contains("AAAA-ipv4"));
+    assert_eq!(ipv6_default.found, 1);
+    assert!(ipv6_default.output.contains("AAAA-ipv6-default"));
+    assert_eq!(ipv6_port.found, 1);
+    assert!(ipv6_port.output.contains("AAAA-ipv6-port"));
+    assert_eq!(host_port.found, 1);
+    assert!(host_port.output.contains("AAAA-host-port"));
+}
+
+#[test]
+fn reports_no_known_host_matches() {
+    let result = find_known_host_entries(
+        "other.example ssh-ed25519 AAAA-other\n",
+        "missing.example",
+        22,
+    )
+    .unwrap();
+
+    assert_eq!(result.found, 0);
+    assert!(result.output.is_empty());
 }
 
 fn hash_target(target: &str, salt: &[u8]) -> String {

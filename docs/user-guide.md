@@ -83,11 +83,13 @@ The current documented `ssh_config` subset is:
 | `Port` | Defaults to 22 |
 | `IdentityFile` | Selects a verified LeanTTY key by supported reference |
 
-OpenSSH first-value behavior is preserved for these fields, and a `Match`
-section ends the Host resolution currently performed by LeanTTY. Other
-directives are not part of the current compatibility contract. Do not rely on
-an unsupported directive being silently ignored; explicit unsupported-config
-failure is being tightened for 1.1.
+OpenSSH first-value behavior is preserved for these fields. An unknown or
+unsupported directive in a matching Host block causes `ssh` and `ssh -G` to
+fail with the directive and line number before a connection starts. Because
+LeanTTY does not yet evaluate `Match` conditions, any `Match` block is rejected
+instead of being silently ignored. Unsupported directives in unrelated Host
+blocks do not block the selected Host, and LeanTTY preserves their source text
+when it edits its own managed Host section.
 
 Inspect the effective supported fields without connecting:
 
@@ -159,6 +161,14 @@ existing line. It is a bounded helper, not a general remote file editor.
 
 ## Host-key maintenance
 
+Find every matching algorithm record for one exact endpoint without changing
+the trust store:
+
+```text
+ssh-keygen -F example.com
+ssh-keygen -F [example.com]:2222
+```
+
 Remove every matching algorithm record for one exact endpoint:
 
 ```text
@@ -178,7 +188,7 @@ fingerprint before accepting it.
 | `ssh [-p port] [-i identity] user@host` | Connect directly |
 | `ssh [-p port] [-i identity] host-name` | Connect through saved configuration |
 | `ssh -G host-name` | Show the supported effective configuration |
-| `ssh-keygen -t ...`, `-y`, `-l`, `-p`, `-R` | Generate, inspect or maintain SSH assets |
+| `ssh-keygen -t ...`, `-y`, `-l`, `-p`, `-F`, `-R` | Generate, inspect or maintain SSH assets |
 | `ssh-copy-id -i ...` | Install one public key |
 | `key list/import/export/rm` | Manage LeanTTY key pairs |
 | `host add/set/list/rm` | Manage LeanTTY Host entries |

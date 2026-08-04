@@ -4,6 +4,12 @@
 
 ### Development
 
+- Added OpenSSH-compatible `ssh-keygen -F` lookup for the single LeanTTY
+  `known_hosts` authority, including plain, hashed, comma-separated, IPv4,
+  IPv6, non-default-port and multi-algorithm records without changing assets.
+- Made malformed or duplicate SSH options and unknown, `Match` or unsupported
+  directives in the selected SSH config scope fail with an actionable error
+  before connection, while preserving unrelated unmanaged config text.
 - Established a mandatory regression standard with one local software gate,
   monotonic retained-candidate evidence modes and self-driven physical-PC
   scenarios that verify injected input, observable state, negative paths and

@@ -14,6 +14,7 @@ import {
 import { LocalCommandLine } from '../main/ets/model/terminal/LocalCommandLine'
 import { SessionViewModel } from '../main/ets/viewmodel/SessionViewModel'
 import { BrowserLauncher } from '../main/ets/model/browser/BrowserLauncher'
+import { CommandBarViewModel } from '../main/ets/viewmodel/CommandBarViewModel'
 
 export default function interactionFixesTest() {
   describe('InteractionFixes', () => {
@@ -47,6 +48,9 @@ export default function interactionFixesTest() {
         CommandParser.parseInput('exit', new SshConfig())
       expect(result instanceof KeyCommandResult).assertEqual(true)
       if (result instanceof KeyCommandResult) { expect(result.kind).assertEqual(KeyCommandKind.EXIT) }
+      let invalid = CommandParser.parseInput('exit now', new SshConfig())
+      expect(invalid instanceof KeyCommandResult).assertEqual(true)
+      if (invalid instanceof KeyCommandResult) { expect(invalid.errorMessage).assertEqual('Usage: exit') }
     })
 
     it('supportsTopicHelpAndExactCommandNames', 0, () => {
@@ -137,6 +141,26 @@ export default function interactionFixesTest() {
       expect(CommandParser.parseSshKeygen('ssh-keygen -R').errorMessage.length > 0).assertEqual(true)
     })
 
+    it('parsesExactOpenSshKnownHostQueryTargets', 0, () => {
+      let defaultPort: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -F server.example.com')
+      let customPort: KeyCommandResult =
+        CommandParser.parseSshKeygen('ssh-keygen -F [server.example.com]:2222')
+      let ipv6: KeyCommandResult = CommandParser.parseSshKeygen('ssh-keygen -F [2001:db8::1]:2200')
+      expect(defaultPort.kind).assertEqual(KeyCommandKind.HOST_KEY_FIND)
+      expect(defaultPort.sshHost).assertEqual('server.example.com')
+      expect(defaultPort.sshPort).assertEqual(22)
+      expect(customPort.kind).assertEqual(KeyCommandKind.HOST_KEY_FIND)
+      expect(customPort.sshHost).assertEqual('server.example.com')
+      expect(customPort.sshPort).assertEqual(2222)
+      expect(ipv6.sshHost).assertEqual('2001:db8::1')
+      expect(ipv6.sshPort).assertEqual(2200)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -F server.example.com:2222').errorMessage.length > 0)
+        .assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -F').errorMessage.length > 0).assertEqual(true)
+      expect(CommandParser.parseSshKeygen('ssh-keygen -F one extra').errorMessage.length > 0)
+        .assertEqual(true)
+    })
+
     it('buildsChangedHostRemovalCommandFromResolvedAliasEndpoint', 0, () => {
       let config: SshConfig = new SshConfig()
       config.loadFromText('Host prod\n  HostName server.example.com\n  Port 2222\n  User deploy\n')
@@ -194,6 +218,43 @@ export default function interactionFixesTest() {
       if (alias instanceof KeyCommandResult) { expect(alias.legacySyntax).assertEqual(true) }
     })
 
+    it('rejectsInvalidKnownCommandSyntaxExplicitly', 0, () => {
+      let invalidKey = CommandParser.parseInput('key unknown', new SshConfig())
+      let invalidHost = CommandParser.parseInput('host unknown', new SshConfig())
+      let invalidName = CommandParser.parseInput('host add bad*name deploy@example.com', new SshConfig())
+      let missingHost = CommandParser.parseInput('host add prod deploy@', new SshConfig())
+      expect(invalidKey instanceof KeyCommandResult).assertEqual(true)
+      expect(invalidHost instanceof KeyCommandResult).assertEqual(true)
+      expect(invalidName instanceof KeyCommandResult).assertEqual(true)
+      expect(missingHost instanceof KeyCommandResult).assertEqual(true)
+      if (invalidKey instanceof KeyCommandResult) { expect(invalidKey.errorMessage.length > 0).assertEqual(true) }
+      if (invalidHost instanceof KeyCommandResult) { expect(invalidHost.errorMessage.length > 0).assertEqual(true) }
+      if (invalidName instanceof KeyCommandResult) { expect(invalidName.errorMessage.length > 0).assertEqual(true) }
+      if (missingHost instanceof KeyCommandResult) { expect(missingHost.errorMessage.length > 0).assertEqual(true) }
+    })
+
+    it('rejectsAmbiguousSshCopyIdSyntax', 0, () => {
+      expect(CommandParser.parseSshCopyId('ssh-copy-id -i first -i second deploy@example.com')
+        .errorMessage.includes('duplicate option -i')).assertEqual(true)
+      expect(CommandParser.parseSshCopyId('ssh-copy-id -i key -p 22oops deploy@example.com')
+        .errorMessage.includes('port 1-65535')).assertEqual(true)
+      expect(CommandParser.parseSshCopyId('ssh-copy-id -i key deploy@example.com root@other.example')
+        .errorMessage.includes('unexpected target')).assertEqual(true)
+      expect(CommandParser.parseSshCopyId('ssh-copy-id -i key deploy@[2001:db8::1]oops')
+        .errorMessage.includes('unexpected text')).assertEqual(true)
+    })
+
+    it('completesHostsOnlyForSupportedHostTakingCommands', 0, () => {
+      let vm: CommandBarViewModel = new CommandBarViewModel()
+      vm.getSshConfig().loadFromText('Host prod\n  HostName prod.example.com\n  User deploy\n')
+      vm.setInputText('ssh -G pr')
+      expect(vm.tryTabComplete()[0]).assertEqual('ssh -G prod')
+      vm.setInputText('host set pr')
+      expect(vm.tryTabComplete()[0]).assertEqual('host set prod')
+      vm.setInputText('host rm pr')
+      expect(vm.tryTabComplete()[0]).assertEqual('host rm prod')
+    })
+
     it('parsesEffectiveConfigInspection', 0, () => {
       let result: CommandParseResult | KeyCommandResult | null =
         CommandParser.parseInput('ssh -G prod', new SshConfig())
@@ -232,16 +293,73 @@ export default function interactionFixesTest() {
       }
     })
 
-    it('doesNotLeakMatchDirectivesIntoFollowingHostResolution', 0, () => {
+    it('rejectsUnsupportedMatchBeforeConnection', 0, () => {
       let config: SshConfig = new SshConfig()
       config.loadFromText('Host prod\n  HostName prod.example.com\nMatch user root\n  Port 9999\n' +
         'Host *\n  Port 2222\n  User deploy\n')
-      let host = config.findHost('prod')
-      expect(host !== null).assertEqual(true)
-      if (host !== null) {
-        expect(host.port).assertEqual(2222)
-        expect(host.user).assertEqual('deploy')
+      let result: CommandParseResult | KeyCommandResult | null = CommandParser.parseInput('ssh prod', config)
+      expect(result instanceof CommandParseResult).assertEqual(true)
+      if (result instanceof CommandParseResult) {
+        expect(result.isValid).assertEqual(false)
+        expect(result.errorMessage.includes('Match')).assertEqual(true)
+        expect(result.errorMessage.includes('line 3')).assertEqual(true)
       }
+    })
+
+    it('rejectsUnknownOrInvalidConfigBeforeConnection', 0, () => {
+      let unknown: SshConfig = new SshConfig()
+      unknown.loadFromText('Host prod\n  HostName prod.example.com\n  User deploy\n  ProxyJump bastion\n')
+      let unknownResult = CommandParser.parseInput('ssh prod', unknown)
+      expect(unknownResult instanceof CommandParseResult).assertEqual(true)
+      if (unknownResult instanceof CommandParseResult) {
+        expect(unknownResult.isValid).assertEqual(false)
+        expect(unknownResult.errorMessage.includes('ProxyJump')).assertEqual(true)
+      }
+
+      let invalid: SshConfig = new SshConfig()
+      invalid.loadFromText('Host prod\n  HostName prod.example.com\n  User deploy\n  Port 22oops\n')
+      let invalidResult = CommandParser.parseInput('ssh prod', invalid)
+      expect(invalidResult instanceof CommandParseResult).assertEqual(true)
+      if (invalidResult instanceof CommandParseResult) {
+        expect(invalidResult.isValid).assertEqual(false)
+        expect(invalidResult.errorMessage.includes('expected port 1-65535')).assertEqual(true)
+      }
+    })
+
+    it('scopesUnsupportedConfigToMatchingHosts', 0, () => {
+      let config: SshConfig = new SshConfig()
+      config.loadFromText('Host other\n  User root\n  ProxyJump bastion\n\n' +
+        'Host prod\n  HostName prod.example.com\n  User deploy\n  Port=2200\n')
+      let result = CommandParser.parseInput('ssh prod', config)
+      expect(result instanceof CommandParseResult).assertEqual(true)
+      if (result instanceof CommandParseResult) {
+        expect(result.isValid).assertEqual(true)
+        expect(result.host).assertEqual('prod.example.com')
+        expect(result.port).assertEqual(2200)
+      }
+    })
+
+    it('rejectsMalformedAndDuplicateSshOptionsBeforeConnection', 0, () => {
+      let config: SshConfig = new SshConfig()
+      let malformed = CommandParser.parseInput('ssh -p 22oops deploy@example.com', config)
+      let duplicatePort = CommandParser.parseInput('ssh -p 22 -p 2200 deploy@example.com', config)
+      let duplicateIdentity = CommandParser.parseInput('ssh -i first -i second deploy@example.com', config)
+      let malformedTarget = CommandParser.parseInput('ssh deploy@example.com:22oops', config)
+      let bracketSuffix = CommandParser.parseInput('ssh deploy@[2001:db8::1]oops', config)
+      expect(malformed instanceof CommandParseResult).assertEqual(true)
+      expect(duplicatePort instanceof CommandParseResult).assertEqual(true)
+      expect(duplicateIdentity instanceof CommandParseResult).assertEqual(true)
+      expect(malformedTarget instanceof CommandParseResult).assertEqual(true)
+      expect(bracketSuffix instanceof CommandParseResult).assertEqual(true)
+      if (malformed instanceof CommandParseResult) { expect(malformed.isValid).assertEqual(false) }
+      if (duplicatePort instanceof CommandParseResult) {
+        expect(duplicatePort.errorMessage).assertEqual('Duplicate SSH option: -p')
+      }
+      if (duplicateIdentity instanceof CommandParseResult) {
+        expect(duplicateIdentity.errorMessage).assertEqual('Duplicate SSH option: -i')
+      }
+      if (malformedTarget instanceof CommandParseResult) { expect(malformedTarget.isValid).assertEqual(false) }
+      if (bracketSuffix instanceof CommandParseResult) { expect(bracketSuffix.isValid).assertEqual(false) }
     })
 
     it('reportsCopySelectionResultsIncludingAnEmptySelection', 0, () => {

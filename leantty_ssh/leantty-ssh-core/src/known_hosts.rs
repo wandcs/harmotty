@@ -8,6 +8,12 @@ pub struct KnownHostsRemoval {
     pub removed: u32,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct KnownHostsQuery {
+    pub output: String,
+    pub found: u32,
+}
+
 pub fn format_known_hosts_target(host: &str, port: u16) -> String {
     if port == 22 {
         host.to_string()
@@ -21,9 +27,7 @@ pub fn remove_known_host_entries(
     host: &str,
     port: u16,
 ) -> Result<KnownHostsRemoval, String> {
-    if host.is_empty() || host.chars().any(char::is_control) {
-        return Err("invalid known_hosts host".to_string());
-    }
+    validate_host(host)?;
 
     let target = format_known_hosts_target(host, port);
     let mut output = String::with_capacity(content.len());
@@ -46,6 +50,37 @@ pub fn remove_known_host_entries(
         content: output,
         removed,
     })
+}
+
+pub fn find_known_host_entries(
+    content: &str,
+    host: &str,
+    port: u16,
+) -> Result<KnownHostsQuery, String> {
+    validate_host(host)?;
+
+    let target = format_known_hosts_target(host, port);
+    let mut output = String::new();
+    let mut found = 0_u32;
+    for (index, complete_line) in content.split_inclusive('\n').enumerate() {
+        let (line, _) = split_line_ending(complete_line);
+        if !line_matches_target(line, &target) {
+            continue;
+        }
+        found += 1;
+        output.push_str(&format!("# Host {target} found: line {}\n", index + 1));
+        output.push_str(line);
+        output.push('\n');
+    }
+
+    Ok(KnownHostsQuery { output, found })
+}
+
+fn validate_host(host: &str) -> Result<(), String> {
+    if host.is_empty() || host.chars().any(char::is_control) {
+        return Err("invalid known_hosts host".to_string());
+    }
+    Ok(())
 }
 
 enum LineEdit {
@@ -80,6 +115,15 @@ fn remove_target_from_line(line: &str, target: &str) -> LineEdit {
         retained.join(","),
         &line[end..]
     ))
+}
+
+fn line_matches_target(line: &str, target: &str) -> bool {
+    let Some((start, end)) = host_field_bounds(line) else {
+        return false;
+    };
+    line[start..end]
+        .split(',')
+        .any(|pattern| pattern_matches(target, pattern))
 }
 
 fn host_field_bounds(line: &str) -> Option<(usize, usize)> {

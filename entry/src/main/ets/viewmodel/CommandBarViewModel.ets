@@ -23,7 +23,9 @@ export class CommandBarViewModel {
   tryTabComplete(): string[] {
     let trimmed: string = this.inputText.trim()
     let hostPrefix: string = ''
-    if (this.inputText.startsWith('ssh ')) { hostPrefix = 'ssh ' }
+    if (this.inputText.startsWith('ssh -G ')) { hostPrefix = 'ssh -G ' }
+    else if (this.inputText.startsWith('ssh ')) { hostPrefix = 'ssh ' }
+    else if (this.inputText.startsWith('host set ')) { hostPrefix = 'host set ' }
     else if (this.inputText.startsWith('host rm ')) { hostPrefix = 'host rm ' }
     if (hostPrefix.length > 0) {
       let partial: string = this.inputText.substring(hostPrefix.length).trim()
