@@ -7,8 +7,9 @@
 - Added a retained-candidate physical-PC SSH authentication harness for direct
   password, password-to-keyboard-interactive mixed echo, multi-round wrong-answer
   recovery, unencrypted/encrypted public keys, key-to-password and
-  key-to-keyboard-interactive chains, and process-stop cleanup during hidden input.
-  It uses runtime-only fixture credentials and disposable keys, raw key events,
+  key-to-keyboard-interactive chains, parallel Pane authentication,
+  minimize/restore continuity, and process-stop cleanup during hidden input. It
+  uses runtime-only fixture credentials and disposable keys, raw key events,
   layout/log leakage checks, an exact HDC reverse mapping and verified cleanup;
   no test entry or logic enters the HAP.
 - Made the native SSH lifecycle tests executable in WSL through a dev-only
