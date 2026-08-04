@@ -20,6 +20,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
+. (Join-Path $PSScriptRoot 'package-policy.ps1')
+. (Join-Path $PSScriptRoot 'acceptance-source.ps1')
 $productName = 'default'
 $projectProfilePath = Join-Path $repoRoot 'build-profile.json5'
 $localSigningConfigPath = Join-Path $repoRoot 'signing.local.json5'
@@ -368,8 +370,13 @@ if (Test-Path -LiteralPath $localSigningConfigPath) {
 try {
     Push-Location $repoRoot
     try {
-        & $nodeExe @hapArgs
-        $hapBuildExitCode = $LASTEXITCODE
+        Invoke-WithLeanTTYAcceptanceSource `
+            -RepoRoot $repoRoot `
+            -Enabled ($BuildMode -eq 'debug') `
+            -Action {
+                & $nodeExe @hapArgs
+                if ($LASTEXITCODE -ne 0) { throw "PC HAP build failed in $BuildMode mode" }
+            }
     } finally {
         Pop-Location
     }
@@ -378,11 +385,13 @@ try {
         [IO.File]::WriteAllBytes($projectProfilePath, $projectProfileBackup)
     }
 }
-if ($hapBuildExitCode -ne 0) { throw "PC HAP build failed in $BuildMode mode" }
-
 $outputDir = Join-Path $repoRoot "entry\build\$productName\outputs\default"
 $unsignedHap = Join-Path $outputDir 'entry-default-unsigned.hap'
 if (-not (Test-Path -LiteralPath $unsignedHap)) { throw "HAP output missing: $unsignedHap" }
+
+if ($BuildMode -eq 'release') {
+    Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers -PackagePath $unsignedHap
+}
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead($unsignedHap)
@@ -410,6 +419,9 @@ if (Test-Path -LiteralPath $localSigningConfigPath) {
     if (-not (Test-Path -LiteralPath $signedHap) -or $null -eq $signedApp) {
         throw 'Signing is configured, but signed HAP and APP outputs were not both generated'
     }
+}
+if ($BuildMode -eq 'release' -and (Test-Path -LiteralPath $signedHap)) {
+    Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers -PackagePath $signedHap
 }
 Write-Host "BUILD SUCCESS [$BuildMode, arm64-v8a]" -ForegroundColor Green
 Write-Host "Unsigned HAP: $unsignedHap" -ForegroundColor Cyan

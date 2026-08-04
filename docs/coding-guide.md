@@ -107,6 +107,11 @@ Maintainer application gate:
 .\tools\verify-key-passphrase-pc.ps1
 ```
 
+For PowerShell, use semantic variable names and avoid case-insensitive collisions
+with automatic/read-only variables such as `$PID`, `$HOME` and `$Error`. Long
+fixture lifetimes must be derived from declared scenario budgets plus cleanup
+margin; fixed sleeps may pace polling but cannot decide a test verdict.
+
 Automated tests prove pure logic and protocol behavior. ARM64 builds prove
 target integration. Install and launch prove only deployment. A named scenario
 against the same retained HAP is required to prove focus, keyboard, clipboard,

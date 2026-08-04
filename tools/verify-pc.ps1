@@ -26,6 +26,8 @@ if ($candidateSourceStatus.Count -gt 0) {
 foreach ($scriptName in @(
         'build-native.ps1',
         'build-lock.ps1',
+        'acceptance-source.ps1',
+        'package-policy.ps1',
         'candidate-store.ps1',
         'rust-wsl.ps1',
         'device-regression.ps1',
@@ -34,6 +36,7 @@ foreach ($scriptName in @(
         'verify-key-passphrase-pc.ps1',
         'verify-ssh-auth-pc.ps1',
         'test-build-workflows.ps1',
+        'test-acceptance-harness.ps1',
         'build-all.ps1',
         'dev-build.ps1',
         'hdc-common.ps1',

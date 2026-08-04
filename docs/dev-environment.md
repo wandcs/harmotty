@@ -59,6 +59,29 @@ user's local application data, keyed to the Git repository. Retention has one
 rule: keep the five most recently verified unique HAPs. There is no age-based
 cleanup policy.
 
+For an acceptance-harness-only edit, run the focused non-product gate:
+
+```powershell
+.\tools\test-acceptance-harness.ps1
+.\tools\verify-ssh-auth-pc.ps1 -Only password-success
+```
+
+The second command is diagnostic and never promotes the candidate. After the
+harness boundary is stable, run `verify-ssh-auth-pc.ps1` without `-Only` once
+for merge acceptance. A retained HAP may cross a later harness commit only when
+the script proves that every intervening file is on its explicit harness/doc
+allowlist; product-source or packaging changes require a new `verify-pc.ps1`.
+
+Device scenarios publish `live-status.json` while running and final JSON with
+candidate/harness identities, attempt lineage, selected stages, failure domain,
+resource manifest and cleanup audits. Use those artifacts before rerunning a
+failed full matrix.
+
+`build-all.ps1` and `dev-build.ps1` inject acceptance-only ArkTS only around a
+debug compilation and restore tracked production files byte-for-byte even when
+the build fails. Release compilation skips injection and rejects any HAP that
+still contains a registered acceptance marker or helper symbol.
+
 ### Dedicated test-PC unlock credential
 
 The dedicated physical regression PC may use one current-user, machine-local

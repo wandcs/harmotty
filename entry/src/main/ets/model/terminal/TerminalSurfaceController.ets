@@ -5,7 +5,6 @@ import { ClipboardManager } from '../clipboard/ClipboardManager'
 import { Logger } from '../../common/logger/Logger'
 import { TerminalOutputBuffer } from './TerminalOutputBuffer'
 import util from '@ohos.util'
-import { ACCEPTANCE_TESTS } from 'BuildProfile'
 
 class SnapshotCompletion {
   requestId: number
@@ -207,13 +206,6 @@ export class TerminalSurfaceController {
       this.snapshotCompletions.push(new SnapshotCompletion(requestId, onCaptured, timerId))
     }
     this.bridge.requestSnapshot(requestId)
-  }
-
-  terminateRendererForAcceptance(): boolean {
-    if (!ACCEPTANCE_TESTS || this.bridge === null) {
-      return false
-    }
-    return this.bridge.terminateRendererForAcceptance()
   }
 
   private handleBridgeMessage(sourceBridge: TerminalBridge, msg: BridgeMessage): void {

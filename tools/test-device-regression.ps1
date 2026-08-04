@@ -284,9 +284,9 @@ foreach ($scriptName in @(
     if ($scriptName -eq 'verify-ssh-auth-pc.ps1') {
         Assert-True (
             $content.Contains('SSH authentication harness requires a clean committed tree') -and
-            $content.Contains('candidate.gitTree -ne $harnessTree') -and
+            $content.Contains('Assert-LeanTTYCandidateHarnessCompatibility') -and
             $content.Contains('harness = [ordered]@{')
-        ) 'SSH authentication evidence is not bound to its clean retained candidate'
+        ) 'SSH authentication evidence does not separate candidate and harness identity safely'
         Assert-True (
             $content.Contains('rport "tcp:$FixturePort"') -and
             $content.Contains('fport rm "tcp:$FixturePort" "tcp:$FixturePort"') -and
@@ -297,14 +297,26 @@ foreach ($scriptName in @(
             $content.Contains('HarmonyOS application logs exposed a temporary SSH fixture secret') -and
             $content.Contains("'failure-fixture-stderr.txt'") -and
             $content.Contains("'[REDACTED]'") -and
-            $content.Contains('Device auth input delivery length mismatch') -and
+            -not $content.Contains('Device auth input delivery length mismatch') -and
+            -not $content.Contains("SessionViewModel: D: 1 chars, mode=") -and
+            $content.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
             $content.Contains('Submit-FocusedDeviceCommand') -and
             $content.Contains('Activate-RegressionWindow') -and
             $content.Contains('Focus-ActiveCommandInput') -and
-            -not $content.Contains('Device command character delivery failed') -and
-            $content.Contains('secretDeliveryLengthVerifiedBeforeSubmit = $true') -and
+            $content.Contains('businessOutcomeRequired = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
+        Assert-True (
+            $content.Contains('[string[]]$Only') -and
+            $content.Contains("runMode = `$runMode") -and
+            $content.Contains("failureDomain = `$failureDomain") -and
+            $content.Contains('attemptId = $attemptId') -and
+            $content.Contains('resourceManifest = [ordered]@{') -and
+            $content.Contains('Write-AuthLiveStatus') -and
+            $content.Contains('Get-LeanTTYFixtureRunSeconds') -and
+            $content.Contains("'diagnostic'") -and
+            $content.Contains("'acceptance'")
+        ) 'SSH authentication harness lacks targeted diagnostics or auditable live evidence'
         Assert-True (
             $content.Contains("'password-success'") -and
             $content.Contains("'password-then-keyboard-interactive-mixed-echo'") -and
@@ -320,7 +332,7 @@ foreach ($scriptName in @(
             $content.Contains("'pane-close-during-hidden-prompt-and-recovery'") -and
             $content.Contains("-ButtonText 'Close pane'") -and
             $content.Contains("'layout-close-auth-single-pane.json'") -and
-            $content.Contains("'-RunSeconds', '1200'") -and
+            -not $content.Contains("'-RunSeconds', '1200'") -and
             $content.Contains("'publickey-encrypted-passphrase'") -and
             $content.Contains("'parallel-pane-independent-authentication'") -and
             $content.Contains("'minimize-restore-hidden-answer-continuity'") -and
@@ -331,6 +343,33 @@ foreach ($scriptName in @(
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
     }
+}
+
+$repoRoot = Split-Path $PSScriptRoot -Parent
+$sessionViewModel = Get-Content -LiteralPath (
+    Join-Path $repoRoot 'entry\src\main\ets\viewmodel\SessionViewModel.ets'
+) -Raw
+$acceptanceSource = Get-Content -LiteralPath (
+    Join-Path $PSScriptRoot 'acceptance-source.ps1'
+) -Raw
+Assert-True (
+    -not $sessionViewModel.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
+    $acceptanceSource.Contains("import { ACCEPTANCE_TESTS } from 'BuildProfile'") -and
+    $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
+    $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
+    $acceptanceSource.Contains('Invoke-WithLeanTTYAcceptanceSource')
+) 'Acceptance-only ArkTS is not isolated from the production source tree'
+
+foreach ($productionSource in @(
+    'entry\src\main\ets\pages\Index.ets',
+    'entry\src\main\ets\model\bridge\TerminalBridge.ets',
+    'entry\src\main\ets\model\terminal\TerminalSurfaceController.ets',
+    'entry\src\main\ets\viewmodel\SessionViewModel.ets'
+)) {
+    $productionText = Get-Content -LiteralPath (Join-Path $repoRoot $productionSource) -Raw
+    Assert-True (
+        $productionText -notmatch 'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|ACCEPTANCE_INPUT_SUBMIT'
+    ) "Production ArkTS contains acceptance-only source: $productionSource"
 }
 
 Write-Host 'Device regression helper tests passed.' -ForegroundColor Green

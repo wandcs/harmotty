@@ -14,6 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
+. (Join-Path $PSScriptRoot 'acceptance-source.ps1')
 
 Invoke-WithLeanTTYBuildLock -RepoRoot $repoRoot -Operation 'dev-build' -Action {
 $deveco = $env:DEVECO_HOME
@@ -47,8 +48,10 @@ if ($Clean) {
 
 $start = Get-Date
 $args = @($hvigorJs, '--mode', 'module', '-p', 'module=entry@default', 'assembleHap', '-p', 'buildMode=debug')
-& $nodeExe @args
-if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+Invoke-WithLeanTTYAcceptanceSource -RepoRoot $repoRoot -Enabled $true -Action {
+    & $nodeExe @args
+    if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+}
 
 $elapsed = (Get-Date) - $start
 Write-Host "BUILD SUCCESS in $([math]::Round($elapsed.TotalSeconds, 1))s" -ForegroundColor Green

@@ -16,7 +16,26 @@ param(
     [string]$UnlockPasswordPath = '',
     [ValidateRange(1024, 65535)]
     [int]$FixturePort = 22222,
-    [string]$Distribution = $env:LEANTTY_WSL_DISTRO
+    [string]$Distribution = $env:LEANTTY_WSL_DISTRO,
+    [ValidateSet(
+        'password-success',
+        'password-kbdint-mixed-echo',
+        'multiround-wrong-answer-recovery',
+        'publickey-unencrypted',
+        'publickey-then-password',
+        'publickey-then-keyboard-interactive',
+        'keyboard-interactive-zero-prompt',
+        'unsupported-method-error-and-recovery',
+        'ctrl-c-authentication-cancellation-and-recovery',
+        'pane-close-during-hidden-prompt-and-recovery',
+        'publickey-encrypted-passphrase',
+        'parallel-pane-authentication',
+        'minimize-restore-hidden-prompt',
+        'process-stop-during-hidden-prompt-cleanup'
+    )]
+    [string[]]$Only = @(),
+    [ValidatePattern('^[0-9a-f]{32}$')]
+    [string]$PreviousAttemptId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,9 +81,20 @@ if ([string]::IsNullOrWhiteSpace($HapPath)) {
 if ($candidate.gitDirty) {
     throw 'SSH authentication evidence requires a clean committed candidate'
 }
-if ($candidate.gitTree -ne $harnessTree) {
-    throw 'Retained candidate and SSH authentication harness must use the same committed tree'
-}
+$harnessDifferencePaths = @(Assert-LeanTTYCandidateHarnessCompatibility `
+    -RepoRoot $repoRoot `
+    -Candidate $candidate `
+    -AllowedHarnessPaths @(
+        'tools/verify-ssh-auth-pc.ps1',
+        'tools/device-regression.ps1',
+        'tools/test-device-regression.ps1',
+        'tools/candidate-store.ps1',
+        'tools/package-policy.ps1',
+        'tools/test-build-workflows.ps1',
+        'docs/quality-strategy.md',
+        'docs/design/ssh-authentication.md',
+        'docs/dev-environment.md'
+    ))
 
 if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
     $EvidenceDirectory = Join-Path $repoRoot (
@@ -75,6 +105,7 @@ if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
 $EvidenceDirectory = [IO.Path]::GetFullPath($EvidenceDirectory)
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
 $evidencePath = Join-Path $EvidenceDirectory 'device-ssh-auth.json'
+$liveStatusPath = Join-Path $EvidenceDirectory 'live-status.json'
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) (
     'leantty-ssh-auth-device-' + [Guid]::NewGuid().ToString('N')
 )
@@ -103,10 +134,119 @@ $secrets = @()
 $keyName = 'ltty_reg_' + [Guid]::NewGuid().ToString('N').Substring(0, 10)
 $keyPassphrase = New-LeanTTYRegressionSecret
 $keyCleanupRequired = $false
+$keyDeletePathUsed = $false
+$keyAbsenceAudited = $false
+$fixtureProcessAbsent = $false
 $failure = ''
 $scenarioResult = 'failed'
 $caughtError = $null
 $stageStartedAt = $null
+$currentStage = 'initialization'
+$failureDomain = 'none'
+$attemptId = [Guid]::NewGuid().ToString('N')
+$runMode = if ($Only.Count -eq 0) { 'acceptance' } else { 'diagnostic' }
+$availableStages = @(
+    'password-success',
+    'password-kbdint-mixed-echo',
+    'multiround-wrong-answer-recovery',
+    'generated-disposable-auth-key',
+    'publickey-unencrypted',
+    'publickey-then-password',
+    'publickey-then-keyboard-interactive',
+    'keyboard-interactive-zero-prompt',
+    'unsupported-method-error-and-recovery',
+    'ctrl-c-authentication-cancellation-and-recovery',
+    'pane-close-during-hidden-prompt-and-recovery',
+    'encrypted-disposable-auth-key',
+    'publickey-encrypted-passphrase',
+    'parallel-pane-authentication',
+    'minimize-restore-hidden-prompt',
+    'process-stop-during-hidden-prompt-cleanup',
+    'deleted-disposable-auth-key'
+)
+$selectedStages = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+if ($Only.Count -eq 0) {
+    foreach ($name in $availableStages) { [void]$selectedStages.Add($name) }
+} else {
+    foreach ($name in $Only) { [void]$selectedStages.Add($name) }
+    $keyStages = @(
+        'publickey-unencrypted',
+        'publickey-then-password',
+        'publickey-then-keyboard-interactive',
+        'publickey-encrypted-passphrase'
+    )
+    if (@($Only | Where-Object { $_ -in $keyStages }).Count -gt 0) {
+        [void]$selectedStages.Add('generated-disposable-auth-key')
+        [void]$selectedStages.Add('deleted-disposable-auth-key')
+    }
+    if ($Only -contains 'publickey-encrypted-passphrase') {
+        [void]$selectedStages.Add('encrypted-disposable-auth-key')
+    }
+}
+$selectedStageNames = @($availableStages | Where-Object { $selectedStages.Contains($_) })
+
+function Test-AuthStageSelected {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    return $selectedStages.Contains($Name)
+}
+
+function Get-LeanTTYFixtureRunSeconds {
+    param([Parameter(Mandatory = $true)][string[]]$StageNames)
+    $stageBudgetSeconds = 55
+    $setupAndCleanupSeconds = 180
+    return [Math]::Max(300, $setupAndCleanupSeconds + ($StageNames.Count * $stageBudgetSeconds))
+}
+
+$fixtureRunSeconds = Get-LeanTTYFixtureRunSeconds -StageNames $selectedStageNames
+
+function Write-AuthLiveStatus {
+    param(
+        [Parameter(Mandatory = $true)][string]$State,
+        [string]$Stage = $currentStage,
+        [string]$Detail = ''
+    )
+    $status = [ordered]@{
+        schemaVersion = 1
+        attemptId = $attemptId
+        previousAttemptId = $PreviousAttemptId
+        retryCount = 0
+        runMode = $runMode
+        state = $State
+        stage = $Stage
+        completedChecks = @($checks | ForEach-Object { $_.name })
+        updatedAt = [DateTimeOffset]::UtcNow.ToString('o')
+        detail = $Detail
+    }
+    [IO.File]::WriteAllText(
+        $liveStatusPath,
+        (ConvertTo-Json -InputObject $status -Depth 4),
+        [Text.UTF8Encoding]::new($false)
+    )
+}
+
+function Resolve-AuthFailureDomain {
+    param([Parameter(Mandatory = $true)][string]$Message)
+    foreach ($domain in @('product', 'harness', 'environment', 'infrastructure', 'invalid')) {
+        if ($Message.StartsWith("[$domain]", [StringComparison]::OrdinalIgnoreCase)) {
+            return $domain
+        }
+    }
+    if ($currentStage -eq 'fixture-and-device-preflight' -or $currentStage -eq 'initialization') {
+        return 'infrastructure'
+    }
+    if ($Message -match '(?i)fixture|\bhdc\b|device target|reverse mapping|launcher process') {
+        return 'infrastructure'
+    }
+    if ($Message -match '(?i)layout|selector|node|button|confirmation did not appear') {
+        return 'harness'
+    }
+    if ($Message -match '(?i)focus|foreground|window|notification|minimize|restore') {
+        return 'environment'
+    }
+    return 'product'
+}
 
 function Add-AuthCheck {
     param(
@@ -120,6 +260,8 @@ function Add-AuthCheck {
 function Start-AuthStage {
     param([Parameter(Mandatory = $true)][string]$Name)
     Write-Host "[device-auth] START $Name"
+    $script:currentStage = $Name
+    Write-AuthLiveStatus -State 'running' -Stage $Name
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     $script:stageStartedAt = [Diagnostics.Stopwatch]::StartNew()
 }
@@ -145,6 +287,7 @@ function Complete-AuthStage {
     if ($null -eq $stageStartedAt) { throw 'SSH authentication stage timing was not started' }
     Add-AuthCheck -Name $Name -DurationMs $stageStartedAt.ElapsedMilliseconds
     $script:stageStartedAt = $null
+    Write-AuthLiveStatus -State 'running' -Stage $Name -Detail 'passed'
 }
 
 function Wait-AuthLog {
@@ -165,19 +308,12 @@ function Submit-AuthValue {
         [Parameter(Mandatory = $true)][string]$Value,
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
+    Focus-ActiveCommandInput -LayoutName ($LayoutName + '.focus.json')
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
     Assert-NoSecretExposure -LayoutName $LayoutName
-    $logs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
-    $delivered = [regex]::Matches(
-        $logs,
-        '(?m)SessionViewModel: D: 1 chars, mode='
-    ).Count
-    if ($delivered -ne $Value.Length) {
-        throw "Device auth input delivery length mismatch: expected $($Value.Length), observed $delivered"
-    }
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
-    Start-Sleep -Milliseconds 150
+    Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT' -TimeoutSeconds 10
 }
 
 function Focus-ActiveCommandInput {
@@ -194,11 +330,11 @@ function Focus-ActiveCommandInput {
     } elseif ($nodes.Count -eq 1) {
         $inputNode = $nodes[0]
     } else {
-        throw 'Unable to identify the active terminal input before command submission'
+        throw '[environment] Unable to identify the active terminal input before command submission'
     }
     $center = Get-LeanTTYBoundsCenter -Bounds ([string]$inputNode.attributes.bounds)
     & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to focus the terminal before command submission' }
+    if ($LASTEXITCODE -ne 0) { throw '[environment] Unable to focus the terminal before command submission' }
 }
 
 function Submit-FocusedDeviceCommand {
@@ -207,8 +343,10 @@ function Submit-FocusedDeviceCommand {
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
     Focus-ActiveCommandInput -LayoutName $LayoutName
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+    Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
 }
 
 function Start-AuthCommand {
@@ -276,7 +414,7 @@ function Focus-AuthPane {
     $index = if ($Side -eq 'left') { 0 } else { 1 }
     $center = Get-LeanTTYBoundsCenter -Bounds ([string]$nodes[$index].attributes.bounds)
     & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Unable to focus $Side LeanTTY pane" }
+    if ($LASTEXITCODE -ne 0) { throw "[environment] Unable to focus $Side LeanTTY pane" }
 
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     do {
@@ -288,14 +426,14 @@ function Focus-AuthPane {
         }
         Start-Sleep -Milliseconds 200
     } while ($stopwatch.Elapsed.TotalSeconds -lt 10)
-    throw "Timed out focusing $Side LeanTTY pane"
+    throw "[environment] Timed out focusing $Side LeanTTY pane"
 }
 
 function Activate-RegressionWindow {
     & $hdc -t $Target shell 'aa start -a EntryAbility -b com.leantty.app' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Unable to activate LeanTTY regression window' }
     $activatedPid = (@(& $hdc -t $Target shell 'pidof com.leantty.app' 2>&1) -join "`n").Trim()
-    if ($activatedPid -ne $appPid) { throw 'LeanTTY process changed while activating its window' }
+    if ($activatedPid -ne $appPid) { throw '[environment] LeanTTY process changed while activating its window' }
 }
 
 function Invoke-ActivePaneCloseButton {
@@ -306,7 +444,7 @@ function Invoke-ActivePaneCloseButton {
         [string]$_.attributes.clickable -eq 'true' -and
         [string]$_.attributes.visible -eq 'true'
     } | Select-Object -First 1)
-    if ($button.Count -ne 1) { throw 'LeanTTY active-pane close button was not found' }
+    if ($button.Count -ne 1) { throw '[harness] LeanTTY active-pane close button was not found' }
     $center = Get-LeanTTYBoundsCenter -Bounds ([string]$button[0].attributes.bounds)
     & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Unable to click the LeanTTY active-pane close button' }
@@ -377,40 +515,46 @@ function Restart-RegressionApp {
     Ensure-SingleAuthPane -LayoutName ('layout-single-pane-' + $appPid + '.json')
 }
 
-function Invoke-DeleteKeyDialog {
-    param([Parameter(Mandatory = $true)][string]$LayoutName)
+function Invoke-ExpectedAuthDialog {
+    param(
+        [Parameter(Mandatory = $true)][string]$ButtonText,
+        [Parameter(Mandatory = $true)][string]$LayoutName,
+        [Parameter(Mandatory = $true)][string]$Postcondition
+    )
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     while ($stopwatch.Elapsed.TotalSeconds -lt 10) {
         try {
             Invoke-LeanTTYDialogButton `
                 -Hdc $hdc `
                 -Target $Target `
-                -ButtonText 'Delete key' `
+                -ButtonText $ButtonText `
                 -LayoutPath (Join-Path $EvidenceDirectory $LayoutName)
+            Write-AuthLiveStatus `
+                -State 'running' `
+                -Stage $currentStage `
+                -Detail "dialog=$ButtonText; expectedPostcondition=$Postcondition"
             return
         } catch {
             Start-Sleep -Milliseconds 200
         }
     }
-    throw 'Delete-key confirmation did not appear'
+    throw "[harness] Expected '$ButtonText' confirmation did not appear"
+}
+
+function Invoke-DeleteKeyDialog {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    Invoke-ExpectedAuthDialog `
+        -ButtonText 'Delete key' `
+        -LayoutName $LayoutName `
+        -Postcondition 'KEY_DELETE result=success and key files absent'
 }
 
 function Invoke-ClosePaneDialog {
     param([Parameter(Mandatory = $true)][string]$LayoutName)
-    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-    while ($stopwatch.Elapsed.TotalSeconds -lt 10) {
-        try {
-            Invoke-LeanTTYDialogButton `
-                -Hdc $hdc `
-                -Target $Target `
-                -ButtonText 'Close pane' `
-                -LayoutPath (Join-Path $EvidenceDirectory $LayoutName)
-            return
-        } catch {
-            Start-Sleep -Milliseconds 200
-        }
-    }
-    throw 'Close-pane confirmation did not appear'
+    Invoke-ExpectedAuthDialog `
+        -ButtonText 'Close pane' `
+        -LayoutName $LayoutName `
+        -Postcondition 'one terminal pane remains and authentication secret is absent'
 }
 
 function Remove-DisposableAuthKey {
@@ -426,6 +570,7 @@ function Remove-DisposableAuthKey {
     Submit-FocusedDeviceCommand `
         -Command "key rm $keyName" `
         -LayoutName "$LayoutPrefix-focus.json"
+    $script:keyDeletePathUsed = $true
     Invoke-DeleteKeyDialog -LayoutName "$LayoutPrefix-dialog.json"
     Wait-AuthLog -Pattern 'KEY_DELETE result=success'
     if (Test-LeanTTYDeviceKeyFilesPresent `
@@ -475,9 +620,13 @@ function Read-FixtureCredentials {
 
 function Write-AuthEvidence {
     $evidence = [ordered]@{
-        schemaVersion = 1
-        gate = 'device-behavior'
+        schemaVersion = 2
+        gate = $(if ($runMode -eq 'acceptance') { 'device-behavior' } else { 'diagnostic' })
         scenario = 'ssh-interactive-authentication'
+        runMode = $runMode
+        attemptId = $attemptId
+        previousAttemptId = $PreviousAttemptId
+        retryCount = 0
         result = $scenarioResult
         startedAt = $startedAt.ToString('o')
         completedAt = [DateTimeOffset]::UtcNow.ToString('o')
@@ -487,11 +636,13 @@ function Write-AuthEvidence {
             gitCommit = $candidate.gitCommit
             gitTree = $candidate.gitTree
             gitDirty = $candidate.gitDirty
+            reusedAcrossHarnessOnlyChanges = ($harnessDifferencePaths.Count -gt 0)
         }
         harness = [ordered]@{
             gitCommit = $harnessCommit
             gitTree = $harnessTree
             gitDirty = $false
+            differencePathsFromCandidate = @($harnessDifferencePaths)
         }
         device = [ordered]@{
             model = $deviceModel
@@ -502,6 +653,7 @@ function Write-AuthEvidence {
             endpoint = "127.0.0.1:$FixturePort"
             transport = 'hdc-reverse-to-repository-only-russh-server'
             credentials = 'runtime-generated-temporary-values'
+            runSeconds = $fixtureRunSeconds
         }
         environment = [ordered]@{
             awakeLease = $awakeLeaseResult
@@ -513,13 +665,15 @@ function Write-AuthEvidence {
             secretInjection = 'runtime-generated-printable-ascii'
             textChunkCharacters = 1
             interChunkPacingMilliseconds = 10
-            secretDeliveryLengthVerifiedBeforeSubmit = $true
-            interPromptSettleMilliseconds = 150
+            submitTelemetry = 'compile-time-acceptance-marker-with-sequence-and-kind-only'
+            businessOutcomeRequired = $true
             fixedDelayUsedAsVerdict = $false
             paneRouting = 'sorted-terminal-input-accessibility-nodes'
             minimizeTrigger = 'HarmonyOS-EnhanceMinimizeBtn'
         }
-        coverage = @(
+        coverage = @($checks | Where-Object { $_.name -ne 'fixture-and-device-preflight' } |
+            ForEach-Object { $_.name })
+        declaredCoverage = @(
             'password-success',
             'password-then-keyboard-interactive-mixed-echo',
             'keyboard-interactive-multi-round-wrong-answer-recovery',
@@ -535,8 +689,23 @@ function Write-AuthEvidence {
             'minimize-restore-hidden-answer-continuity',
             'process-stop-during-hidden-prompt-cleanup'
         )
+        selectedStages = @($selectedStageNames)
         checks = @($checks)
-        cleanup = [ordered]@{ result = $cleanupResult; failure = $cleanupFailure }
+        resourceManifest = [ordered]@{
+            disposableKey = $keyName
+            reversePort = $FixturePort
+            fixtureDirectory = 'run-scoped-system-temporary-directory'
+            knownHostEndpoint = "[127.0.0.1]:$FixturePort"
+        }
+        cleanup = [ordered]@{
+            result = $cleanupResult
+            failure = $cleanupFailure
+            productDeletePathUsed = $keyDeletePathUsed
+            independentKeyAbsenceAudit = $keyAbsenceAudited
+            reverseMappingAbsenceAudit = (-not $mappingActive)
+            fixtureProcessAbsenceAudit = $fixtureProcessAbsent
+        }
+        failureDomain = $failureDomain
         failure = $failure
     }
     [IO.File]::WriteAllText(
@@ -548,13 +717,15 @@ function Write-AuthEvidence {
 
 try {
     Write-Host '[device-auth] START fixture-and-device-preflight'
+    $currentStage = 'fixture-and-device-preflight'
+    Write-AuthLiveStatus -State 'running' -Stage $currentStage
     $preflight = [Diagnostics.Stopwatch]::StartNew()
     $pwshPath = (Get-Process -Id $PID).Path
     $fixtureArguments = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
         (Join-Path $PSScriptRoot 'start-ssh-auth-fixture.ps1'),
         '-ListenAddress', "0.0.0.0:$FixturePort",
-        '-RunSeconds', '1200',
+        '-RunSeconds', $fixtureRunSeconds.ToString(),
         '-ControlDirectory', $fixtureControl
     )
     if (-not [string]::IsNullOrWhiteSpace($Distribution)) {
@@ -606,9 +777,21 @@ try {
     Submit-FocusedDeviceCommand `
         -Command "ssh-keygen -R [127.0.0.1]:$FixturePort" `
         -LayoutName 'layout-preflight-command-focus.json'
-    Start-Sleep -Milliseconds 500
+    if (-not (Test-AuthStageSelected -Name 'password-success')) {
+        Start-AuthCommand -User 'password'
+        Wait-AuthLog -Pattern 'rust event: HOST_KEY_PROMPT:'
+        Submit-LeanTTYDeviceCommand -Hdc $hdc -Target $Target -Command 'yes'
+        Wait-AuthLog -Pattern 'native auth event kind=password'
+        Invoke-LeanTTYDeviceCtrlC -Hdc $hdc -Target $Target
+        Wait-LeanTTYTerminalInputLayout `
+            -Hdc $hdc `
+            -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'layout-preflight-trust-cancelled.json') `
+            -TimeoutSeconds 10 | Out-Null
+    }
     Add-AuthCheck -Name 'fixture-and-device-preflight' -DurationMs $preflight.ElapsedMilliseconds
 
+    if (Test-AuthStageSelected -Name 'password-success') {
     Start-AuthStage -Name 'password-success'
     Start-AuthCommand -User 'password'
     Wait-AuthLog -Pattern 'rust event: HOST_KEY_PROMPT:'
@@ -618,7 +801,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'password-success'
+    }
 
+    if (Test-AuthStageSelected -Name 'password-kbdint-mixed-echo') {
     Start-AuthStage -Name 'password-kbdint-mixed-echo'
     Start-AuthCommand -User 'password-kbdint'
     Wait-AuthLog -Pattern 'native auth event kind=password'
@@ -631,7 +816,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'password-kbdint-mixed-echo'
+    }
 
+    if (Test-AuthStageSelected -Name 'multiround-wrong-answer-recovery') {
     Start-AuthStage -Name 'multiround-wrong-answer-recovery'
     Start-AuthCommand -User 'kbdint-multiround'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -655,7 +842,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'multiround-wrong-answer-recovery'
+    }
 
+    if (Test-AuthStageSelected -Name 'generated-disposable-auth-key') {
     Start-AuthStage -Name 'generated-disposable-auth-key'
     $keyCleanupRequired = $true
     Submit-FocusedDeviceCommand `
@@ -663,13 +852,17 @@ try {
         -LayoutName 'layout-key-generate-command-focus.json'
     Wait-AuthLog -Pattern 'Key generated:'
     Complete-AuthStage -Name 'generated-disposable-auth-key'
+    }
 
+    if (Test-AuthStageSelected -Name 'publickey-unencrypted') {
     Start-AuthStage -Name 'publickey-unencrypted'
     Start-AuthCommand -User 'publickey' -Identity $keyName
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'publickey-unencrypted'
+    }
 
+    if (Test-AuthStageSelected -Name 'publickey-then-password') {
     Start-AuthStage -Name 'publickey-then-password'
     Start-AuthCommand -User 'publickey-password' -Identity $keyName
     Wait-AuthLog -Pattern 'native auth event kind=password'
@@ -677,7 +870,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'publickey-then-password'
+    }
 
+    if (Test-AuthStageSelected -Name 'publickey-then-keyboard-interactive') {
     Start-AuthStage -Name 'publickey-then-keyboard-interactive'
     Start-AuthCommand -User 'publickey-kbdint' -Identity $keyName
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -687,14 +882,18 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'publickey-then-keyboard-interactive'
+    }
 
+    if (Test-AuthStageSelected -Name 'keyboard-interactive-zero-prompt') {
     Start-AuthStage -Name 'keyboard-interactive-zero-prompt'
     Start-AuthCommand -User 'kbdint-zero'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'keyboard-interactive-zero-prompt'
+    }
 
+    if (Test-AuthStageSelected -Name 'unsupported-method-error-and-recovery') {
     Start-AuthStage -Name 'unsupported-method-error-and-recovery'
     Start-AuthCommand -User 'unsupported'
     Wait-AuthLog -Pattern 'rust event: AUTH:no supported authentication method is available'
@@ -706,7 +905,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'unsupported-method-error-and-recovery'
+    }
 
+    if (Test-AuthStageSelected -Name 'ctrl-c-authentication-cancellation-and-recovery') {
     Start-AuthStage -Name 'ctrl-c-authentication-cancellation-and-recovery'
     Start-AuthCommand -User 'kbdint-multiround'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -725,7 +926,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'ctrl-c-authentication-cancellation-and-recovery'
+    }
 
+    if (Test-AuthStageSelected -Name 'pane-close-during-hidden-prompt-and-recovery') {
     Start-AuthStage -Name 'pane-close-during-hidden-prompt-and-recovery'
     Split-AuthPane
     Focus-AuthPane -Side 'right' -LayoutName 'layout-close-auth-right-prompt.json'
@@ -748,7 +951,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'pane-close-during-hidden-prompt-and-recovery'
+    }
 
+    if (Test-AuthStageSelected -Name 'encrypted-disposable-auth-key') {
     Start-AuthStage -Name 'encrypted-disposable-auth-key'
     Submit-FocusedDeviceCommand `
         -Command "ssh-keygen -p -f $keyName" `
@@ -761,7 +966,9 @@ try {
     Submit-AuthValue -Value $keyPassphrase -LayoutName 'layout-key-passphrase-confirm.json'
     Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE result=success'
     Complete-AuthStage -Name 'encrypted-disposable-auth-key'
+    }
 
+    if (Test-AuthStageSelected -Name 'publickey-encrypted-passphrase') {
     Start-AuthStage -Name 'publickey-encrypted-passphrase'
     Start-AuthCommand -User 'publickey' -Identity $keyName
     Wait-AuthLog -Pattern 'native auth event kind=private_key_passphrase'
@@ -769,7 +976,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'publickey-encrypted-passphrase'
+    }
 
+    if (Test-AuthStageSelected -Name 'parallel-pane-authentication') {
     Start-AuthStage -Name 'parallel-pane-authentication'
     Split-AuthPane
     Focus-AuthPane -Side 'right' -LayoutName 'layout-parallel-right-prompt.json'
@@ -797,7 +1006,9 @@ try {
     Close-FixtureShell
     Complete-AuthStage -Name 'parallel-pane-authentication'
     Ensure-SingleAuthPane -LayoutName 'layout-parallel-cleanup.json'
+    }
 
+    if (Test-AuthStageSelected -Name 'minimize-restore-hidden-prompt') {
     Start-AuthStage -Name 'minimize-restore-hidden-prompt'
     Start-AuthCommand -User 'kbdint-multiround'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -814,7 +1025,9 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'minimize-restore-hidden-prompt'
+    }
 
+    if (Test-AuthStageSelected -Name 'process-stop-during-hidden-prompt-cleanup') {
     Start-AuthStage -Name 'process-stop-during-hidden-prompt-cleanup'
     Start-AuthCommand -User 'kbdint-multiround'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -826,20 +1039,24 @@ try {
     Restart-RegressionApp
     Assert-NoSecretExposure -LayoutName 'layout-cancel-restarted.json'
     Complete-AuthStage -Name 'process-stop-during-hidden-prompt-cleanup'
+    }
 
+    if (Test-AuthStageSelected -Name 'deleted-disposable-auth-key') {
     Start-AuthStage -Name 'deleted-disposable-auth-key'
     Remove-DisposableAuthKey -LayoutPrefix 'layout-key-cleanup' | Out-Null
     $keyCleanupRequired = $false
     Complete-AuthStage -Name 'deleted-disposable-auth-key'
+    }
 
     Submit-FocusedDeviceCommand `
         -Command "ssh-keygen -R [127.0.0.1]:$FixturePort" `
         -LayoutName 'layout-final-known-hosts-command-focus.json'
-    Start-Sleep -Milliseconds 500
     $scenarioResult = 'passed'
 } catch {
     $caughtError = $_
     $failure = $_.Exception.Message
+    $failureDomain = Resolve-AuthFailureDomain -Message $failure
+    Write-AuthLiveStatus -State 'failed' -Stage $currentStage -Detail $failureDomain
     try {
         $failureLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
         Save-SafeDiagnosticText -Text $failureLogs -FileName 'failure-hilog.txt'
@@ -895,6 +1112,19 @@ try {
             $cleanupFailures.Add('SSH fixture launcher process remained after cleanup')
         }
     }
+    $fixtureProcessAbsent = ($null -eq $fixtureProcess -or $fixtureProcess.HasExited)
+    try {
+        if (Test-LeanTTYDeviceKeyFilesPresent `
+            -Hdc $hdc `
+            -Target $Target `
+            -KeyName $keyName) {
+            $cleanupFailures.Add('Disposable SSH authentication key remained after cleanup audit')
+        } else {
+            $keyAbsenceAudited = $true
+        }
+    } catch {
+        $cleanupFailures.Add('Disposable SSH authentication key absence audit failed')
+    }
     if (-not [string]::IsNullOrWhiteSpace($failure)) {
         foreach ($diagnostic in @(
             @{ source = $fixtureStdout; destination = 'failure-fixture-stdout.txt' },
@@ -945,13 +1175,21 @@ if ($scenarioResult -ne 'passed') {
     throw $failure
 }
 
-Save-LeanTTYVerifiedCandidate `
-    -RepoRoot $repoRoot `
-    -HapPath $candidate.hapPath `
-    -VerificationMode 'device-behavior' `
-    -EvidencePaths @($evidencePath) `
-    -CandidateBasePath $CandidateBasePath | Out-Null
-Write-Host (
-    'DEVICE BEHAVIOR SUCCESS: ssh-interactive-authentication ' +
-    "(SHA256=$($candidate.sha256), evidence=$evidencePath)"
-) -ForegroundColor Green
+Write-AuthLiveStatus -State 'passed' -Stage 'complete'
+if ($runMode -eq 'acceptance') {
+    Save-LeanTTYVerifiedCandidate `
+        -RepoRoot $repoRoot `
+        -HapPath $candidate.hapPath `
+        -VerificationMode 'device-behavior' `
+        -EvidencePaths @($evidencePath) `
+        -CandidateBasePath $CandidateBasePath | Out-Null
+    Write-Host (
+        'DEVICE BEHAVIOR SUCCESS: ssh-interactive-authentication ' +
+        "(SHA256=$($candidate.sha256), evidence=$evidencePath)"
+    ) -ForegroundColor Green
+} else {
+    Write-Host (
+        'DIAGNOSTIC SUCCESS: ssh-interactive-authentication ' +
+        "(stages=$($Only -join ','), evidence=$evidencePath; candidate not promoted)"
+    ) -ForegroundColor Yellow
+}
