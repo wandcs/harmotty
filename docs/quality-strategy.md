@@ -160,9 +160,9 @@ Every automated physical scenario MUST:
   and scan captured layouts/logs for disclosure;
 - wait on observable state or a non-secret structured log marker; fixed sleeps
   MAY pace polling but MUST NOT decide success;
-- derive input cleanup from current accessibility state, use the minimum bounded
-  key events and verify the resulting empty state instead of sending a fixed
-  high-count key loop;
+- cancel input through the application's real `Ctrl+C` state-machine path;
+  ArkWeb's hidden textarea accessibility value MUST NOT be treated as the
+  native local-command or secret-input buffer;
 - cover the positive path plus applicable rejection, cancellation, retry,
   recovery and cleanup paths;
 - report stage start/pass progress and duration so a stalled boundary is visible;

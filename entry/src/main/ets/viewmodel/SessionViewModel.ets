@@ -560,6 +560,10 @@ export class SessionViewModel {
       let action: TerminalInputAction = actions[i]
       if (action.kind === TerminalInputActionKind.SUBMIT) {
         this.executeCommandBuffer()
+      } else if (action.kind === TerminalInputActionKind.INTERRUPT) {
+        this.commandLine.clear()
+        this.writeTerminal('^C\r\n')
+        this.writePrompt()
       } else if (action.kind === TerminalInputActionKind.BACKSPACE) {
         if (this.commandLine.backspace() !== null) {
           this.redrawLocalCommandLine()

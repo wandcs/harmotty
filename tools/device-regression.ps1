@@ -285,34 +285,10 @@ function Invoke-LeanTTYDeviceCtrlC {
 function Clear-LeanTTYDeviceInput {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
-        [Parameter(Mandatory = $true)][string]$Target,
-        [Parameter(Mandatory = $true)][string]$LayoutPath
+        [Parameter(Mandatory = $true)][string]$Target
     )
 
     Invoke-LeanTTYDeviceCtrlC -Hdc $Hdc -Target $Target
-    $layout = Get-LeanTTYDeviceLayout -Hdc $Hdc -Target $Target -LocalPath $LayoutPath
-    $currentText = Get-LeanTTYTerminalInputText -Layout $layout
-    if ([string]::IsNullOrEmpty($currentText)) { return 0 }
-    if ($currentText.Length -gt 256) {
-        throw 'HarmonyOS terminal-line cleanup refused unexpectedly long input'
-    }
-
-    $backspaceCount = $currentText.Length + 2
-    & $Hdc -t $Target shell (
-        "i=0; while [ `$i -lt $backspaceCount ]; do " +
-        'uitest uiInput keyEvent 2055 >/dev/null; i=$((i+1)); done'
-    ) | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS terminal-line cleanup failed' }
-
-    $verifiedLayout = Get-LeanTTYDeviceLayout `
-        -Hdc $Hdc `
-        -Target $Target `
-        -LocalPath $LayoutPath
-    $remainingText = Get-LeanTTYTerminalInputText -Layout $verifiedLayout
-    if (-not [string]::IsNullOrEmpty($remainingText)) {
-        throw "HarmonyOS terminal-line cleanup left $($remainingText.Length) input characters"
-    }
-    return $backspaceCount
 }
 
 function Test-LeanTTYDeviceKeyFilesPresent {

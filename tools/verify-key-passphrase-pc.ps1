@@ -205,8 +205,7 @@ function Remove-DisposableDeviceKey {
 
     Clear-LeanTTYDeviceInput `
         -Hdc $hdc `
-        -Target $Target `
-        -LayoutPath (Join-Path $EvidenceDirectory "$LayoutPrefix-input.json") | Out-Null
+        -Target $Target
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-Command -Command "key rm $keyName"
     Invoke-DeleteKeyDialog -LayoutName "$LayoutPrefix-dialog.json"
@@ -313,8 +312,7 @@ try {
     Get-LeanTTYTerminalInputText -Layout $preflightLayout | Out-Null
     Clear-LeanTTYDeviceInput `
         -Hdc $hdc `
-        -Target $Target `
-        -LayoutPath (Join-Path $EvidenceDirectory 'layout-preflight-cleanup.json') | Out-Null
+        -Target $Target
     Add-BehaviorCheck `
         -Name 'device-harness-preflight' `
         -DurationMs $preflightStopwatch.ElapsedMilliseconds

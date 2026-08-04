@@ -152,17 +152,32 @@ Assert-True (
     $deviceRegressionText -notmatch 'hilog\s+-x[^\r\n]*\s-z\s'
 ) 'Device log query combines mutually exclusive hilog exit and tail modes'
 Assert-True (
-    $deviceRegressionText -notmatch 'while \[ \$i -lt 160 \]'
-) 'Device input cleanup still uses a fixed high-count backspace loop'
+    $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
+) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
     $deviceRegressionText -match 'shell\s+-b\s+com\.leantty\.app'
 ) 'Device key-state inspection does not use the HarmonyOS bundle shell'
 
 $clearInputParameters = (Get-Command Clear-LeanTTYDeviceInput).Parameters.Keys
+$clearInputSource = (Get-Command Clear-LeanTTYDeviceInput).Definition
 Assert-True (
-    $clearInputParameters -contains 'LayoutPath'
-) 'Device input cleanup does not verify current input state through a layout readback'
+    $clearInputParameters -notcontains 'LayoutPath' -and
+    $clearInputSource.Contains('Invoke-LeanTTYDeviceCtrlC') -and
+    -not $clearInputSource.Contains('Get-LeanTTYTerminalInputText')
+) 'Device input cleanup still accepts the non-authoritative ArkWeb layout readback'
+
+& {
+    $script:ctrlCCount = 0
+    function Invoke-LeanTTYDeviceCtrlC {
+        param($Hdc, $Target)
+        $script:ctrlCCount++
+    }
+    Clear-LeanTTYDeviceInput -Hdc 'unused' -Target 'unused'
+    Assert-True ($script:ctrlCCount -eq 1) (
+        'Device input cleanup did not use the single application interrupt path'
+    )
+}
 
 Assert-True (
     $null -ne (Get-Command Start-LeanTTYDeviceAwakeLease -ErrorAction SilentlyContinue) -and
