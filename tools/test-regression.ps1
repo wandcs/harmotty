@@ -112,6 +112,11 @@ Invoke-RegressionCheck -Name 'device-regression-helpers' -Action {
     if ($LASTEXITCODE -ne 0) { throw 'Device regression helper tests failed' }
 }
 
+Invoke-RegressionCheck -Name 'ssh-transport-order' -Action {
+    & (Join-Path $PSScriptRoot 'check-ssh-transport-flow.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'SSH transport ordering check failed' }
+}
+
 $script:devecoPath = ''
 $script:nodePath = ''
 $script:hvigorPath = ''

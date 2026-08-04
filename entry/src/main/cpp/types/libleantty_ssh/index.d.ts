@@ -12,12 +12,16 @@ export interface AuthEvent {
   instructions: string
   prompts: AuthPromptEvent[]
 }
+export interface TransportEvent {
+  kind: string
+  data: Uint8Array
+  result: string
+}
 export declare function sshConnect(
   host: string, port: number, user: string,
   privateKeyPath: string, privateKeyRequiresPassphrase: boolean,
   knownHostsPath: string, connectTimeoutMs: number, generation: number,
-  onData: (data: Uint8Array) => void,
-  onClose: (exitCode: string) => void,
+  onTransport: (event: TransportEvent) => void,
   onControl: (event: string) => void,
   onAuth: (event: AuthEvent) => void
 ): string

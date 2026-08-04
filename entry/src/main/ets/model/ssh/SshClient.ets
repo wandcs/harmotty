@@ -1,7 +1,11 @@
 import { SshErrorCode, SshError, SshConnectOptions } from '../../common/types/SshTypes'
 import { Logger } from '../../common/logger/Logger'
 import sshNative from 'libleantty_ssh.so'
-import type { AuthEvent as NativeAuthEvent, AuthPromptEvent as NativeAuthPromptEvent } from 'libleantty_ssh.so'
+import type {
+  AuthEvent as NativeAuthEvent,
+  AuthPromptEvent as NativeAuthPromptEvent,
+  TransportEvent as NativeTransportEvent
+} from 'libleantty_ssh.so'
 
 export { SshErrorCode, SshError, SshConnectOptions } from '../../common/types/SshTypes'
 
@@ -84,19 +88,8 @@ export class SshClient {
         options.knownHostsPath,
         options.connectTimeoutMs,
         this.generation,
-        (data: Uint8Array) => {
-          if (this.dataCallback !== null) {
-            this.dataCallback(data)
-          }
-        },
-        (closeResult: string) => {
-          let closeError: string | null = SshClient.parseCloseError(closeResult)
-          if (closeError !== null) {
-            this.handleError('CONNECT:' + closeError)
-          } else {
-            let exitCode: number = parseInt(closeResult, 10)
-            this.handleClose(isNaN(exitCode) ? -1 : exitCode)
-          }
+        (event: NativeTransportEvent) => {
+          this.handleNativeTransportEvent(event)
         },
         (event: string) => {
           this.handleRustEvent(event)
@@ -373,6 +366,26 @@ export class SshClient {
       return
     }
     this.handleError('AUTH:Unknown native authentication event')
+  }
+
+  private handleNativeTransportEvent(event: NativeTransportEvent): void {
+    if (event.kind === 'data') {
+      if (this.dataCallback !== null) {
+        this.dataCallback(event.data)
+      }
+      return
+    }
+    if (event.kind === 'close') {
+      let closeError: string | null = SshClient.parseCloseError(event.result)
+      if (closeError !== null) {
+        this.handleError('CONNECT:' + closeError)
+      } else {
+        let exitCode: number = parseInt(event.result, 10)
+        this.handleClose(isNaN(exitCode) ? -1 : exitCode)
+      }
+      return
+    }
+    this.handleError('CONNECT:Invalid native SSH transport event')
   }
 
   private emitEvent(event: SshClientEvent, data: string): void {

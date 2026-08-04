@@ -33,6 +33,7 @@ foreach ($scriptName in @(
         'rust-wsl.ps1',
         'device-regression.ps1',
         'test-device-regression.ps1',
+        'check-ssh-transport-flow.ps1',
         'test-regression.ps1',
         'verify-key-passphrase-pc.ps1',
         'verify-ssh-auth-pc.ps1',

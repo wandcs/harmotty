@@ -86,6 +86,9 @@
 
 ### Fixed
 
+- Preserved the visible terminal and scrollback when SSH closes by delivering
+  final PTY bytes and the close event through one ordered native callback before
+  the disconnected prompt and terminal checkpoint.
 - Enabled the existing `russh` RSA feature so the advertised RSA-4096 key
   generation and passphrase-change paths use the supported implementation
   instead of failing with an unknown-algorithm error.
