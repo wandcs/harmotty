@@ -61,12 +61,13 @@ HarmonyOS PC 已使用同一夹具验证直接密码、未加密/加密私钥、
 公钥后密码、公钥后 interactive、多轮 interactive、混合 echo、banner 和取消；更广的
 真实服务、Pane 并行、最小化/恢复、断网与错误矩阵仍是发布门禁。
 
-`tools/verify-ssh-auth-pc.ps1` 将其中不依赖密钥部署的主路径固化为保留候选验收：脚本
+`tools/verify-ssh-auth-pc.ps1` 将这些主路径固化为保留候选验收：脚本
 只在系统临时目录生成凭据，通过可清理的 HDC reverse 映射让设备标准 `ssh` 命令连接
 仓库夹具，并使用原始按键、结构化非秘密日志与 accessibility layout 覆盖直接密码、
-密码后 mixed-echo interactive、多轮错误恢复，以及隐藏回答期间进程停止后的清理。
-脚本不要求 HAP 内存在验收入口；公钥组合、Pane 并行、最小化/恢复和真实服务矩阵仍
-保持独立门禁。
+密码后 mixed-echo interactive、多轮错误恢复、未加密/加密公钥、公钥后密码、公钥后
+interactive，以及隐藏回答期间进程停止后的清理。一次性密钥由应用标准 `ssh-keygen`
+路径创建、加密并删除，脚本独立检查其沙箱文件已清理。脚本不要求 HAP 内存在验收
+入口；Pane 并行、最小化/恢复和真实服务矩阵仍保持独立门禁。
 
 ## 用户交互
 

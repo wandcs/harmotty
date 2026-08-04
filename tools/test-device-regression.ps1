@@ -68,9 +68,9 @@ Assert-Throws -Action {
 } -Message 'Device text key conversion accepted non-printable input'
 
 & {
-    $script:capturedHdcArgs = @()
+    $script:capturedHdcCalls = [Collections.Generic.List[object]]::new()
     function Invoke-FakeHdc {
-        $script:capturedHdcArgs = @($args)
+        $script:capturedHdcCalls.Add(@($args))
         $global:LASTEXITCODE = 0
     }
 
@@ -78,15 +78,20 @@ Assert-Throws -Action {
         -Hdc 'Invoke-FakeHdc' `
         -Target 'regression-device' `
         -Text 'echo LEANTTY_SMOKE'
+    $expectedChunks = @('echo LEANTTY', '_SMOKE')
     Assert-True (
-        $script:capturedHdcArgs.Count -eq 4 -and
-        $script:capturedHdcArgs[0] -eq '-t' -and
-        $script:capturedHdcArgs[1] -eq 'regression-device' -and
-        $script:capturedHdcArgs[2] -eq 'shell' -and
-        $script:capturedHdcArgs[3] -eq (
-            ConvertTo-LeanTTYDeviceTextKeyCommand -Text 'echo LEANTTY_SMOKE'
+        $script:capturedHdcCalls.Count -eq 2 -and
+        $script:capturedHdcCalls[0].Count -eq 4 -and
+        $script:capturedHdcCalls[0][0] -eq '-t' -and
+        $script:capturedHdcCalls[0][1] -eq 'regression-device' -and
+        $script:capturedHdcCalls[0][2] -eq 'shell' -and
+        $script:capturedHdcCalls[0][3] -eq (
+            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[0]
+        ) -and
+        $script:capturedHdcCalls[1][3] -eq (
+            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[1]
         )
-    ) 'Device text injection did not preserve the requested echo command'
+    ) 'Device text injection did not preserve and pace the requested echo command'
 }
 
 & {
@@ -278,6 +283,10 @@ foreach ($scriptName in @(
             $content.Contains("'password-success'") -and
             $content.Contains("'password-then-keyboard-interactive-mixed-echo'") -and
             $content.Contains("'keyboard-interactive-multi-round-wrong-answer-recovery'") -and
+            $content.Contains("'publickey-unencrypted'") -and
+            $content.Contains("'publickey-then-password'") -and
+            $content.Contains("'publickey-then-keyboard-interactive'") -and
+            $content.Contains("'publickey-encrypted-passphrase'") -and
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
     }
