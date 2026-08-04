@@ -4,6 +4,10 @@
 
 ### Development
 
+- Closed the engineering device-text injection gate with exact command
+  readback before Enter, deterministic coverage that rejects the historical
+  `echo` to `eho` corruption, and a physical ARM64 HarmonyOS PC probe that
+  preserved `echo` and representative ASCII inputs exactly.
 - Added OpenSSH-compatible `ssh-keygen -F` lookup for the single LeanTTY
   `known_hosts` authority, including plain, hashed, comma-separated, IPv4,
   IPv6, non-default-port and multi-algorithm records without changing assets.
