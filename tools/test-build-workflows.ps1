@@ -18,6 +18,20 @@ function Assert-True {
     }
 }
 
+function Assert-Throws {
+    param(
+        [Parameter(Mandatory = $true)][scriptblock]$Action,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    try {
+        & $Action
+    } catch {
+        return
+    }
+    throw $Message
+}
+
 function Wait-ForPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -40,6 +54,92 @@ try {
         "Candidate store helper is missing: $candidateScript"
     )
     . $candidateScript
+    $candidateScriptText = Get-Content -LiteralPath $candidateScript -Raw
+    Assert-True (
+        $candidateScriptText.Contains('diff --name-only $candidateCommit HEAD') -and
+        -not $candidateScriptText.Contains('diff --name-only --diff-filter=')
+    ) 'Candidate reuse comparison could omit deleted or otherwise changed product paths'
+
+    $packagePolicyScript = Join-Path $PSScriptRoot 'package-policy.ps1'
+    Assert-True (Test-Path -LiteralPath $packagePolicyScript -PathType Leaf) (
+        "Package policy helper is missing: $packagePolicyScript"
+    )
+    . $packagePolicyScript
+
+    $acceptanceSourceScript = Join-Path $PSScriptRoot 'acceptance-source.ps1'
+    Assert-True (Test-Path -LiteralPath $acceptanceSourceScript -PathType Leaf) (
+        "Acceptance source helper is missing: $acceptanceSourceScript"
+    )
+    . $acceptanceSourceScript
+    $acceptanceArkTsPaths = @(
+        Join-Path $repoRoot 'entry\src\main\ets\pages\Index.ets'
+        Join-Path $repoRoot 'entry\src\main\ets\model\bridge\TerminalBridge.ets'
+        Join-Path $repoRoot 'entry\src\main\ets\model\terminal\TerminalSurfaceController.ets'
+        Join-Path $repoRoot 'entry\src\main\ets\viewmodel\SessionViewModel.ets'
+    )
+    $acceptanceSourceHashes = @{}
+    foreach ($path in $acceptanceArkTsPaths) {
+        $acceptanceSourceHashes[$path] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    }
+    Invoke-WithLeanTTYAcceptanceSource -RepoRoot $repoRoot -Enabled $true -Action {
+        $injectedText = $acceptanceArkTsPaths | ForEach-Object {
+            Get-Content -LiteralPath $_ -Raw
+        }
+        Assert-True (($injectedText -join "`n").Contains('ACCEPTANCE_INPUT_SUBMIT')) (
+            'Debug acceptance source injection omitted input telemetry'
+        )
+        Assert-True (($injectedText -join "`n").Contains('Acceptance: Rebuild Renderer')) (
+            'Debug acceptance source injection omitted renderer trigger'
+        )
+    }
+    foreach ($path in $acceptanceArkTsPaths) {
+        Assert-True (
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $acceptanceSourceHashes[$path]
+        ) "Acceptance source injection did not restore $path byte-for-byte"
+    }
+
+    Assert-LeanTTYHarnessOnlyPaths `
+        -ChangedPaths @('tools/verify-ssh-auth-pc.ps1', 'docs/quality-strategy.md') `
+        -AllowedPaths @('tools/verify-ssh-auth-pc.ps1', 'docs/*.md')
+    Assert-Throws -Action {
+        Assert-LeanTTYHarnessOnlyPaths `
+            -ChangedPaths @('entry/src/main/ets/pages/Index.ets') `
+            -AllowedPaths @('tools/verify-ssh-auth-pc.ps1', 'docs/*.md')
+    } -Message 'Candidate reuse accepted a product-source change'
+
+    $safeHap = Join-Path $testRoot 'safe-release.hap'
+    $unsafeHap = Join-Path $testRoot 'unsafe-release.hap'
+    foreach ($archiveCase in @(
+        @{ path = $safeHap; content = 'ordinary release bytecode' },
+        @{ path = $unsafeHap; content = 'ACCEPTANCE_INPUT_SUBMIT must not ship' }
+    )) {
+        $archiveStream = [IO.File]::Open($archiveCase.path, [IO.FileMode]::Create)
+        try {
+            $zip = [IO.Compression.ZipArchive]::new(
+                $archiveStream,
+                [IO.Compression.ZipArchiveMode]::Create,
+                $false
+            )
+            try {
+                $entry = $zip.CreateEntry('modules.abc')
+                $entryStream = $entry.Open()
+                try {
+                    $bytes = [Text.Encoding]::UTF8.GetBytes($archiveCase.content)
+                    $entryStream.Write($bytes, 0, $bytes.Length)
+                } finally {
+                    $entryStream.Dispose()
+                }
+            } finally {
+                $zip.Dispose()
+            }
+        } finally {
+            $archiveStream.Dispose()
+        }
+    }
+    Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers -PackagePath $safeHap
+    Assert-Throws -Action {
+        Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers -PackagePath $unsafeHap
+    } -Message 'Release package policy accepted an acceptance-only marker'
 
     $candidateBase = Join-Path $testRoot 'candidates'
     $latestSource = $null
@@ -153,6 +253,18 @@ try {
         $verifyPcText.Contains('[IO.Path]::GetTempPath()') -and
         -not $verifyPcText.Contains("Join-Path `$repoRoot 'build\verification'")
     ) 'verify-pc evidence would be deleted by its own clean build'
+
+    $buildAllText = Get-Content -LiteralPath (
+        Join-Path $PSScriptRoot 'build-all.ps1'
+    ) -Raw
+    Assert-True (
+        $buildAllText.Contains('Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers') -and
+        $buildAllText.Contains("if (`$BuildMode -eq 'release')") -and
+        $buildAllText.Contains('Invoke-WithLeanTTYAcceptanceSource')
+    ) 'Formal release build does not reject acceptance-only package markers'
+    Assert-True (
+        Test-Path -LiteralPath (Join-Path $PSScriptRoot 'test-acceptance-harness.ps1') -PathType Leaf
+    ) 'Focused acceptance-harness regression command is missing'
 
     $workerPath = Join-Path $testRoot 'lock-worker.ps1'
     $workerSource = @'

@@ -415,9 +415,8 @@ assert.match(terminalSurfaceController, /takeDetachedChunks/,
   'a new terminal surface must take only output produced while no surface was attached');
 assert.doesNotMatch(terminalSurfaceController, /releaseBuffers|term\.clear|term\.reset/,
   'disconnect cleanup must not ask a live terminal surface to clear its screen or scrollback');
-assert.match(terminalSurfaceController,
-  /terminateRendererForAcceptance[\s\S]*?!ACCEPTANCE_TESTS[\s\S]*?bridge\.terminateRendererForAcceptance/,
-  'renderer termination must remain behind the compile-time acceptance flag at the surface boundary');
+assert.doesNotMatch(terminalSurfaceController, /terminateRendererForAcceptance|ACCEPTANCE_TESTS/,
+  'production terminal-surface source must exclude acceptance-only renderer termination');
 
 const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
@@ -435,8 +434,20 @@ assert.match(indexPage, /BrowserLauncher\.open\(/,
   'the ArkUI shell must hand validated HTTP(S) links to the HarmonyOS system browser');
 assert.doesNotMatch(indexPage, /requestCopySelection|['"]Copy['"]/,
   'the tool menu must not keep a standalone Copy action');
-assert.match(indexPage, /const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS \? 7 : 6/,
-  'the acceptance-only menu action must not change the production menu count');
+assert.match(indexPage, /const MENU_ACTION_COUNT: number = 6/,
+  'the production menu count must exclude acceptance-only actions');
+assert.doesNotMatch(indexPage, /Acceptance: Rebuild Renderer|ACCEPTANCE_TESTS|rebuildRendererForAcceptance/,
+  'production Index source must exclude the acceptance-only renderer trigger');
+const acceptanceSource = readFileSync(
+  new URL('../acceptance-source.ps1', import.meta.url), 'utf8');
+assert.match(acceptanceSource, /Invoke-WithLeanTTYAcceptanceSource/,
+  'debug build transformation wrapper must exist');
+assert.match(acceptanceSource, /Acceptance: Rebuild Renderer/,
+  'debug build transformation must own the renderer acceptance menu');
+assert.match(acceptanceSource, /terminateRendererForAcceptance/,
+  'debug build transformation must own the renderer termination trigger');
+assert.match(acceptanceSource, /finally[\s\S]*WriteAllBytes/,
+  'debug build transformation must restore production ArkTS source in finally');
 assert.match(indexPage, /for \(let i = 0; i < MENU_ACTION_COUNT; i\+\+\)/,
   'keyboard menu selection must traverse the compile-time action count');
 assert.match(indexPage, /\(next \+ direction \+ MENU_ACTION_COUNT\) % MENU_ACTION_COUNT/,
@@ -447,12 +458,12 @@ assert.match(indexPage,
 assert.match(indexPage,
   /menuRow\(3, 'A⁺', 'Font Size \+'[\s\S]*menuRow\(4, 'Aa', 'Reset Font Size'[\s\S]*menuRow\(5, 'A⁻', 'Font Size -'/,
   'the rendered menu must retain the three font actions at indices 3 through 5');
-assert.match(indexPage,
+assert.match(acceptanceSource,
   /if \(ACCEPTANCE_TESTS\) \{[\s\S]*menuRow\(6, '↻', 'Acceptance: Rebuild Renderer'/,
-  'the renderer rebuild entry must be rendered only in acceptance-enabled packages');
-assert.match(indexPage,
+  'the debug source transformation must add the acceptance-only renderer entry');
+assert.match(acceptanceSource,
   /private rebuildRendererForAcceptance[\s\S]*?if \(!ACCEPTANCE_TESTS\)[\s\S]*?captureSnapshot\(\(captured: boolean\)[\s\S]*?terminateRendererForAcceptance/,
-  'the acceptance action must wait for a confirmed production snapshot before terminating the renderer');
+  'the injected acceptance action must wait for a confirmed production snapshot before terminating the renderer');
 
 const moduleBuildProfile = readFileSync(
   new URL('../../entry/build-profile.json5', import.meta.url), 'utf8');

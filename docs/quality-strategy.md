@@ -22,13 +22,18 @@ Every code change MUST use this sequence:
 2. During implementation, run focused tests as often as useful. All Rust
    formatting, compilation, clippy and tests MUST run in WSL; Windows supplies
    the OHOS SDK tools but is not a Rust build host.
-3. Before committing, run `tools/test-regression.ps1`. A failed or interrupted
-   run is not a pass.
-4. Commit the intended change so the device candidate has an exact, clean Git
-   identity. Run `tools/verify-pc.ps1` to execute the software gate again,
-   perform one clean ARM64 HAP build and retain the exact signed candidate.
-5. For device-visible behavior, run the applicable `verify-*-pc.ps1` scenario
-   against that retained HAP without rebuilding it. The scenario MUST verify
+3. Before committing a product-input change, run `tools/test-regression.ps1`.
+   A failed or interrupted run is not a pass. A later change restricted to the
+   committed acceptance harness MAY use `tools/test-acceptance-harness.ps1`;
+   that focused result is diagnostic and cannot replace the product gate.
+4. Commit the intended product change so the device candidate has an exact,
+   clean Git identity. Run `tools/verify-pc.ps1` once to execute the software
+   gate again, perform one clean ARM64 HAP build and retain the exact signed
+   candidate. Do not rebuild that candidate for a harness-only correction.
+5. For device-visible behavior, first use a named diagnostic stage when a new
+   or repaired harness boundary needs proving, then run the applicable complete
+   `verify-*-pc.ps1` scenario once against that retained HAP without rebuilding
+   it. The complete scenario MUST verify
    the changed behavior, relevant negative/recovery paths and secret/privacy
    boundaries, not merely install and launch.
 6. Report the candidate SHA-256, verification mode, commands, concise results
@@ -82,6 +87,13 @@ Mandatory software regression gate:
 .\tools\test-regression.ps1
 ```
 
+Focused acceptance-harness gate and one SSH diagnostic stage:
+
+```powershell
+.\tools\test-acceptance-harness.ps1
+.\tools\verify-ssh-auth-pc.ps1 -Only password-success
+```
+
 Clean candidate build/deployment and current feature-specific physical scenario:
 
 ```powershell
@@ -107,6 +119,39 @@ records JSON evidence and never rebuilds the HAP.
 
 Public CI independently repeats the public subset. Neither CI nor a clean HAP
 automatically proves a physical scenario.
+
+## Three-level execution and rerun policy
+
+Testing has exactly three execution levels:
+
+1. **Focused diagnostic:** affected unit/helper/fixture checks and, when needed,
+   one named physical stage. It may reuse an unchanged retained HAP, writes
+   `runMode=diagnostic`, and MUST NOT promote candidate evidence.
+2. **Candidate checkpoint:** one full software gate and clean signed ARM64 build
+   after product inputs stabilize. This creates the HAP SHA-256 used by all
+   later physical evidence.
+3. **Merge acceptance:** one complete physical matrix against that exact HAP,
+   followed by required remote checks and an independent cleanup audit. Only
+   this level may promote `device-behavior`.
+
+After one harness failure, inspect its screenshot, layout, live status and
+failure domain. After the same boundary fails twice, stop rerunning the complete
+matrix and reduce to the named diagnostic stage until the harness precondition
+is proved. A passing diagnostic never removes the requirement for one final
+complete matrix.
+
+Each physical stage declares its own conservative fixture budget; the fixture
+lifetime is the sum of selected stages plus setup/cleanup margin, not a uniform
+per-stage estimate. The invoking terminal/agent timeout MUST exceed that
+published lifetime plus cleanup margin. A client-side pipe timeout or `EPIPE` is an
+interrupted run, not a product result; inspect `live-status.json`, let bounded
+cleanup finish when possible, then rerun only the affected diagnostic stage.
+
+Candidate source identity and harness source identity are separate. Reuse is
+allowed only when the candidate commit is an ancestor of the clean harness and
+every intervening path is on the scenario's explicit harness/document allowlist.
+Any ArkTS, Rust, packaged resource, dependency, build input or other product
+path change invalidates reuse and requires a new candidate checkpoint.
 
 ## Candidate and evidence states
 
@@ -157,10 +202,18 @@ Every automated physical scenario MUST:
 - inject terminal commands as deterministic numeric physical-key events, cover
   the complete printable-ASCII mapping, and require the command's structured
   result or actual side effect before proceeding;
+- activate the application, locate the current active terminal input and prove
+  focus immediately before each command or hidden response; a system
+  notification, dialog or foreground-window change invalidates that input
+  attempt;
 - generate disposable names and secrets at runtime, keep secret input non-echoing
   and scan captured layouts/logs for disclosure;
 - wait on observable state or a non-secret structured log marker; fixed sleeps
   MAY pace polling but MUST NOT decide success;
+- never treat the count of repeated hilog lines as lossless keyboard delivery.
+  Acceptance-only input telemetry may confirm one submitted input event with a
+  monotonic sequence and non-secret kind, but the stage verdict MUST still use
+  the resulting product state or server outcome;
 - cancel input through the application's real `Ctrl+C` state-machine path;
   ArkWeb's hidden textarea accessibility value MUST NOT be treated as the
   native local-command or secret-input buffer;
@@ -168,9 +221,18 @@ Every automated physical scenario MUST:
   recovery and cleanup paths;
 - report stage start/pass progress and duration so a stalled boundary is visible;
 - write a machine-readable pass/fail record, including per-stage timing and the
-  cleanup outcome, and capture bounded diagnostic artifacts on failure; and
-- remove disposable device state in `finally`, independently verify absence in
-  the application sandbox and forbid evidence promotion when cleanup fails.
+  cleanup outcome, attempt/previous-attempt identity, candidate and harness
+  identities, selected stages, failure domain and resource manifest; update a
+  small live-status file at every stage boundary; and
+- remove disposable device state in `finally` through the product's create/delete
+  semantics first, then independently verify absence in the application sandbox.
+  Direct filesystem deletion is emergency recovery, not accepted cleanup, and
+  evidence promotion is forbidden when any run-scoped resource remains.
+
+UI automation MUST model each consequential interaction as an explicit state
+transition: action, expected dialog, confirmation action and observable
+postcondition. Clicking a close/delete control without handling and verifying
+its confirmation state is incomplete automation.
 
 Physical keyboard injection MAY be used only when the script verifies the
 focused application, uses the covered numeric key mapping without an IME text
@@ -182,8 +244,12 @@ on the target PC it can omit rendered digits and diverge from the native buffer.
 
 - **Pass:** every required assertion completed for one exact evidence identity.
 - **Product failure:** the application produced an incorrect observable result.
-- **Infrastructure failure:** the device, server, SDK, signing, transport or
-  harness could not establish the required precondition.
+- **Harness failure:** automation used a stale selector, invalid state model or
+  unreliable observation.
+- **Environment failure:** focus, notification, lock state or another desktop
+  condition invalidated interaction while the device and tools remained usable.
+- **Infrastructure failure:** the device, server, SDK, signing or transport
+  could not establish the required precondition.
 - **Invalid/interrupted:** the candidate changed, evidence identity is missing,
   cleanup makes the result ambiguous, or the run stopped early.
 
@@ -229,6 +295,32 @@ The automated suite should keep stable ownership over:
 A test name should state the contract. Tests must avoid real credentials,
 production hosts, device identifiers and unredacted logs.
 
+## Acceptance-only product hooks
+
+An acceptance-only entry is permitted only when a required physical condition
+cannot be triggered or observed reliably through normal HarmonyOS/product
+interfaces. It MUST be guarded by the compile-time `ACCEPTANCE_TESTS` field,
+invoke the unchanged production event chain, expose no secret value, create no
+parallel business state and have a named regression owner. Runtime hiding alone
+is prohibited.
+
+Production ArkTS files MUST contain no acceptance-only entry or helper. The
+versioned `acceptance-source.ps1` transformation injects the minimal guarded
+ArkTS only while a debug/test HAP is compiling and restores every source file
+byte-for-byte in `finally`. Release builds never run that transformation, set
+`ACCEPTANCE_TESTS=false`, enable branch elimination as defense in depth, and
+`build-all.ps1` scans both unsigned and signed release HAPs for every registered
+acceptance marker and helper symbol. Finding one fails the formal build. New
+hooks MUST add a unique marker to that package policy, an injection/restoration
+test and a negative package test. Remove a hook when its associated gate
+disappears or normal system control becomes reliable.
+
+Acceptance configuration MUST NOT shorten or bypass the production timeout,
+retry, authentication or cleanup policy being claimed. A shorter diagnostic
+budget may bound fixture/process lifetime, but final timeout evidence must run
+the unchanged product value or be explicitly labeled diagnostic and followed by
+one real-duration production check.
+
 ## Permanent physical-PC regression areas
 
 For a candidate whose changes can affect them, exercise on a physical ARM64
@@ -264,6 +356,11 @@ access system. User-visible supported behavior is documented in
 [`user-guide.md`](user-guide.md); proposed coverage remains in the roadmap and
 technical designs.
 
+Per-change authentication regression uses the controlled repository fixture.
+Representative real OpenSSH/PAM/TOTP servers belong to scheduled compatibility
+or release checkpoints, not every harness edit; their evidence records exact
+server policy and never replaces the deterministic fixture matrix.
+
 ## Performance and reliability measurement
 
 Do not choose an optimization target from intuition. First record distributions
@@ -284,6 +381,10 @@ Every release-candidate conclusion must be attributable to:
 - device model, HarmonyOS version and connection/deployment route;
 - SSH server, network and representative Shell/TUI workload;
 - commands or manual actions performed;
+- run mode, selected stages, attempt lineage, per-stage duration and retry count;
+- classified failure domain and the last proven component boundary;
+- every run-scoped key, mapping, process and temporary directory plus cleanup
+  and independent absence audits;
 - expected and observed results, including failures and exclusions; and
 - which layer the evidence proves.
 

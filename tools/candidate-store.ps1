@@ -149,6 +149,54 @@ function Assert-LeanTTYCandidatePath {
     return $fullPath
 }
 
+function Assert-LeanTTYHarnessOnlyPaths {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ChangedPaths,
+        [Parameter(Mandatory = $true)][string[]]$AllowedPaths
+    )
+
+    foreach ($changedPath in @($ChangedPaths)) {
+        $normalized = ([string]$changedPath).Replace('\', '/').TrimStart('./')
+        if ([string]::IsNullOrWhiteSpace($normalized)) { continue }
+        $allowed = $false
+        foreach ($allowedPath in $AllowedPaths) {
+            $pattern = ([string]$allowedPath).Replace('\', '/').TrimStart('./')
+            if ($normalized -like $pattern) {
+                $allowed = $true
+                break
+            }
+        }
+        if (-not $allowed) {
+            throw "Retained candidate cannot be reused after product input changed: $normalized"
+        }
+    }
+}
+
+function Assert-LeanTTYCandidateHarnessCompatibility {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][object]$Candidate,
+        [Parameter(Mandatory = $true)][string[]]$AllowedHarnessPaths
+    )
+
+    $candidateCommit = [string]$Candidate.gitCommit
+    if ($candidateCommit -notmatch '^[0-9a-f]{40}$') {
+        throw 'Retained candidate has no valid source commit identity'
+    }
+    & git -C $RepoRoot merge-base --is-ancestor $candidateCommit HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Retained candidate source is not an ancestor of the current harness'
+    }
+    $changedPaths = @(& git -C $RepoRoot diff --name-only $candidateCommit HEAD 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to compare retained candidate and harness source'
+    }
+    Assert-LeanTTYHarnessOnlyPaths `
+        -ChangedPaths $changedPaths `
+        -AllowedPaths $AllowedHarnessPaths
+    return @($changedPaths)
+}
+
 function Save-LeanTTYVerifiedCandidate {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,

@@ -13,11 +13,10 @@ import { InteractionPolicy } from '../model/ui/InteractionPolicy'
 import { UserPreferences } from '../model/settings/UserPreferences'
 import { TerminalSurfaceController } from '../model/terminal/TerminalSurfaceController'
 import { BrowserLauncher } from '../model/browser/BrowserLauncher'
-import { ACCEPTANCE_TESTS } from 'BuildProfile'
 
 const logger: Logger = new Logger('IndexPage')
 const WARM_TAB_RETENTION_MS: number = 30000
-const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 7 : 6
+const MENU_ACTION_COUNT: number = 6
 
 class PaneRuntime {
   id: string
@@ -1022,7 +1021,6 @@ struct Index {
     if (selected === 3) { this.handleFontIncrease(); return }
     if (selected === 4) { this.handleFontReset(); return }
     if (selected === 5) { this.handleFontDecrease(); return }
-    if (selected === 6 && ACCEPTANCE_TESTS) { this.rebuildRendererForAcceptance(); return }
   }
 
   private moveMenuSelection(direction: number): void {
@@ -1043,27 +1041,6 @@ struct Index {
     return true
   }
 
-  private rebuildRendererForAcceptance(): void {
-    if (!ACCEPTANCE_TESTS) {
-      return
-    }
-    let pane: PaneInfo | null = this.appVm.getActivePane()
-    let runtime: PaneRuntime | null = pane === null ? null : this.findPaneRuntime(pane.id)
-    if (runtime === null) {
-      logger.error('Acceptance renderer rebuild has no active pane')
-      return
-    }
-    let targetRuntime: PaneRuntime = runtime
-    targetRuntime.surface.captureSnapshot((captured: boolean) => {
-      if (!captured) {
-        logger.error('Acceptance renderer rebuild cancelled because checkpoint failed')
-        return
-      }
-      let terminated: boolean = targetRuntime.surface.terminateRendererForAcceptance()
-      logger.info('Acceptance renderer rebuild requested=' + terminated.toString() + ',pane=' + targetRuntime.id)
-    })
-  }
-
   @Builder
   menuPanel() {
     Column() {
@@ -1075,11 +1052,6 @@ struct Index {
       this.menuRow(4, 'Aa', 'Reset Font Size', this.fontSize.toString() + ' px · Ctrl+0', true,
         () => { this.handleFontReset() })
       this.menuRow(5, 'A⁻', 'Font Size -', 'Ctrl+-', true, () => { this.handleFontDecrease() })
-      if (ACCEPTANCE_TESTS) {
-        this.menuDivider()
-        this.menuRow(6, '↻', 'Acceptance: Rebuild Renderer', '', true,
-          () => { this.rebuildRendererForAcceptance() })
-      }
     }
     .width(252)
     .backgroundColor(this.chromeColors.commandBarBackground)
