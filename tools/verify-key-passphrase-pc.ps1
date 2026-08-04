@@ -12,7 +12,8 @@ param(
     [string]$Target = '',
     [string]$HapPath = '',
     [string]$EvidenceDirectory = '',
-    [string]$CandidateBasePath = ''
+    [string]$CandidateBasePath = '',
+    [string]$UnlockPasswordPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +34,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve device behavior harness tree
 
 $hdc = Resolve-Hdc
 $Target = Resolve-LeanTTYRegressionTarget -Hdc $hdc -Target $Target
+if ([string]::IsNullOrWhiteSpace($UnlockPasswordPath)) {
+    $UnlockPasswordPath = Get-LeanTTYDeviceUnlockPasswordPath
+}
+Assert-LeanTTYCredentialPathOutsideRepository `
+    -CredentialPath $UnlockPasswordPath `
+    -RepositoryRoot $repoRoot
 $candidateRoot = Get-LeanTTYCandidateRoot `
     -RepoRoot $repoRoot `
     -CandidateBasePath $CandidateBasePath
@@ -85,6 +92,7 @@ $cleanupFailure = ''
 $awakeLeaseActive = $false
 $awakeLeaseResult = 'not-acquired'
 $awakeLeaseFailure = ''
+$deviceUnlockResult = 'not-attempted'
 $stageStartedAt = $null
 
 function Add-BehaviorCheck {
@@ -241,6 +249,7 @@ function Write-BehaviorEvidence {
         }
         environment = [ordered]@{
             awakeLease = $awakeLeaseResult
+            deviceUnlock = $deviceUnlockResult
             failure = $awakeLeaseFailure
         }
         input = [ordered]@{
@@ -273,15 +282,26 @@ try {
     & (Join-Path $PSScriptRoot 'dev-pc.ps1') `
         -Target $Target `
         -HapPath $candidate.hapPath `
-        -SkipBuild
+        -SkipBuild `
+        -NoLaunch
     if ($LASTEXITCODE -ne 0) { throw 'Exact candidate deployment failed' }
+
+    $appStart = Start-LeanTTYRegressionApp `
+        -Hdc $hdc `
+        -Target $Target `
+        -CredentialPath $UnlockPasswordPath `
+        -RepositoryRoot $repoRoot
+    $appPid = $appStart.processId
+    $deviceUnlockResult = $appStart.unlock
+    Write-Host "LeanTTY started. PID=$appPid" -ForegroundColor Green
+    if ($deviceUnlockResult -eq 'local-plaintext-credential') {
+        Write-Host '[device] INFO unlocked regression PC from local credential file'
+    }
 
     $deviceModel = (Invoke-HdcShell $hdc $Target 'param get const.product.model').Trim()
     $deviceAbi = (Invoke-HdcShell $hdc $Target 'param get const.product.cpu.abilist').Trim()
     $deviceTransport = Get-HdcTargetTransport -Hdc $hdc -Target $Target
     if ($deviceAbi -notmatch 'arm64-v8a') { throw "Device is not ARM64: $deviceAbi" }
-    $appPid = (Invoke-HdcShell $hdc $Target 'pidof com.leantty.app').Trim()
-    if ($appPid -notmatch '^\d+$') { throw 'LeanTTY application PID is unavailable' }
 
     Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid | Out-Null
     $preflightLayoutPath = Join-Path $EvidenceDirectory 'layout-preflight.json'

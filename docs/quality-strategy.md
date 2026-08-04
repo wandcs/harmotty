@@ -135,8 +135,9 @@ summaries carry only the minimum redacted identity and result.
 The maintainer agent owns routine device acceptance whenever the connected PC
 and repository tools make it objectively possible. It MUST inspect device state,
 drive the scenario and read logs/layouts itself. User validation is requested
-only for an objective blocker such as a locked or disconnected device, missing
-permission, unavailable controlled server or a necessarily subjective judgment.
+only for an objective blocker such as a locked device without its dedicated
+local test credential, a disconnected device, missing permission, unavailable
+controlled server or a necessarily subjective judgment.
 
 Every automated physical scenario MUST:
 
@@ -144,6 +145,10 @@ Every automated physical scenario MUST:
 - install an exact retained candidate and record its SHA-256 before interaction;
 - acquire a bounded screen-timeout override before launch and restore the prior
   device policy in `finally`, so unattended execution cannot silently relock;
+- when HarmonyOS explicitly reports a locked screen, unlock only the dedicated
+  test PC from a current-user plaintext credential stored outside the repository;
+  inject numeric physical-key events without putting plaintext in commands,
+  logs or evidence, and never type a credential on an already unlocked device;
 - preflight every control and observation channel, including application PID,
   structured logs, layout capture and focused terminal input, before creating
   disposable device state;

@@ -98,6 +98,28 @@ Assert-True (
     $null -ne (Get-Command Stop-LeanTTYDeviceAwakeLease -ErrorAction SilentlyContinue)
 ) 'Device regression has no reversible screen-timeout lease'
 
+Assert-True (
+    $null -ne (Get-Command ConvertTo-LeanTTYDevicePasswordKeyCommand -ErrorAction SilentlyContinue) -and
+    $null -ne (Get-Command Assert-LeanTTYCredentialPathOutsideRepository -ErrorAction SilentlyContinue) -and
+    $null -ne (Get-Command Start-LeanTTYRegressionApp -ErrorAction SilentlyContinue)
+) 'Device regression has no conditional local-credential unlock helpers'
+$passwordKeyCommand = ConvertTo-LeanTTYDevicePasswordKeyCommand -Password 'abc'
+Assert-True (
+    $passwordKeyCommand -eq (
+        'uinput -K -d 2017 -u 2017 -d 2018 -u 2018 -d 2019 -u 2019 ' +
+        '-d 2054 -u 2054'
+    ) -and
+    -not $passwordKeyCommand.Contains('abc')
+) 'Device unlock command does not convert plaintext to the expected non-secret key events'
+Assert-Throws -Action {
+    ConvertTo-LeanTTYDevicePasswordKeyCommand -Password 'unsafe value'
+} -Message 'Device unlock accepted an unsupported password alphabet'
+Assert-Throws -Action {
+    Assert-LeanTTYCredentialPathOutsideRepository `
+        -CredentialPath (Join-Path $PSScriptRoot 'device-password.txt') `
+        -RepositoryRoot (Split-Path $PSScriptRoot -Parent)
+} -Message 'Device unlock accepted a credential file inside the repository'
+
 $keyPresenceCommand = Get-Command Test-LeanTTYDeviceKeyFilesPresent -ErrorAction SilentlyContinue
 Assert-True ($null -ne $keyPresenceCommand) (
     'Device cleanup has no independent app-sandbox key-file verification helper'
@@ -136,6 +158,11 @@ foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1
             $content.Contains('Start-LeanTTYDeviceAwakeLease') -and
             $content.Contains('Stop-LeanTTYDeviceAwakeLease')
         ) 'Device scenario does not acquire and restore a screen-timeout lease'
+        Assert-True (
+            $content.Contains('UnlockPasswordPath') -and
+            $content.Contains('Start-LeanTTYRegressionApp') -and
+            $content.Contains('deviceUnlock = $deviceUnlockResult')
+        ) 'Device scenario does not record conditional local-credential unlock behavior'
     }
 }
 

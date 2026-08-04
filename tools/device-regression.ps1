@@ -46,6 +46,107 @@ function Stop-LeanTTYDeviceAwakeLease {
     }
 }
 
+function Get-LeanTTYDeviceUnlockPasswordPath {
+    $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        throw 'Unable to resolve the current Windows user LocalAppData directory'
+    }
+    return Join-Path $localAppData 'LeanTTY\regression\device-unlock-password.txt'
+}
+
+function Assert-LeanTTYCredentialPathOutsideRepository {
+    param(
+        [Parameter(Mandatory = $true)][string]$CredentialPath,
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot
+    )
+
+    $credentialFullPath = [IO.Path]::GetFullPath($CredentialPath)
+    $repositoryPrefix = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', '/') + `
+        [IO.Path]::DirectorySeparatorChar
+    if ($credentialFullPath.StartsWith(
+        $repositoryPrefix,
+        [StringComparison]::OrdinalIgnoreCase
+    )) {
+        throw 'Device unlock credential must be stored outside the repository'
+    }
+}
+
+function ConvertTo-LeanTTYDevicePasswordKeyCommand {
+    param([Parameter(Mandatory = $true)][string]$Password)
+
+    if ($Password -notmatch '^[a-z]{1,64}$') {
+        throw 'Device unlock password must contain only lowercase ASCII letters'
+    }
+    $parts = [Collections.Generic.List[string]]::new()
+    $parts.Add('uinput -K')
+    foreach ($character in $Password.ToCharArray()) {
+        $keyCode = 2017 + ([int]$character - [int][char]'a')
+        $parts.Add("-d $keyCode -u $keyCode")
+    }
+    $parts.Add('-d 2054 -u 2054')
+    return $parts -join ' '
+}
+
+function Start-LeanTTYRegressionApp {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$CredentialPath,
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot
+    )
+
+    Assert-LeanTTYCredentialPathOutsideRepository `
+        -CredentialPath $CredentialPath `
+        -RepositoryRoot $RepositoryRoot
+    $launchCommand = 'aa start -a EntryAbility -b com.leantty.app'
+    $launchOutput = @(& $Hdc -t $Target shell $launchCommand 2>&1) -join "`n"
+    $launchExitCode = $LASTEXITCODE
+    $deviceLocked = $launchOutput -match 'Error Code:10106102|device screen is locked'
+    if ($launchExitCode -ne 0 -and -not $deviceLocked) {
+        throw 'LeanTTY application launch command failed before device unlock detection'
+    }
+    if ($launchOutput -match '(?i)\[Fail\]|error' -and -not $deviceLocked) {
+        throw "LeanTTY application launch failed: $launchOutput"
+    }
+
+    $unlockResult = 'not-required'
+    if ($deviceLocked) {
+        if (-not (Test-Path -LiteralPath $CredentialPath -PathType Leaf)) {
+            throw "Locked regression PC requires local credential file: $CredentialPath"
+        }
+        $password = [IO.File]::ReadAllText($CredentialPath).TrimEnd("`r", "`n")
+        try {
+            $keyCommand = ConvertTo-LeanTTYDevicePasswordKeyCommand -Password $password
+            & $Hdc -t $Target shell 'power-shell wakeup' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to wake the locked regression PC' }
+            & $Hdc -t $Target shell 'uinput -K -d 2050 -u 2050' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to focus the regression PC unlock prompt' }
+            Start-Sleep -Milliseconds 500
+            & $Hdc -t $Target shell $keyCommand | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to inject regression PC unlock key events' }
+        } finally {
+            $password = ''
+            $keyCommand = ''
+        }
+        Start-Sleep -Milliseconds 800
+        $launchOutput = @(& $Hdc -t $Target shell $launchCommand 2>&1) -join "`n"
+        if ($LASTEXITCODE -ne 0 -or $launchOutput -match '(?i)\[Fail\]|error') {
+            throw 'Regression PC remained locked after local credential injection'
+        }
+        $unlockResult = 'local-plaintext-credential'
+    }
+
+    Start-Sleep -Milliseconds 800
+    $processId = (@(& $Hdc -t $Target shell 'pidof com.leantty.app' 2>&1) -join "`n").Trim()
+    if ($LASTEXITCODE -ne 0 -or $processId -notmatch '^\d+$') {
+        throw 'LeanTTY application PID is unavailable after launch'
+    }
+    return [pscustomobject]@{
+        processId = $processId
+        unlock = $unlockResult
+    }
+}
+
 function Get-LeanTTYLayoutNodes {
     param([Parameter(Mandatory = $true)]$Node)
 
