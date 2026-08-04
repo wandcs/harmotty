@@ -106,6 +106,10 @@
 - Accepted the default OSC 52 clipboard selector emitted when tmux mouse
   selection ends, allowing the standard `MouseDragEnd1Pane` copy path to reach
   the HarmonyOS system clipboard without Shift or a second right-click.
+  Physical ARM64 HarmonyOS PC validation covers exact tmux-buffer/system-
+  clipboard agreement with `set-clipboard external/on`, `Ms`, Chinese and
+  multiline text, tmux touchpad scrolling and TUI mouse input, Shift-drag local
+  copy followed by `Ctrl+C`, and ordinary terminal selection.
 
 ### Documentation
 
