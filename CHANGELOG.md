@@ -94,7 +94,10 @@
   instead of failing with an unknown-algorithm error.
 - Added bounded session-memory checkpoints so a terminal surface rebuilt after
   the app enters the background can recover its screen and scrollback even when
-  SSH disconnects; physical ARM64 PC lifecycle validation remains pending.
+  SSH disconnects. Physical ARM64 PC validation now covers long sleep with a
+  disconnect, renderer reconstruction without replayed side effects, and the
+  absence of terminal-content recovery after process termination or a normal
+  uninstall and reinstall.
 - Ended accepted SSH host-key confirmation input with a new line before showing
   the next authentication prompt.
 - Added OpenSSH-compatible `ssh-keygen -R` host-record removal and made changed

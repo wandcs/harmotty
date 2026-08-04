@@ -27,15 +27,7 @@
 
 ## 1. 收敛现有可靠性门禁
 
-### 1.1 休眠与 renderer 重建后的终端内容
-
-- [ ] 在物理 ARM64 HarmonyOS PC 上验证：当前 Tab 已产生 screen 与 scrollback 后，
-  长时间休眠并让 SSH 断开，唤醒后旧内容、断连提示和 `ltty>` 均保留。
-- [ ] 在进入后台并完成检查点后主动触发 ArkWeb renderer 重建，确认内存快照先于脱离
-  期间输出恢复，没有重复 OSC 52、bell、标题或远端输入。应用终止、普通卸载重装后
-  不得恢复终端内容。
-
-### 1.2 tmux 鼠标复制真机门禁
+### 1.1 tmux 鼠标复制真机门禁
 
 - [ ] 在物理 ARM64 HarmonyOS PC 上开启 `set -g mouse on`，确认普通拖动后无需 Shift
   或二次右键即可由 tmux `MouseDragEnd1Pane` 完成复制，`tmux show-buffer` 与系统
@@ -43,7 +35,7 @@
 - [ ] 同时覆盖 `set-clipboard external/on`、`Ms`、中文与多行文本，并回归 tmux
   滚动/TUI 鼠标、`Shift+拖动` 后 `Ctrl+C` 的本地复制和普通终端选区。
 
-### 1.3 卸载重装持久资产完整矩阵
+### 1.2 卸载重装持久资产完整矩阵
 
 - [ ] 使用普通卸载（不得使用 `bm uninstall -k`）后，以同一正式应用身份重装，验证
   Ed25519、RSA-4096、加密/未加密私钥、OpenSSH config、`known_hosts`、字号、窗口
