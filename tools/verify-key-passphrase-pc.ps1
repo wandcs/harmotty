@@ -74,21 +74,36 @@ $secretB = New-LeanTTYRegressionSecret
 $mismatchSecret = New-LeanTTYRegressionSecret
 $wrongSecret = New-LeanTTYRegressionSecret
 $secrets = @($secretA, $secretB, $mismatchSecret, $wrongSecret)
-$keyGenerated = $false
+$keyCleanupRequired = $false
 $deviceModel = ''
 $deviceAbi = ''
 $deviceTransport = ''
 $appPid = ''
 $failure = ''
+$cleanupResult = 'not-required'
+$cleanupFailure = ''
+$stageStartedAt = $null
 
 function Add-BehaviorCheck {
-    param([Parameter(Mandatory = $true)][string]$Name)
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][long]$DurationMs
+    )
 
-    $checks.Add([pscustomobject]@{ name = $Name; result = 'passed' })
+    $checks.Add([pscustomobject]@{
+        name = $Name
+        result = 'passed'
+        durationMs = $DurationMs
+    })
+    Write-Host "[device] PASS $Name ($DurationMs ms)" -ForegroundColor Green
 }
 
 function Start-BehaviorStage {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    Write-Host "[device] START $Name"
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    $script:stageStartedAt = [Diagnostics.Stopwatch]::StartNew()
 }
 
 function Complete-BehaviorStage {
@@ -100,7 +115,9 @@ function Complete-BehaviorStage {
             throw 'HarmonyOS application logs exposed a runtime regression secret'
         }
     }
-    Add-BehaviorCheck -Name $Name
+    if ($null -eq $stageStartedAt) { throw 'Device behavior stage timing was not started' }
+    Add-BehaviorCheck -Name $Name -DurationMs $stageStartedAt.ElapsedMilliseconds
+    $script:stageStartedAt = $null
 }
 
 function Submit-Command {
@@ -146,16 +163,63 @@ function Wait-State {
         -TimeoutSeconds 15 | Out-Null
 }
 
+function Invoke-DeleteKeyDialog {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+
+    $dialogStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($dialogStopwatch.Elapsed.TotalSeconds -lt 10) {
+        try {
+            Invoke-LeanTTYDialogButton `
+                -Hdc $hdc `
+                -Target $Target `
+                -ButtonText 'Delete key' `
+                -LayoutPath (Join-Path $EvidenceDirectory $LayoutName)
+            return
+        } catch {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    throw 'Delete-key confirmation did not appear'
+}
+
+function Remove-DisposableDeviceKey {
+    param([Parameter(Mandatory = $true)][string]$LayoutPrefix)
+
+    if (-not (Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc $hdc `
+        -Target $Target `
+        -KeyName $keyName)) {
+        return 'already-absent'
+    }
+
+    Clear-LeanTTYDeviceInput `
+        -Hdc $hdc `
+        -Target $Target `
+        -LayoutPath (Join-Path $EvidenceDirectory "$LayoutPrefix-input.json") | Out-Null
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-Command -Command "key rm $keyName"
+    Invoke-DeleteKeyDialog -LayoutName "$LayoutPrefix-dialog.json"
+    Wait-State -Pattern 'KEY_DELETE result=success'
+    if (Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc $hdc `
+        -Target $Target `
+        -KeyName $keyName) {
+        throw 'Disposable key files remain in the LeanTTY application sandbox after deletion'
+    }
+    return 'verified-absent'
+}
+
 function Write-BehaviorEvidence {
     param([Parameter(Mandatory = $true)][string]$Result)
 
     $evidence = [ordered]@{
-        schemaVersion = 1
+        schemaVersion = 2
         gate = 'device-behavior'
         scenario = 'ssh-keygen-passphrase'
         result = $Result
         startedAt = $startedAt.ToString('o')
         completedAt = [DateTimeOffset]::UtcNow.ToString('o')
+        durationMs = [long]([DateTimeOffset]::UtcNow - $startedAt).TotalMilliseconds
         candidate = [ordered]@{
             sha256 = $candidate.sha256
             gitCommit = $candidate.gitCommit
@@ -178,6 +242,10 @@ function Write-BehaviorEvidence {
             fixedDelayUsedAsVerdict = $false
         }
         checks = @($checks)
+        cleanup = [ordered]@{
+            result = $cleanupResult
+            failure = $cleanupFailure
+        }
         failure = $failure
     }
     [IO.File]::WriteAllText(
@@ -187,7 +255,11 @@ function Write-BehaviorEvidence {
     )
 }
 
+$caughtError = $null
+$scenarioResult = 'failed'
 try {
+    $preflightStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    Write-Host '[device] START device-harness-preflight'
     & (Join-Path $PSScriptRoot 'dev-pc.ps1') `
         -Target $Target `
         -HapPath $candidate.hapPath `
@@ -200,17 +272,29 @@ try {
     if ($deviceAbi -notmatch 'arm64-v8a') { throw "Device is not ARM64: $deviceAbi" }
     $appPid = (Invoke-HdcShell $hdc $Target 'pidof com.leantty.app').Trim()
     if ($appPid -notmatch '^\d+$') { throw 'LeanTTY application PID is unavailable' }
-    Add-BehaviorCheck -Name 'exact-candidate-installed-and-running'
 
-    Clear-LeanTTYDeviceInput -Hdc $hdc -Target $Target
+    Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid | Out-Null
+    $preflightLayoutPath = Join-Path $EvidenceDirectory 'layout-preflight.json'
+    $preflightLayout = Get-LeanTTYDeviceLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath $preflightLayoutPath
+    Get-LeanTTYTerminalInputText -Layout $preflightLayout | Out-Null
+    Clear-LeanTTYDeviceInput `
+        -Hdc $hdc `
+        -Target $Target `
+        -LayoutPath (Join-Path $EvidenceDirectory 'layout-preflight-cleanup.json') | Out-Null
+    Add-BehaviorCheck `
+        -Name 'device-harness-preflight' `
+        -DurationMs $preflightStopwatch.ElapsedMilliseconds
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'generated-disposable-ed25519-key'
+    $keyCleanupRequired = $true
     Submit-Command -Command "ssh-keygen -t ed25519 -f $keyName -C regression"
     Wait-State -Pattern 'Key generated:'
-    $keyGenerated = $true
     Complete-BehaviorStage -Name 'generated-disposable-ed25519-key'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'added-passphrase-without-layout-or-log-exposure'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Submit-Secret
@@ -221,7 +305,7 @@ try {
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=success'
     Complete-BehaviorStage -Name 'added-passphrase-without-layout-or-log-exposure'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'mismatched-confirmation-made-no-change'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Submit-Secret -Value $secretA
@@ -234,7 +318,7 @@ try {
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=cancelled'
     Complete-BehaviorStage -Name 'mismatched-confirmation-made-no-change'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'wrong-old-passphrase-made-no-change'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Submit-Secret -Value $wrongSecret
@@ -245,7 +329,7 @@ try {
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=failure reason=native'
     Complete-BehaviorStage -Name 'wrong-old-passphrase-made-no-change'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'recovered-after-negative-paths-with-original-passphrase'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Submit-Secret -Value $secretA
@@ -256,7 +340,7 @@ try {
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=success'
     Complete-BehaviorStage -Name 'recovered-after-negative-paths-with-original-passphrase'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'ctrl-c-cancelled-and-cleared-secret-input'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $secretB
@@ -275,7 +359,7 @@ try {
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=cancelled'
     Complete-BehaviorStage -Name 'ctrl-c-cancelled-and-cleared-secret-input'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'removed-passphrase'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
     Submit-Secret -Value $secretB
@@ -286,39 +370,22 @@ try {
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=success'
     Complete-BehaviorStage -Name 'removed-passphrase'
 
-    Start-BehaviorStage
+    Start-BehaviorStage -Name 'deleted-disposable-key-by-native-layout-button'
     Submit-Command -Command "key rm $keyName"
-    $dialogStopwatch = [Diagnostics.Stopwatch]::StartNew()
-    $dialogClicked = $false
-    while (-not $dialogClicked -and $dialogStopwatch.Elapsed.TotalSeconds -lt 10) {
-        try {
-            Invoke-LeanTTYDialogButton `
-                -Hdc $hdc `
-                -Target $Target `
-                -ButtonText 'Delete key' `
-                -LayoutPath (Join-Path $EvidenceDirectory 'layout-delete-dialog.json')
-            $dialogClicked = $true
-        } catch {
-            Start-Sleep -Milliseconds 200
-        }
-    }
-    if (-not $dialogClicked) { throw 'Delete-key confirmation did not appear' }
+    Invoke-DeleteKeyDialog -LayoutName 'layout-delete-dialog.json'
     Wait-State -Pattern 'KEY_DELETE result=success'
-    $keyGenerated = $false
+    if (Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc $hdc `
+        -Target $Target `
+        -KeyName $keyName) {
+        throw 'Disposable key files remain in the LeanTTY application sandbox after deletion'
+    }
+    $keyCleanupRequired = $false
+    $cleanupResult = 'verified-absent'
     Complete-BehaviorStage -Name 'deleted-disposable-key-by-native-layout-button'
-
-    Write-BehaviorEvidence -Result 'passed'
-    Save-LeanTTYVerifiedCandidate `
-        -RepoRoot $repoRoot `
-        -HapPath $candidate.hapPath `
-        -VerificationMode 'device-behavior' `
-        -EvidencePaths @($evidencePath) `
-        -CandidateBasePath $CandidateBasePath | Out-Null
-    Write-Host (
-        'DEVICE BEHAVIOR SUCCESS: ssh-keygen-passphrase ' +
-        "(SHA256=$($candidate.sha256), evidence=$evidencePath)"
-    ) -ForegroundColor Green
+    $scenarioResult = 'passed'
 } catch {
+    $caughtError = $_
     $failure = $_.Exception.Message
     try {
         Save-LeanTTYDeviceScreenshot `
@@ -326,28 +393,20 @@ try {
             -Target $Target `
             -LocalPath (Join-Path $EvidenceDirectory 'failure.png')
     } catch {}
-    Write-BehaviorEvidence -Result 'failed'
-    throw
 } finally {
-    if ($keyGenerated -and -not [string]::IsNullOrWhiteSpace($appPid)) {
+    if ($keyCleanupRequired -and -not [string]::IsNullOrWhiteSpace($appPid)) {
         try {
-            Clear-LeanTTYDeviceInput -Hdc $hdc -Target $Target
-            Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-            Submit-Command -Command "key rm $keyName"
-            $cleanupStopwatch = [Diagnostics.Stopwatch]::StartNew()
-            while ($cleanupStopwatch.Elapsed.TotalSeconds -lt 5) {
-                try {
-                    Invoke-LeanTTYDialogButton `
-                        -Hdc $hdc `
-                        -Target $Target `
-                        -ButtonText 'Delete key' `
-                        -LayoutPath (Join-Path $EvidenceDirectory 'layout-cleanup-dialog.json')
-                    break
-                } catch {
-                    Start-Sleep -Milliseconds 200
-                }
+            Write-Host '[device] START disposable-key-cleanup'
+            $cleanupResult = Remove-DisposableDeviceKey -LayoutPrefix 'layout-cleanup'
+            $keyCleanupRequired = $false
+            Write-Host "[device] PASS disposable-key-cleanup ($cleanupResult)" -ForegroundColor Green
+        } catch {
+            $cleanupResult = 'failed'
+            $cleanupFailure = $_.Exception.Message
+            if ([string]::IsNullOrWhiteSpace($failure)) {
+                $failure = "Cleanup failed: $cleanupFailure"
             }
-        } catch {}
+        }
     }
     $secretA = ''
     $secretB = ''
@@ -355,3 +414,24 @@ try {
     $wrongSecret = ''
     $secrets = @()
 }
+
+if (-not [string]::IsNullOrWhiteSpace($cleanupFailure)) {
+    $scenarioResult = 'failed'
+}
+Write-BehaviorEvidence -Result $scenarioResult
+
+if ($scenarioResult -ne 'passed') {
+    if ($null -ne $caughtError) { throw $caughtError }
+    throw $failure
+}
+
+Save-LeanTTYVerifiedCandidate `
+    -RepoRoot $repoRoot `
+    -HapPath $candidate.hapPath `
+    -VerificationMode 'device-behavior' `
+    -EvidencePaths @($evidencePath) `
+    -CandidateBasePath $CandidateBasePath | Out-Null
+Write-Host (
+    'DEVICE BEHAVIOR SUCCESS: ssh-keygen-passphrase ' +
+    "(SHA256=$($candidate.sha256), evidence=$evidencePath)"
+) -ForegroundColor Green

@@ -49,11 +49,17 @@ function Get-LeanTTYDeviceLayout {
     )
 
     $remotePath = '/data/local/tmp/leantty-layout-' + [Guid]::NewGuid().ToString('N') + '.json'
-    & $Hdc -t $Target shell uitest dumpLayout -p $remotePath -a -b com.leantty.app | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS UI layout capture failed' }
-    & $Hdc -t $Target file recv $remotePath $LocalPath | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS UI layout transfer failed' }
-    & $Hdc -t $Target shell rm -f $remotePath | Out-Null
+    try {
+        & $Hdc -t $Target shell uitest dumpLayout -p $remotePath -a -b com.leantty.app | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS UI layout capture failed' }
+        & $Hdc -t $Target file recv $remotePath $LocalPath | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS UI layout transfer failed' }
+        if (-not (Test-Path -LiteralPath $LocalPath -PathType Leaf)) {
+            throw 'HarmonyOS UI layout transfer produced no local file'
+        }
+    } finally {
+        & $Hdc -t $Target shell rm -f $remotePath 2>$null | Out-Null
+    }
     return Get-Content -LiteralPath $LocalPath -Raw | ConvertFrom-Json -Depth 100
 }
 
@@ -124,14 +130,61 @@ function Invoke-LeanTTYDeviceCtrlC {
 function Clear-LeanTTYDeviceInput {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
-        [Parameter(Mandatory = $true)][string]$Target
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$LayoutPath
     )
 
     Invoke-LeanTTYDeviceCtrlC -Hdc $Hdc -Target $Target
-    & $Hdc -t $Target shell `
-        'i=0; while [ $i -lt 160 ]; do uitest uiInput keyEvent 2055 >/dev/null; i=$((i+1)); done' |
-        Out-Null
+    $layout = Get-LeanTTYDeviceLayout -Hdc $Hdc -Target $Target -LocalPath $LayoutPath
+    $currentText = Get-LeanTTYTerminalInputText -Layout $layout
+    if ([string]::IsNullOrEmpty($currentText)) { return 0 }
+    if ($currentText.Length -gt 256) {
+        throw 'HarmonyOS terminal-line cleanup refused unexpectedly long input'
+    }
+
+    $backspaceCount = $currentText.Length + 2
+    & $Hdc -t $Target shell (
+        "i=0; while [ `$i -lt $backspaceCount ]; do " +
+        'uitest uiInput keyEvent 2055 >/dev/null; i=$((i+1)); done'
+    ) | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS terminal-line cleanup failed' }
+
+    $verifiedLayout = Get-LeanTTYDeviceLayout `
+        -Hdc $Hdc `
+        -Target $Target `
+        -LocalPath $LayoutPath
+    $remainingText = Get-LeanTTYTerminalInputText -Layout $verifiedLayout
+    if (-not [string]::IsNullOrEmpty($remainingText)) {
+        throw "HarmonyOS terminal-line cleanup left $($remainingText.Length) input characters"
+    }
+    return $backspaceCount
+}
+
+function Test-LeanTTYDeviceKeyFilesPresent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$KeyName
+    )
+
+    if ($KeyName -notmatch '^ltty_reg_[0-9a-f]{10}$') {
+        throw 'Device regression key name is outside the disposable-key namespace'
+    }
+    $sshDirectory = '/data/app/el2/100/base/com.leantty.app/haps/entry/files/.ssh'
+    $privatePath = "$sshDirectory/$KeyName"
+    $publicPath = "$privatePath.pub"
+    $condition = (
+        "if [ -e $privatePath ] || [ -e $publicPath ]; " +
+        'then echo PRESENT; else echo ABSENT; fi'
+    )
+    $output = @(& $Hdc -t $Target shell -b com.leantty.app $condition 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to inspect disposable key state in the LeanTTY application sandbox'
+    }
+    $result = ($output -join "`n").Trim()
+    if ($result -eq 'PRESENT') { return $true }
+    if ($result -eq 'ABSENT') { return $false }
+    throw 'Unexpected disposable key-state response from the LeanTTY application sandbox'
 }
 
 function Submit-LeanTTYDeviceCommand {
@@ -227,11 +280,17 @@ function Save-LeanTTYDeviceScreenshot {
     )
 
     $remotePath = '/data/local/tmp/leantty-screen-' + [Guid]::NewGuid().ToString('N') + '.png'
-    & $Hdc -t $Target shell uitest screenCap -p $remotePath | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS screenshot capture failed' }
-    & $Hdc -t $Target file recv $remotePath $LocalPath | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS screenshot transfer failed' }
-    & $Hdc -t $Target shell rm -f $remotePath | Out-Null
+    try {
+        & $Hdc -t $Target shell uitest screenCap -p $remotePath | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS screenshot capture failed' }
+        & $Hdc -t $Target file recv $remotePath $LocalPath | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS screenshot transfer failed' }
+        if (-not (Test-Path -LiteralPath $LocalPath -PathType Leaf)) {
+            throw 'HarmonyOS screenshot transfer produced no local file'
+        }
+    } finally {
+        & $Hdc -t $Target shell rm -f $remotePath 2>$null | Out-Null
+    }
 }
 
 function New-LeanTTYRegressionSecret {

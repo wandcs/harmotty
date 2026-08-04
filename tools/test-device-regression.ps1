@@ -80,6 +80,29 @@ $deviceRegressionText = Get-Content -LiteralPath (
 Assert-True (
     $deviceRegressionText -notmatch 'hilog\s+-x[^\r\n]*\s-z\s'
 ) 'Device log query combines mutually exclusive hilog exit and tail modes'
+Assert-True (
+    $deviceRegressionText -notmatch 'while \[ \$i -lt 160 \]'
+) 'Device input cleanup still uses a fixed high-count backspace loop'
+Assert-True (
+    $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
+    $deviceRegressionText -match 'shell\s+-b\s+com\.leantty\.app'
+) 'Device key-state inspection does not use the HarmonyOS bundle shell'
+
+$clearInputParameters = (Get-Command Clear-LeanTTYDeviceInput).Parameters.Keys
+Assert-True (
+    $clearInputParameters -contains 'LayoutPath'
+) 'Device input cleanup does not verify current input state through a layout readback'
+
+$keyPresenceCommand = Get-Command Test-LeanTTYDeviceKeyFilesPresent -ErrorAction SilentlyContinue
+Assert-True ($null -ne $keyPresenceCommand) (
+    'Device cleanup has no independent app-sandbox key-file verification helper'
+)
+Assert-Throws -Action {
+    Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc 'unused' `
+        -Target 'unused' `
+        -KeyName '../unsafe'
+} -Message 'Device key-file verification accepted an unsafe generated-key name'
 
 foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1')) {
     $scriptPath = Join-Path $PSScriptRoot $scriptName
@@ -95,6 +118,15 @@ foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1
             $content.Contains('Device behavior harness requires a clean committed tree') -and
             $content.Contains('harness = [ordered]@{')
         ) 'Device behavior evidence is not bound to a clean committed harness'
+        Assert-True (
+            $content.Contains('schemaVersion = 2') -and
+            $content.Contains('cleanup = [ordered]@{') -and
+            $content.Contains('durationMs =')
+        ) 'Device behavior evidence does not record stage timing and cleanup outcome'
+        Assert-True (
+            $content.Contains("'device-harness-preflight'") -and
+            $content.Contains('Test-LeanTTYDeviceKeyFilesPresent')
+        ) 'Device scenario does not preflight telemetry and independently verify cleanup'
     }
 }
 

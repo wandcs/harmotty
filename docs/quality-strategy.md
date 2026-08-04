@@ -142,6 +142,9 @@ Every automated physical scenario MUST:
 
 - resolve a ready physical ARM64 PC at runtime and never commit its identifier;
 - install an exact retained candidate and record its SHA-256 before interaction;
+- preflight every control and observation channel, including application PID,
+  structured logs, layout capture and focused terminal input, before creating
+  disposable device state;
 - locate UI controls from current layout semantics and native bounds, not stale
   screenshots or Windows-scaled coordinates;
 - verify injected terminal command text through the focused accessibility node
@@ -150,12 +153,16 @@ Every automated physical scenario MUST:
   and scan captured layouts/logs for disclosure;
 - wait on observable state or a non-secret structured log marker; fixed sleeps
   MAY pace polling but MUST NOT decide success;
+- derive input cleanup from current accessibility state, use the minimum bounded
+  key events and verify the resulting empty state instead of sending a fixed
+  high-count key loop;
 - cover the positive path plus applicable rejection, cancellation, retry,
   recovery and cleanup paths;
-- write a machine-readable pass/fail record and capture bounded diagnostic
-  artifacts on failure; and
-- remove disposable device state in `finally`, while reporting cleanup failure
-  separately when it affects repeatability.
+- report stage start/pass progress and duration so a stalled boundary is visible;
+- write a machine-readable pass/fail record, including per-stage timing and the
+  cleanup outcome, and capture bounded diagnostic artifacts on failure; and
+- remove disposable device state in `finally`, independently verify absence in
+  the application sandbox and forbid evidence promotion when cleanup fails.
 
 Physical keyboard injection MAY be used only when the script verifies the
 focused application and the exact resulting input. Direct key injection without
