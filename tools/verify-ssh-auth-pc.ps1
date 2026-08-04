@@ -100,6 +100,9 @@ $deviceUnlockResult = 'not-attempted'
 $appPid = ''
 $credentials = @{}
 $secrets = @()
+$keyName = 'ltty_reg_' + [Guid]::NewGuid().ToString('N').Substring(0, 10)
+$keyPassphrase = New-LeanTTYRegressionSecret
+$keyCleanupRequired = $false
 $failure = ''
 $scenarioResult = 'failed'
 $caughtError = $null
@@ -165,14 +168,19 @@ function Submit-AuthValue {
     Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
     Assert-NoSecretExposure -LayoutName $LayoutName
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+    Start-Sleep -Milliseconds 150
 }
 
 function Start-AuthCommand {
-    param([Parameter(Mandatory = $true)][string]$User)
+    param(
+        [Parameter(Mandatory = $true)][string]$User,
+        [string]$Identity = ''
+    )
+    $identityOption = if ([string]::IsNullOrWhiteSpace($Identity)) { '' } else { " -i $Identity" }
     Submit-LeanTTYDeviceCommand `
         -Hdc $hdc `
         -Target $Target `
-        -Command "ssh -p $FixturePort $User@127.0.0.1"
+        -Command "ssh -p $FixturePort$identityOption $User@127.0.0.1"
 }
 
 function Close-FixtureShell {
@@ -196,6 +204,46 @@ function Restart-RegressionApp {
         -Target $Target `
         -LocalPath (Join-Path $EvidenceDirectory ('layout-restart-' + $appPid + '.json')) `
         -TimeoutSeconds 20 | Out-Null
+}
+
+function Invoke-DeleteKeyDialog {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($stopwatch.Elapsed.TotalSeconds -lt 10) {
+        try {
+            Invoke-LeanTTYDialogButton `
+                -Hdc $hdc `
+                -Target $Target `
+                -ButtonText 'Delete key' `
+                -LayoutPath (Join-Path $EvidenceDirectory $LayoutName)
+            return
+        } catch {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    throw 'Delete-key confirmation did not appear'
+}
+
+function Remove-DisposableAuthKey {
+    param([Parameter(Mandatory = $true)][string]$LayoutPrefix)
+    if (-not (Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc $hdc `
+        -Target $Target `
+        -KeyName $keyName)) {
+        return 'already-absent'
+    }
+    Clear-LeanTTYDeviceInput -Hdc $hdc -Target $Target
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-LeanTTYDeviceCommand -Hdc $hdc -Target $Target -Command "key rm $keyName"
+    Invoke-DeleteKeyDialog -LayoutName "$LayoutPrefix-dialog.json"
+    Wait-AuthLog -Pattern 'KEY_DELETE result=success'
+    if (Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc $hdc `
+        -Target $Target `
+        -KeyName $keyName) {
+        throw 'Disposable SSH authentication key remains after deletion'
+    }
+    return 'verified-absent'
 }
 
 function Read-FixtureCredentials {
@@ -272,12 +320,19 @@ function Write-AuthEvidence {
         input = [ordered]@{
             method = 'raw-physical-key-events'
             secretInjection = 'runtime-generated-printable-ascii'
+            textChunkCharacters = 12
+            interChunkPacingMilliseconds = 25
+            interPromptSettleMilliseconds = 150
             fixedDelayUsedAsVerdict = $false
         }
         coverage = @(
             'password-success',
             'password-then-keyboard-interactive-mixed-echo',
             'keyboard-interactive-multi-round-wrong-answer-recovery',
+            'publickey-unencrypted',
+            'publickey-then-password',
+            'publickey-then-keyboard-interactive',
+            'publickey-encrypted-passphrase',
             'process-stop-during-hidden-prompt-cleanup'
         )
         checks = @($checks)
@@ -317,7 +372,8 @@ try {
         $credentials.password,
         $credentials.account,
         $credentials.token,
-        $credentials.second_token
+        $credentials.second_token,
+        $keyPassphrase
     )
 
     $existingMappings = @(& $hdc -t $Target fport ls 2>&1) -join "`n"
@@ -401,6 +457,58 @@ try {
     Close-FixtureShell
     Complete-AuthStage -Name 'multiround-wrong-answer-recovery'
 
+    Start-AuthStage -Name 'generated-disposable-auth-key'
+    $keyCleanupRequired = $true
+    Submit-LeanTTYDeviceCommand `
+        -Hdc $hdc `
+        -Target $Target `
+        -Command "ssh-keygen -t ed25519 -f $keyName -C regression"
+    Wait-AuthLog -Pattern 'Key generated:'
+    Complete-AuthStage -Name 'generated-disposable-auth-key'
+
+    Start-AuthStage -Name 'publickey-unencrypted'
+    Start-AuthCommand -User 'publickey' -Identity $keyName
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'publickey-unencrypted'
+
+    Start-AuthStage -Name 'publickey-then-password'
+    Start-AuthCommand -User 'publickey-password' -Identity $keyName
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-publickey-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'publickey-then-password'
+
+    Start-AuthStage -Name 'publickey-then-keyboard-interactive'
+    Start-AuthCommand -User 'publickey-kbdint' -Identity $keyName
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.account -LayoutName 'layout-publickey-kbdint-account.json'
+    Submit-AuthValue -Value $credentials.token -LayoutName 'layout-publickey-kbdint-token.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'publickey-then-keyboard-interactive'
+
+    Start-AuthStage -Name 'encrypted-disposable-auth-key'
+    Submit-LeanTTYDeviceCommand -Hdc $hdc -Target $Target -Command "ssh-keygen -p -f $keyName"
+    Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+    Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE stage=new'
+    Submit-AuthValue -Value $keyPassphrase -LayoutName 'layout-key-passphrase-new.json'
+    Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE stage=confirm'
+    Submit-AuthValue -Value $keyPassphrase -LayoutName 'layout-key-passphrase-confirm.json'
+    Wait-AuthLog -Pattern 'KEY_PASSPHRASE_CHANGE result=success'
+    Complete-AuthStage -Name 'encrypted-disposable-auth-key'
+
+    Start-AuthStage -Name 'publickey-encrypted-passphrase'
+    Start-AuthCommand -User 'publickey' -Identity $keyName
+    Wait-AuthLog -Pattern 'native auth event kind=private_key_passphrase'
+    Submit-AuthValue -Value $keyPassphrase -LayoutName 'layout-key-passphrase-auth.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'publickey-encrypted-passphrase'
+
     Start-AuthStage -Name 'process-stop-during-hidden-prompt-cleanup'
     Start-AuthCommand -User 'kbdint-multiround'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -412,6 +520,11 @@ try {
     Restart-RegressionApp
     Assert-NoSecretExposure -LayoutName 'layout-cancel-restarted.json'
     Complete-AuthStage -Name 'process-stop-during-hidden-prompt-cleanup'
+
+    Start-AuthStage -Name 'deleted-disposable-auth-key'
+    Remove-DisposableAuthKey -LayoutPrefix 'layout-key-cleanup' | Out-Null
+    $keyCleanupRequired = $false
+    Complete-AuthStage -Name 'deleted-disposable-auth-key'
 
     Submit-LeanTTYDeviceCommand `
         -Hdc $hdc `
@@ -430,6 +543,15 @@ try {
     } catch {}
 } finally {
     $cleanupFailures = [Collections.Generic.List[string]]::new()
+    if ($keyCleanupRequired -and -not [string]::IsNullOrWhiteSpace($appPid)) {
+        try {
+            Restart-RegressionApp
+            Remove-DisposableAuthKey -LayoutPrefix 'layout-key-finally-cleanup' | Out-Null
+            $keyCleanupRequired = $false
+        } catch {
+            $cleanupFailures.Add('Disposable SSH authentication key cleanup failed')
+        }
+    }
     if ($mappingActive) {
         $removeOutput = @(
             & $hdc -t $Target fport rm "tcp:$FixturePort" "tcp:$FixturePort" 2>&1
@@ -483,6 +605,7 @@ try {
     }
     $credentials = @{}
     $secrets = @()
+    $keyPassphrase = ''
     if ($cleanupFailures.Count -eq 0) {
         $cleanupResult = 'passed'
     } else {
