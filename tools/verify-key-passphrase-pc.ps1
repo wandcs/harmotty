@@ -82,6 +82,9 @@ $appPid = ''
 $failure = ''
 $cleanupResult = 'not-required'
 $cleanupFailure = ''
+$awakeLeaseActive = $false
+$awakeLeaseResult = 'not-acquired'
+$awakeLeaseFailure = ''
 $stageStartedAt = $null
 
 function Add-BehaviorCheck {
@@ -236,6 +239,10 @@ function Write-BehaviorEvidence {
             abi = $deviceAbi
             transport = $deviceTransport
         }
+        environment = [ordered]@{
+            awakeLease = $awakeLeaseResult
+            failure = $awakeLeaseFailure
+        }
         input = [ordered]@{
             commandInjection = 'uitest-focused-text-with-layout-readback'
             secretInjection = 'runtime-generated-printable-ascii'
@@ -260,6 +267,9 @@ $scenarioResult = 'failed'
 try {
     $preflightStopwatch = [Diagnostics.Stopwatch]::StartNew()
     Write-Host '[device] START device-harness-preflight'
+    Start-LeanTTYDeviceAwakeLease -Hdc $hdc -Target $Target
+    $awakeLeaseActive = $true
+    $awakeLeaseResult = 'acquired'
     & (Join-Path $PSScriptRoot 'dev-pc.ps1') `
         -Target $Target `
         -HapPath $candidate.hapPath `
@@ -408,6 +418,19 @@ try {
             }
         }
     }
+    if ($awakeLeaseActive) {
+        try {
+            Stop-LeanTTYDeviceAwakeLease -Hdc $hdc -Target $Target
+            $awakeLeaseActive = $false
+            $awakeLeaseResult = 'restored'
+        } catch {
+            $awakeLeaseResult = 'restore-failed'
+            $awakeLeaseFailure = $_.Exception.Message
+            if ([string]::IsNullOrWhiteSpace($failure)) {
+                $failure = "Environment restore failed: $awakeLeaseFailure"
+            }
+        }
+    }
     $secretA = ''
     $secretB = ''
     $mismatchSecret = ''
@@ -416,6 +439,9 @@ try {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($cleanupFailure)) {
+    $scenarioResult = 'failed'
+}
+if (-not [string]::IsNullOrWhiteSpace($awakeLeaseFailure)) {
     $scenarioResult = 'failed'
 }
 Write-BehaviorEvidence -Result $scenarioResult

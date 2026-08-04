@@ -17,6 +17,35 @@ function Resolve-LeanTTYRegressionTarget {
     throw 'Multiple HarmonyOS PCs are connected; pass -Target explicitly'
 }
 
+function Start-LeanTTYDeviceAwakeLease {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [ValidateRange(60000, 1800000)][int]$TimeoutMilliseconds = 900000
+    )
+
+    & $Hdc -t $Target shell 'power-shell wakeup' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to wake the HarmonyOS regression PC' }
+    $output = @(
+        & $Hdc -t $Target shell "power-shell timeout -o $TimeoutMilliseconds" 2>&1
+    ) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $output -notmatch 'Override screen off time') {
+        throw 'Unable to acquire the HarmonyOS regression screen-timeout lease'
+    }
+}
+
+function Stop-LeanTTYDeviceAwakeLease {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target
+    )
+
+    $output = @(& $Hdc -t $Target shell 'power-shell timeout -r 0' 2>&1) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $output -notmatch 'Restore screen off time') {
+        throw 'Unable to restore the HarmonyOS regression screen timeout'
+    }
+}
+
 function Get-LeanTTYLayoutNodes {
     param([Parameter(Mandatory = $true)]$Node)
 

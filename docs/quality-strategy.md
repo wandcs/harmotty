@@ -142,6 +142,8 @@ Every automated physical scenario MUST:
 
 - resolve a ready physical ARM64 PC at runtime and never commit its identifier;
 - install an exact retained candidate and record its SHA-256 before interaction;
+- acquire a bounded screen-timeout override before launch and restore the prior
+  device policy in `finally`, so unattended execution cannot silently relock;
 - preflight every control and observation channel, including application PID,
   structured logs, layout capture and focused terminal input, before creating
   disposable device state;

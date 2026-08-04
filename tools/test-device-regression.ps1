@@ -93,6 +93,11 @@ Assert-True (
     $clearInputParameters -contains 'LayoutPath'
 ) 'Device input cleanup does not verify current input state through a layout readback'
 
+Assert-True (
+    $null -ne (Get-Command Start-LeanTTYDeviceAwakeLease -ErrorAction SilentlyContinue) -and
+    $null -ne (Get-Command Stop-LeanTTYDeviceAwakeLease -ErrorAction SilentlyContinue)
+) 'Device regression has no reversible screen-timeout lease'
+
 $keyPresenceCommand = Get-Command Test-LeanTTYDeviceKeyFilesPresent -ErrorAction SilentlyContinue
 Assert-True ($null -ne $keyPresenceCommand) (
     'Device cleanup has no independent app-sandbox key-file verification helper'
@@ -127,6 +132,10 @@ foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1
             $content.Contains("'device-harness-preflight'") -and
             $content.Contains('Test-LeanTTYDeviceKeyFilesPresent')
         ) 'Device scenario does not preflight telemetry and independently verify cleanup'
+        Assert-True (
+            $content.Contains('Start-LeanTTYDeviceAwakeLease') -and
+            $content.Contains('Stop-LeanTTYDeviceAwakeLease')
+        ) 'Device scenario does not acquire and restore a screen-timeout lease'
     }
 }
 

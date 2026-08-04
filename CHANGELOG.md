@@ -9,7 +9,8 @@
   scenarios that verify injected input, observable state, negative paths and
   secret non-disclosure without rebuilding the accepted HAP. Physical scenarios
   now preflight telemetry, report stage timing, clear input from observed state
-  and independently record verified disposable-state cleanup.
+  and independently record verified disposable-state cleanup while using a
+  bounded, automatically restored screen-timeout lease.
 - Added `ssh-keygen -p -f <identity>` with non-echoing old/new passphrase
   prompts, verified atomic private-key replacement, durable retention and
   rollback on retention failure without changing the public key or comment.
