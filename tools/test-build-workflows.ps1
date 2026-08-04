@@ -71,6 +71,22 @@ try {
         "Acceptance source helper is missing: $acceptanceSourceScript"
     )
     . $acceptanceSourceScript
+    $lfTarget = "first`nsecond`n"
+    $lfResult = Set-LeanTTYAcceptanceSourceText `
+        -Text $lfTarget `
+        -Anchor "first`r`nsecond" `
+        -Replacement "alpha`r`nbeta"
+    Assert-True ($lfResult -ceq "alpha`nbeta`n") (
+        'Acceptance source replacement did not normalize a CRLF anchor to an LF target'
+    )
+    $crlfTarget = "first`r`nsecond`r`n"
+    $crlfResult = Set-LeanTTYAcceptanceSourceText `
+        -Text $crlfTarget `
+        -Anchor "first`nsecond" `
+        -Replacement "alpha`nbeta"
+    Assert-True ($crlfResult -ceq "alpha`r`nbeta`r`n") (
+        'Acceptance source replacement did not normalize an LF anchor to a CRLF target'
+    )
     $acceptanceArkTsPaths = @(
         Join-Path $repoRoot 'entry\src\main\ets\pages\Index.ets'
         Join-Path $repoRoot 'entry\src\main\ets\model\bridge\TerminalBridge.ets'

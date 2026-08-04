@@ -5,13 +5,21 @@ function Set-LeanTTYAcceptanceSourceText {
         [Parameter(Mandatory = $true)][string]$Replacement
     )
 
-    $first = $Text.IndexOf($Anchor, [StringComparison]::Ordinal)
+    $targetNewLine = if ($Text.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $normalizedAnchor = $Anchor.Replace("`r`n", "`n").Replace("`r", "`n").Replace("`n", $targetNewLine)
+    $normalizedReplacement = $Replacement.Replace("`r`n", "`n").Replace("`r", "`n").Replace("`n", $targetNewLine)
+
+    $first = $Text.IndexOf($normalizedAnchor, [StringComparison]::Ordinal)
     if ($first -lt 0) { throw "Acceptance source anchor is missing: $Anchor" }
-    if ($Text.IndexOf($Anchor, $first + $Anchor.Length, [StringComparison]::Ordinal) -ge 0) {
+    if ($Text.IndexOf(
+            $normalizedAnchor,
+            $first + $normalizedAnchor.Length,
+            [StringComparison]::Ordinal
+        ) -ge 0) {
         throw "Acceptance source anchor is ambiguous: $Anchor"
     }
-    return $Text.Substring(0, $first) + $Replacement +
-        $Text.Substring($first + $Anchor.Length)
+    return $Text.Substring(0, $first) + $normalizedReplacement +
+        $Text.Substring($first + $normalizedAnchor.Length)
 }
 
 function Add-LeanTTYAcceptanceSource {
