@@ -37,7 +37,7 @@ export declare function sshWrite(sessionId: string, data: string): void
 export declare function sshResize(sessionId: string, cols: number, rows: number): void
 export declare function sshSetOutputPaused(sessionId: string, paused: boolean): void
 export declare function sshDisconnect(sessionId: string): void
-export declare function sshGenerateKeyPair(algorithm: string, passphrase: string, outputDir: string, fileName: string, comment: string): string
+export declare function sshGenerateKeyPair(algorithm: string, passphrase: string, outputDir: string, fileName: string, comment: string): Promise<string>
 export declare function sshChangePrivateKeyPassphrase(keyPath: string, oldPassphrase: string, newPassphrase: string): void
 export declare function sshExportKeyPair(privatePath: string, publicPath: string, outputDir: string, fileName: string): void
 export declare function sshReadPublicKey(keyPath: string): string

@@ -1387,16 +1387,19 @@ pub fn ssh_disconnect(session_id: String) -> Result<()> {
 }
 
 #[napi]
-pub fn ssh_generate_key_pair(
+pub async fn ssh_generate_key_pair(
     algorithm: String,
     passphrase: String,
     output_dir: String,
     file_name: String,
     comment: String,
 ) -> Result<String> {
-    let result =
+    let result = tokio::task::spawn_blocking(move || {
         keygen::generate_key_pair(&algorithm, &output_dir, &file_name, &passphrase, &comment)
-            .map_err(|e| napi_error(&e))?;
+    })
+    .await
+    .map_err(|error| napi_error(&format!("key generation task failed: {error}")))?
+    .map_err(|error| napi_error(&error))?;
     let json = format!(
         "{{\"privatePath\":\"{}\",\"publicPath\":\"{}\",\"fingerprint\":\"{}\"}}",
         result.private_path, result.public_path, result.fingerprint

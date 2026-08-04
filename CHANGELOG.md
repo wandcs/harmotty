@@ -92,6 +92,9 @@
 - Enabled the existing `russh` RSA feature so the advertised RSA-4096 key
   generation and passphrase-change paths use the supported implementation
   instead of failing with an unknown-algorithm error.
+- Moved CPU-bound SSH key generation from the ArkUI event thread to an
+  asynchronous native worker, preventing the system not-responding dialog
+  during RSA-4096 generation while keeping the terminal menu interactive.
 - Added bounded session-memory checkpoints so a terminal surface rebuilt after
   the app enters the background can recover its screen and scrollback even when
   SSH disconnects. Physical ARM64 PC validation now covers long sleep with a

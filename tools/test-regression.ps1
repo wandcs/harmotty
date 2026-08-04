@@ -117,6 +117,11 @@ Invoke-RegressionCheck -Name 'ssh-transport-order' -Action {
     if ($LASTEXITCODE -ne 0) { throw 'SSH transport ordering check failed' }
 }
 
+Invoke-RegressionCheck -Name 'ssh-keygen-async-flow' -Action {
+    & (Join-Path $PSScriptRoot 'check-keygen-async-flow.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'SSH key-generation async flow check failed' }
+}
+
 $script:devecoPath = ''
 $script:nodePath = ''
 $script:hvigorPath = ''
