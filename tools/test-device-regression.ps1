@@ -78,9 +78,9 @@ Assert-Throws -Action {
         -Hdc 'Invoke-FakeHdc' `
         -Target 'regression-device' `
         -Text 'echo LEANTTY_SMOKE'
-    $expectedChunks = @('echo LEANTTY', '_SMOKE')
+    $expectedChunks = @('echo LEANTTY_SMOKE'.ToCharArray() | ForEach-Object { $_.ToString() })
     Assert-True (
-        $script:capturedHdcCalls.Count -eq 2 -and
+        $script:capturedHdcCalls.Count -eq $expectedChunks.Count -and
         $script:capturedHdcCalls[0].Count -eq 4 -and
         $script:capturedHdcCalls[0][0] -eq '-t' -and
         $script:capturedHdcCalls[0][1] -eq 'regression-device' -and
@@ -88,8 +88,8 @@ Assert-Throws -Action {
         $script:capturedHdcCalls[0][3] -eq (
             ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[0]
         ) -and
-        $script:capturedHdcCalls[1][3] -eq (
-            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[1]
+        $script:capturedHdcCalls[-1][3] -eq (
+            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[-1]
         )
     ) 'Device text injection did not preserve and pace the requested echo command'
 }
@@ -222,8 +222,26 @@ $deviceRegressionSource = Get-Content -LiteralPath (
     Join-Path $PSScriptRoot 'device-regression.ps1'
 ) -Raw
 Assert-True (
-    $deviceRegressionSource.Contains('-T SessionViewModel,KeyCommandService,SshClient')
-) 'Device application log capture omits structured SshClient authentication events'
+    $deviceRegressionSource.Contains(
+        '-T SessionViewModel,KeyCommandService,SshClient,EntryAbility,Index'
+    )
+) 'Device application log capture omits authentication or window lifecycle events'
+
+$splitLayout = @'
+{
+  "attributes": {"bounds":"[0,0][3120,1955]","hint":""},
+  "children": [
+    {"attributes":{"bounds":"[127,495][145,536]","hint":"Terminal input","focused":"false"},"children":[]},
+    {"attributes":{"bounds":"[1694,135][1712,176]","hint":"Terminal input","focused":"true"},"children":[]}
+  ]
+}
+'@ | ConvertFrom-Json -Depth 20
+$splitInputs = @(Get-LeanTTYTerminalInputNodes -Layout $splitLayout)
+Assert-True (
+    $splitInputs.Count -eq 2 -and
+    $splitInputs[0].attributes.bounds -eq '[127,495][145,536]' -and
+    $splitInputs[1].attributes.bounds -eq '[1694,135][1712,176]'
+) 'Terminal input nodes are not sorted into stable left/right pane order'
 
 foreach ($scriptName in @(
     'device-regression.ps1',
@@ -277,6 +295,10 @@ foreach ($scriptName in @(
         Assert-True (
             $content.Contains('Assert-LeanTTYLayoutExcludesValues') -and
             $content.Contains('HarmonyOS application logs exposed a temporary SSH fixture secret') -and
+            $content.Contains("'failure-fixture-stderr.txt'") -and
+            $content.Contains("'[REDACTED]'") -and
+            $content.Contains('Device auth input delivery length mismatch') -and
+            $content.Contains('deliveryLengthVerifiedBeforeSubmit = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
@@ -287,6 +309,12 @@ foreach ($scriptName in @(
             $content.Contains("'publickey-then-password'") -and
             $content.Contains("'publickey-then-keyboard-interactive'") -and
             $content.Contains("'publickey-encrypted-passphrase'") -and
+            $content.Contains("'parallel-pane-independent-authentication'") -and
+            $content.Contains("'minimize-restore-hidden-answer-continuity'") -and
+            $content.Contains("'EnhanceMinimizeBtn'") -and
+            $content.Contains('LeanTTY active-pane close button was not found') -and
+            -not $content.Contains("Invoke-AuthShortcut -Action 'close-pane'") -and
+            $content.Contains('LeanTTY process changed while activating its window') -and
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
     }

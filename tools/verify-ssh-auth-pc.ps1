@@ -165,8 +165,17 @@ function Submit-AuthValue {
         [Parameter(Mandatory = $true)][string]$Value,
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
     Assert-NoSecretExposure -LayoutName $LayoutName
+    $logs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+    $delivered = [regex]::Matches(
+        $logs,
+        '(?m)SessionViewModel: D: 1 chars, mode='
+    ).Count
+    if ($delivered -ne $Value.Length) {
+        throw "Device auth input delivery length mismatch: expected $($Value.Length), observed $delivered"
+    }
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Start-Sleep -Milliseconds 150
 }
@@ -189,6 +198,137 @@ function Close-FixtureShell {
     Wait-AuthLog -Pattern 'SSH closed, exitCode=0'
 }
 
+function Save-SafeDiagnosticText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+    foreach ($secret in $secrets) {
+        if (-not [string]::IsNullOrEmpty($secret)) {
+            $Text = $Text.Replace($secret, '[REDACTED]')
+        }
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $EvidenceDirectory $FileName),
+        $Text,
+        [Text.UTF8Encoding]::new($false)
+    )
+}
+
+function Invoke-AuthSplitShortcut {
+    & $hdc -t $Target shell (
+        'uinput -K -d 2072 -d 2047 -d 2020 -u 2020 -u 2047 -u 2072'
+    ) | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY split shortcut' }
+}
+
+function Wait-AuthPaneCount {
+    param(
+        [Parameter(Mandatory = $true)][ValidateRange(1, 2)][int]$Count,
+        [Parameter(Mandatory = $true)][string]$LayoutName
+    )
+    return Wait-LeanTTYTerminalInputCount `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory $LayoutName) `
+        -Count $Count `
+        -TimeoutSeconds 20
+}
+
+function Focus-AuthPane {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('left', 'right')][string]$Side,
+        [Parameter(Mandatory = $true)][string]$LayoutName
+    )
+    $path = Join-Path $EvidenceDirectory $LayoutName
+    $layout = Wait-AuthPaneCount -Count 2 -LayoutName $LayoutName
+    $nodes = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+    $index = if ($Side -eq 'left') { 0 } else { 1 }
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$nodes[$index].attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to focus $Side LeanTTY pane" }
+
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
+        $nodes = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        if ($nodes.Count -eq 2 -and [string]$nodes[$index].attributes.focused -eq 'true' -and
+            [string]$nodes[1 - $index].attributes.focused -ne 'true') {
+            return
+        }
+        Start-Sleep -Milliseconds 200
+    } while ($stopwatch.Elapsed.TotalSeconds -lt 10)
+    throw "Timed out focusing $Side LeanTTY pane"
+}
+
+function Activate-RegressionWindow {
+    & $hdc -t $Target shell 'aa start -a EntryAbility -b com.leantty.app' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to activate LeanTTY regression window' }
+    $activatedPid = (@(& $hdc -t $Target shell 'pidof com.leantty.app' 2>&1) -join "`n").Trim()
+    if ($activatedPid -ne $appPid) { throw 'LeanTTY process changed while activating its window' }
+}
+
+function Invoke-ActivePaneCloseButton {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    $layout = Wait-AuthPaneCount -Count 2 -LayoutName $LayoutName
+    $button = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        [string]$_.attributes.text -eq '×' -and
+        [string]$_.attributes.clickable -eq 'true' -and
+        [string]$_.attributes.visible -eq 'true'
+    } | Select-Object -First 1)
+    if ($button.Count -ne 1) { throw 'LeanTTY active-pane close button was not found' }
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$button[0].attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to click the LeanTTY active-pane close button' }
+}
+
+function Ensure-SingleAuthPane {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    Activate-RegressionWindow
+    $path = Join-Path $EvidenceDirectory $LayoutName
+    $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
+    $count = @(Get-LeanTTYTerminalInputNodes -Layout $layout).Count
+    if ($count -eq 1) { return }
+    if ($count -ne 2) { throw "Unexpected LeanTTY pane count: $count" }
+    Focus-AuthPane -Side 'right' -LayoutName $LayoutName
+    Invoke-ActivePaneCloseButton -LayoutName $LayoutName
+    Wait-AuthPaneCount -Count 1 -LayoutName $LayoutName | Out-Null
+}
+
+function Split-AuthPane {
+    Invoke-AuthSplitShortcut
+    Wait-AuthPaneCount -Count 2 -LayoutName 'layout-parallel-split.json' | Out-Null
+}
+
+function Minimize-RegressionWindow {
+    $layoutName = 'layout-before-minimize.json'
+    $layout = Get-LeanTTYDeviceLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory $layoutName)
+    $button = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        [string]$_.attributes.id -eq 'EnhanceMinimizeBtn'
+    } | Select-Object -First 1)
+    if ($button.Count -ne 1) { throw 'HarmonyOS system minimize button was not found' }
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$button[0].attributes.bounds)
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS system minimize click failed' }
+    Wait-AuthLog -Pattern 'Window visibility changed: visible=false'
+    $minimizedPid = (@(& $hdc -t $Target shell 'pidof com.leantty.app' 2>&1) -join "`n").Trim()
+    if ($minimizedPid -ne $appPid) { throw 'LeanTTY process changed while minimizing' }
+}
+
+function Restore-RegressionWindow {
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    & $hdc -t $Target shell 'aa start -a EntryAbility -b com.leantty.app' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to restore minimized LeanTTY window' }
+    Wait-AuthLog -Pattern 'Window visibility changed: visible=true'
+    $restoredPid = (@(& $hdc -t $Target shell 'pidof com.leantty.app' 2>&1) -join "`n").Trim()
+    if ($restoredPid -ne $appPid) { throw 'LeanTTY process changed while restoring' }
+    Wait-AuthPaneCount -Count 1 -LayoutName 'layout-after-restore.json' | Out-Null
+}
+
 function Restart-RegressionApp {
     & $hdc -t $Target shell 'aa force-stop com.leantty.app' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Unable to stop LeanTTY between SSH authentication scenarios' }
@@ -204,6 +344,7 @@ function Restart-RegressionApp {
         -Target $Target `
         -LocalPath (Join-Path $EvidenceDirectory ('layout-restart-' + $appPid + '.json')) `
         -TimeoutSeconds 20 | Out-Null
+    Ensure-SingleAuthPane -LayoutName ('layout-single-pane-' + $appPid + '.json')
 }
 
 function Invoke-DeleteKeyDialog {
@@ -320,10 +461,13 @@ function Write-AuthEvidence {
         input = [ordered]@{
             method = 'raw-physical-key-events'
             secretInjection = 'runtime-generated-printable-ascii'
-            textChunkCharacters = 12
-            interChunkPacingMilliseconds = 25
+            textChunkCharacters = 1
+            interChunkPacingMilliseconds = 10
+            deliveryLengthVerifiedBeforeSubmit = $true
             interPromptSettleMilliseconds = 150
             fixedDelayUsedAsVerdict = $false
+            paneRouting = 'sorted-terminal-input-accessibility-nodes'
+            minimizeTrigger = 'HarmonyOS-EnhanceMinimizeBtn'
         }
         coverage = @(
             'password-success',
@@ -333,6 +477,8 @@ function Write-AuthEvidence {
             'publickey-then-password',
             'publickey-then-keyboard-interactive',
             'publickey-encrypted-passphrase',
+            'parallel-pane-independent-authentication',
+            'minimize-restore-hidden-answer-continuity',
             'process-stop-during-hidden-prompt-cleanup'
         )
         checks = @($checks)
@@ -509,6 +655,51 @@ try {
     Close-FixtureShell
     Complete-AuthStage -Name 'publickey-encrypted-passphrase'
 
+    Start-AuthStage -Name 'parallel-pane-authentication'
+    Split-AuthPane
+    Focus-AuthPane -Side 'right' -LayoutName 'layout-parallel-right-prompt.json'
+    Start-AuthCommand -User 'kbdint-multiround'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Focus-AuthPane -Side 'left' -LayoutName 'layout-parallel-left-prompt.json'
+    Start-AuthCommand -User 'password-kbdint'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-parallel-left-password.json'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.account -LayoutName 'layout-parallel-left-account.json'
+    Submit-AuthValue -Value $credentials.token -LayoutName 'layout-parallel-left-token.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Focus-AuthPane -Side 'right' -LayoutName 'layout-parallel-right-resume.json'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.account -LayoutName 'layout-parallel-right-account.json'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.second_token -LayoutName 'layout-parallel-right-token.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'parallel-pane-authentication'
+    Ensure-SingleAuthPane -LayoutName 'layout-parallel-cleanup.json'
+
+    Start-AuthStage -Name 'minimize-restore-hidden-prompt'
+    Start-AuthCommand -User 'kbdint-multiround'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.account -LayoutName 'layout-minimize-account.json'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
+    Assert-NoSecretExposure -LayoutName 'layout-minimize-hidden-token.json'
+    Minimize-RegressionWindow
+    Restore-RegressionWindow
+    Assert-NoSecretExposure -LayoutName 'layout-minimize-restored-token.json'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'minimize-restore-hidden-prompt'
+
     Start-AuthStage -Name 'process-stop-during-hidden-prompt-cleanup'
     Start-AuthCommand -User 'kbdint-multiround'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
@@ -535,6 +726,10 @@ try {
 } catch {
     $caughtError = $_
     $failure = $_.Exception.Message
+    try {
+        $failureLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+        Save-SafeDiagnosticText -Text $failureLogs -FileName 'failure-hilog.txt'
+    } catch {}
     try {
         Save-LeanTTYDeviceScreenshot `
             -Hdc $hdc `
@@ -584,6 +779,20 @@ try {
         }
         if (-not $fixtureProcess.HasExited) {
             $cleanupFailures.Add('SSH fixture launcher process remained after cleanup')
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($failure)) {
+        foreach ($diagnostic in @(
+            @{ source = $fixtureStdout; destination = 'failure-fixture-stdout.txt' },
+            @{ source = $fixtureStderr; destination = 'failure-fixture-stderr.txt' }
+        )) {
+            try {
+                if (Test-Path -LiteralPath $diagnostic.source -PathType Leaf) {
+                    Save-SafeDiagnosticText `
+                        -Text ([IO.File]::ReadAllText($diagnostic.source)) `
+                        -FileName $diagnostic.destination
+                }
+            } catch {}
         }
     }
     if ($awakeLeaseActive) {

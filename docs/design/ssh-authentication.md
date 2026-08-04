@@ -1,6 +1,6 @@
 # SSH keyboard-interactive 与多方法认证技术方案
 
-> 状态：Implementing；受控客户端链路已闭合，真实服务与完整生命周期矩阵仍需验证
+> 状态：Implementing；受控客户端含 Pane/最小化链路已闭合，真实服务与完整错误矩阵仍需验证
 >
 > 目标 milestone：1.1.0
 >
@@ -58,16 +58,19 @@ challenge 和 `sessionId + generation + roundId`，UI 不再根据私钥失败�
 公钥后密码、公钥后 interactive 和多轮 interactive；`test-e2e.sh` 使用 OpenSSH 逐项
 验证未加密/加密私钥、partial success、多提示混合 echo 和多轮协议行为。物理 ARM64
 HarmonyOS PC 已使用同一夹具验证直接密码、未加密/加密私钥、密码后 interactive、
-公钥后密码、公钥后 interactive、多轮 interactive、混合 echo、banner 和取消；更广的
-真实服务、Pane 并行、最小化/恢复、断网与错误矩阵仍是发布门禁。
+公钥后密码、公钥后 interactive、多轮 interactive、混合 echo、banner、取消、两个
+Pane 并行认证和同一进程最小化/恢复期间隐藏回答连续性；真实服务、断网与错误矩阵仍是
+发布门禁。
 
 `tools/verify-ssh-auth-pc.ps1` 将这些主路径固化为保留候选验收：脚本
 只在系统临时目录生成凭据，通过可清理的 HDC reverse 映射让设备标准 `ssh` 命令连接
 仓库夹具，并使用原始按键、结构化非秘密日志与 accessibility layout 覆盖直接密码、
 密码后 mixed-echo interactive、多轮错误恢复、未加密/加密公钥、公钥后密码、公钥后
 interactive，以及隐藏回答期间进程停止后的清理。一次性密钥由应用标准 `ssh-keygen`
-路径创建、加密并删除，脚本独立检查其沙箱文件已清理。脚本不要求 HAP 内存在验收
-入口；Pane 并行、最小化/恢复和真实服务矩阵仍保持独立门禁。
+路径创建、加密并删除；两个 Pane 通过现有分屏、焦点和独立 Session 路径并行完成不同
+认证链；最小化/恢复通过 HarmonyOS 系统窗口按钮、可见性事件和同一进程 ID 验证隐藏
+回答连续性。脚本独立检查沙箱文件已清理，不要求 HAP 内存在验收入口；真实服务、断网
+与完整错误矩阵仍保持独立门禁。
 
 ## 用户交互
 

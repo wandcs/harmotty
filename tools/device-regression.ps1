@@ -207,6 +207,38 @@ function Get-LeanTTYTerminalInputText {
     return [string]$inputNode[0].attributes.text
 }
 
+function Get-LeanTTYTerminalInputNodes {
+    param([Parameter(Mandatory = $true)]$Layout)
+
+    return @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
+        [string]$_.attributes.hint -eq 'Terminal input'
+    } | Sort-Object {
+        (Get-LeanTTYBoundsCenter -Bounds ([string]$_.attributes.bounds)).x
+    })
+}
+
+function Wait-LeanTTYTerminalInputCount {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$LocalPath,
+        [ValidateRange(1, 2)][int]$Count,
+        [ValidateRange(1, 30)][int]$TimeoutSeconds = 20
+    )
+
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout -Hdc $Hdc -Target $Target -LocalPath $LocalPath
+        if (@(Get-LeanTTYTerminalInputNodes -Layout $layout).Count -eq $Count) {
+            return $layout
+        }
+        if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+            Start-Sleep -Milliseconds 200
+        }
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds)
+    throw "Timed out waiting for $Count LeanTTY terminal input accessibility nodes"
+}
+
 function Wait-LeanTTYTerminalInputLayout {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
@@ -323,7 +355,7 @@ function Invoke-LeanTTYDeviceText {
         [Parameter(Mandatory = $true)][string]$Text
     )
 
-    $chunkSize = 12
+    $chunkSize = 1
     for ($offset = 0; $offset -lt $Text.Length; $offset += $chunkSize) {
         $length = [Math]::Min($chunkSize, $Text.Length - $offset)
         $chunk = $Text.Substring($offset, $length)
@@ -331,7 +363,7 @@ function Invoke-LeanTTYDeviceText {
         & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
         if ($offset + $length -lt $Text.Length) {
-            Start-Sleep -Milliseconds 25
+            Start-Sleep -Milliseconds 10
         }
     }
 }
@@ -434,7 +466,7 @@ function Get-LeanTTYAppLogs {
     $output = @(
         & $Hdc -t $Target shell (
             "hilog -z 500 -t app -P $ProcessId " +
-            '-T SessionViewModel,KeyCommandService,SshClient'
+            '-T SessionViewModel,KeyCommandService,SshClient,EntryAbility,Index'
         ) 2>&1
     )
     $exitCode = $LASTEXITCODE
