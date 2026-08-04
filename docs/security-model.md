@@ -115,11 +115,16 @@ are unsupported rather than inferred from prompt text.
   the accepted connection proceeds.
 - Changed keys stop the connection and show old/new fingerprints plus the exact
   OpenSSH removal target.
+- `ssh-keygen -F` queries all matching algorithm records for exactly one
+  endpoint without changing the durable trust store or its runtime projection.
 - `ssh-keygen -R` removes all matching algorithm records for exactly one
   default or non-default-port endpoint and preserves unrelated plain, hashed or
   comma-separated host fields.
 - No option may silently disable checking, auto-accept a changed key or replace
   the trust store with a second model.
+- Unknown, `Match` or unsupported directives that could alter the selected
+  connection fail before connection or managed Host mutation; their values are
+  preserved as source text but never treated as applied configuration.
 
 ## Key and configuration custody
 

@@ -4,7 +4,7 @@ import { KeyPairInfo } from '../../common/types/SshKeyTypes'
 import { KeyCommandResult, KeyCommandKind } from './CommandParser'
 import { SshConfig } from '../ssh/SshConfig'
 import { Logger } from '../../common/logger/Logger'
-import { KnownHostRemovalResult, KnownHostsManager } from '../ssh/KnownHostsManager'
+import { KnownHostQueryResult, KnownHostRemovalResult, KnownHostsManager } from '../ssh/KnownHostsManager'
 
 const logger: Logger = new Logger('KeyCommandService')
 const HELP_TEXT: string =
@@ -20,6 +20,7 @@ const HELP_TEXT: string =
   '  ssh-keygen -y -f <identity>                    Show a public key\r\n' +
   '  ssh-keygen -l -f <identity>[.pub]               Show a fingerprint\r\n' +
   '  ssh-keygen -p -f <identity>                     Change a private-key passphrase\r\n' +
+  '  ssh-keygen -F <host>|[<host>]:<port>            Find trusted host keys\r\n' +
   '  ssh-keygen -R <host>|[<host>]:<port>            Remove trusted host keys\r\n' +
   '  ssh-copy-id -i <key-name> [-p <port>] <user>@<host>  Install a public key\r\n' +
   '\r\n' +
@@ -45,8 +46,9 @@ const SSH_HELP: string = '\r\nUsage: ssh [-p <port>] [-i <identity>] <user>@<hos
 const KEYGEN_HELP: string = '\r\nUsage: ssh-keygen [-t <ed25519|rsa>] [-f <key-name>] [-C <comment>]\r\n' +
   '       ssh-keygen -y -f <identity>\r\n       ssh-keygen -l -f <identity>[.pub]\r\n' +
   '       ssh-keygen -p -f <identity>\r\n' +
+  '       ssh-keygen -F <host>|[<host>]:<port>\r\n' +
   '       ssh-keygen -R <host>|[<host>]:<port>\r\n\r\n' +
-  'Creates, inspects or updates keys and removes trusted host records in LeanTTY ~/.ssh.\r\nltty> '
+  'Creates, inspects or updates keys, and finds or removes trusted host records in LeanTTY ~/.ssh.\r\nltty> '
 const COPY_ID_HELP: string = '\r\nUsage: ssh-copy-id -i <key-name> [-p <port>] <user>@<host>\r\n\r\n' +
   'Installs the public key once; an existing identical line is not duplicated.\r\nltty> '
 const KEY_HELP: string =
@@ -86,6 +88,10 @@ export class KeyCommandService {
       return
     }
     if (result.kind === KeyCommandKind.KEYEXPORT) { KeyCommandService.executeKeyexport(result, ctx); return }
+    if (result.kind === KeyCommandKind.HOST_KEY_FIND) {
+      KeyCommandService.executeHostKeyFind(result, ctx)
+      return
+    }
     if (result.kind === KeyCommandKind.HOST_KEY_REMOVE) {
       KeyCommandService.executeHostKeyRemove(result, ctx)
       return
@@ -218,6 +224,19 @@ export class KeyCommandService {
     }
   }
 
+  private static executeHostKeyFind(result: KeyCommandResult, ctx: KeyCommandContext): void {
+    try {
+      let query: KnownHostQueryResult = KnownHostsManager.find(result.sshHost, result.sshPort)
+      if (query.found === 0) {
+        ctx.writeOutput('\r\nNo host key found for ' + query.target + '.\r\nltty> ')
+        return
+      }
+      ctx.writeOutput('\r\n' + query.output.replace(/\n/g, '\r\n') + 'ltty> ')
+    } catch (e) {
+      ctx.writeError('Failed to find host key: ' + e)
+    }
+  }
+
   private static async executeKeyexport(result: KeyCommandResult, ctx: KeyCommandContext): Promise<void> {
     let key: KeyPairInfo | null = SshKeyManager.findKeyByName(ctx.context, result.keyName)
     if (key === null) {
@@ -255,6 +274,11 @@ export class KeyCommandService {
 
   private static saveHost(result: KeyCommandResult, ctx: KeyCommandContext, updated: boolean): void {
     let config: SshConfig = ctx.sshConfig
+    let current = config.resolveHost(result.keyName)
+    if (current.errorMessage.length > 0) {
+      ctx.writeError(current.errorMessage)
+      return
+    }
     config.addAlias(result.keyName, result.sshHost, result.sshPort, result.sshUser)
     config.saveConfig(ctx.context)
     let info: string = result.keyName + ' -> ' + result.sshUser + '@' + result.sshHost
@@ -265,6 +289,10 @@ export class KeyCommandService {
 
   private static executeSshConfig(result: KeyCommandResult, ctx: KeyCommandContext): void {
     let host = ctx.sshConfig.resolveHost(result.keyName)
+    if (host.errorMessage.length > 0) {
+      ctx.writeError(host.errorMessage)
+      return
+    }
     ctx.writeOutput('\r\nhost ' + result.keyName + '\r\n')
     ctx.writeOutput('hostname ' + host.hostname + '\r\n')
     if (host.user.length > 0) { ctx.writeOutput('user ' + host.user + '\r\n') }

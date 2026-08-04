@@ -210,7 +210,7 @@ bytes, persistence or release identity remains high risk.
 
 The automated suite should keep stable ownership over:
 
-- exact known-host endpoint formatting/removal, including hashed and shared
+- exact known-host endpoint formatting/query/removal, including hashed and shared
   records;
 - key name/path safety, pair verification, no-overwrite export and failure
   cleanup;

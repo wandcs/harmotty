@@ -11,6 +11,7 @@ export class SshConfigHost {
   port: number
   user: string
   identityFile: string
+  errorMessage: string
 
   constructor(alias: string) {
     this.alias = alias
@@ -18,6 +19,7 @@ export class SshConfigHost {
     this.port = 22
     this.user = ''
     this.identityFile = ''
+    this.errorMessage = ''
   }
 }
 
@@ -273,9 +275,9 @@ export class SshConfig {
       if (line.length === 0 || line.startsWith('#')) {
         continue
       }
-      let lower: string = line.toLowerCase()
-      if (lower.startsWith('host ')) {
-        let aliases: string[] = line.substring(5).trim().split(/\s+/)
+      let directive: string[] = this.parseDirective(line)
+      if (directive[0].toLowerCase() === 'host') {
+        let aliases: string[] = directive[1].split(/\s+/)
         for (let aliasIndex = 0; aliasIndex < aliases.length; aliasIndex++) {
           let alias: string = aliases[aliasIndex]
           if (alias.length > 0 && !alias.includes('*') && !alias.includes('?') &&
@@ -299,33 +301,72 @@ export class SshConfig {
     let portSet: boolean = false
     let userSet: boolean = false
     let identitySet: boolean = false
-    let active: boolean = false
+    let active: boolean = true
     let lines: string[] = this.sourceText.split(/\r?\n/)
     for (let i = 0; i < lines.length; i++) {
       let line: string = this.stripInlineComment(lines[i].trim())
       if (line.length === 0 || line.startsWith('#')) { continue }
-      let lower: string = line.toLowerCase()
-      if (lower.startsWith('host ')) {
-        active = this.matchesHostPatterns(alias, line.substring(5).trim().split(/\s+/))
+      let directive: string[] = this.parseDirective(line)
+      let name: string = directive[0]
+      let lowerName: string = name.toLowerCase()
+      let value: string = directive[1]
+      if (lowerName === 'host') {
+        if (value.length === 0) {
+          if (resolved.errorMessage.length === 0) {
+            resolved.errorMessage = this.configError(alias, name, i + 1, 'missing host pattern')
+          }
+          active = false
+        } else {
+          active = this.matchesHostPatterns(alias, value.split(/\s+/))
+        }
         continue
       }
-      if (lower.startsWith('match ')) { active = false; continue }
+      if (lowerName === 'match') {
+        if (resolved.errorMessage.length === 0) {
+          resolved.errorMessage = this.configError(alias, name, i + 1, 'directive is not supported')
+        }
+        active = false
+        continue
+      }
       if (!active) { continue }
-      if (lower.startsWith('hostname ') && !hostnameSet) {
-        resolved.hostname = line.substring(9).trim()
+      if (lowerName === 'hostname' && !hostnameSet) {
+        if (value.length === 0) {
+          if (resolved.errorMessage.length === 0) {
+            resolved.errorMessage = this.configError(alias, name, i + 1, 'missing value')
+          }
+          continue
+        }
+        resolved.hostname = value
         hostnameSet = true
-      } else if (lower.startsWith('port ') && !portSet) {
-        let port: number = parseInt(line.substring(5).trim(), 10)
-        if (!isNaN(port) && port > 0 && port < 65536) {
+      } else if (lowerName === 'port' && !portSet) {
+        let port: number = parseInt(value, 10)
+        if (/^\d+$/.test(value) && !isNaN(port) && port > 0 && port < 65536) {
           resolved.port = port
           portSet = true
+        } else if (resolved.errorMessage.length === 0) {
+          resolved.errorMessage = this.configError(alias, name, i + 1, 'expected port 1-65535')
         }
-      } else if (lower.startsWith('user ') && !userSet) {
-        resolved.user = line.substring(5).trim()
+      } else if (lowerName === 'user' && !userSet) {
+        if (value.length === 0) {
+          if (resolved.errorMessage.length === 0) {
+            resolved.errorMessage = this.configError(alias, name, i + 1, 'missing value')
+          }
+          continue
+        }
+        resolved.user = value
         userSet = true
-      } else if (lower.startsWith('identityfile ') && !identitySet) {
-        resolved.identityFile = line.substring(13).trim()
+      } else if (lowerName === 'identityfile' && !identitySet) {
+        if (value.length === 0) {
+          if (resolved.errorMessage.length === 0) {
+            resolved.errorMessage = this.configError(alias, name, i + 1, 'missing value')
+          }
+          continue
+        }
+        resolved.identityFile = value
         identitySet = true
+      } else if (lowerName !== 'hostname' && lowerName !== 'port' && lowerName !== 'user' &&
+        lowerName !== 'identityfile' && resolved.errorMessage.length === 0) {
+        resolved.errorMessage = this.configError(alias, name, i + 1, 'directive is not supported')
       }
     }
     if (!hostnameSet) { resolved.hostname = alias }
@@ -378,6 +419,20 @@ export class SshConfig {
       if (this.hosts[i].alias === alias) { return true }
     }
     return false
+  }
+
+  private parseDirective(line: string): string[] {
+    let separator: number = line.search(/[\s=]/)
+    if (separator < 0) { return [line, ''] }
+    let name: string = line.substring(0, separator)
+    let value: string = line.substring(separator).trim()
+    if (value.startsWith('=')) { value = value.substring(1).trim() }
+    return [name, value]
+  }
+
+  private configError(alias: string, directive: string, line: number, reason: string): string {
+    return 'SSH config error for ' + alias + ' at line ' + line.toString() + ': ' +
+      directive + ' ' + reason + '. Supported directives: Host, HostName, User, Port, IdentityFile.'
   }
 
   private stripInlineComment(line: string): string {

@@ -38,7 +38,8 @@ export enum KeyCommandKind {
   KEYINFO = 13,
   KEYEXPORT = 14,
   HOST_KEY_REMOVE = 15,
-  KEY_PASSPHRASE_CHANGE = 16
+  KEY_PASSPHRASE_CHANGE = 16,
+  HOST_KEY_FIND = 17
 }
 
 export class KeyCommandResult {
@@ -78,9 +79,10 @@ export class CommandParser {
       if (words.length === 2) { result.keyName = words[1] }
       return result
     }
-    if (trimmed === 'exit') {
+    if (words[0] === 'exit') {
       let result: KeyCommandResult = new KeyCommandResult()
       result.kind = KeyCommandKind.EXIT
+      if (words.length !== 1) { result.errorMessage = 'Usage: exit' }
       return result
     }
     if (words.length >= 2 && words.length <= 3 && words[words.length - 1] === '--help') {
@@ -123,6 +125,13 @@ export class CommandParser {
     if (words[0] === 'key' && words[1] === 'export') {
       return CommandParser.parseKeyExport(trimmed)
     }
+    if (words[0] === 'key' || words[0] === 'keys') {
+      let result: KeyCommandResult = new KeyCommandResult()
+      result.kind = KeyCommandKind.KEYS
+      result.errorMessage = 'Usage: key list | key import <path> [<key-name>] | ' +
+        'key export <key-name> [<file-name>] | key rm <key-name>'
+      return result
+    }
 
     if ((words[0] === 'host' || words[0] === 'alias') && (words[1] === 'add' || words[1] === 'set')) {
       let result: KeyCommandResult = CommandParser.parseAliasAdd(trimmed)
@@ -139,6 +148,14 @@ export class CommandParser {
       let result: KeyCommandResult = new KeyCommandResult()
       result.kind = KeyCommandKind.ALIAS_LIST
       result.legacySyntax = words[0] === 'alias'
+      return result
+    }
+    if (words[0] === 'host' || words[0] === 'alias') {
+      let result: KeyCommandResult = new KeyCommandResult()
+      result.kind = KeyCommandKind.ALIAS_LIST
+      result.legacySyntax = words[0] === 'alias'
+      result.errorMessage = 'Usage: host add|set <host-name> <user>@<host>[:<port>] | ' +
+        'host rm <host-name> | host list'
       return result
     }
 
@@ -167,15 +184,21 @@ export class CommandParser {
     let args: string[] = argText.split(/\s+/)
     let target: string = ''
     let explicitPort: number = 0
+    let identitySpecified: boolean = false
     for (let i = 0; i < args.length; i++) {
       if (args[i] === '-p') {
         if (i + 1 >= args.length) { result.errorMessage = 'Missing port after -p'; return result }
+        if (explicitPort > 0) { result.errorMessage = 'Duplicate SSH option: -p'; return result }
         explicitPort = parseInt(args[i + 1], 10)
-        if (isNaN(explicitPort) || explicitPort < 1 || explicitPort > 65535) { result.errorMessage = 'Port must be between 1 and 65535'; return result }
+        if (!/^\d+$/.test(args[i + 1]) || isNaN(explicitPort) || explicitPort < 1 || explicitPort > 65535) {
+          result.errorMessage = 'Port must be between 1 and 65535'; return result
+        }
         i++
       } else if (args[i] === '-i') {
         if (i + 1 >= args.length) { result.errorMessage = 'Missing identity file after -i'; return result }
+        if (identitySpecified) { result.errorMessage = 'Duplicate SSH option: -i'; return result }
         result.identityFile = args[i + 1]
+        identitySpecified = true
         i++
       } else if (args[i].startsWith('-')) {
         result.errorMessage = 'Unsupported SSH option: ' + args[i]; return result
@@ -189,6 +212,7 @@ export class CommandParser {
 
     let host: SshConfigHost | null = sshConfig.findHost(target)
     if (host !== null) {
+      if (host.errorMessage.length > 0) { result.errorMessage = host.errorMessage; return result }
       if (host.user.length === 0) { result.errorMessage = 'SSH alias must define User: ' + target; return result }
       result.isValid = true
       result.host = host.hostname
@@ -204,6 +228,7 @@ export class CommandParser {
     result.username = target.substring(0, atIdx)
     let hostPort: string = target.substring(atIdx + 1)
     CommandParser.parseHostPort(hostPort, result)
+    if (result.errorMessage.length > 0) { return result }
     if (explicitPort > 0) { result.port = explicitPort }
     result.isValid = result.username.length > 0 && result.host.length > 0
     if (!result.isValid) { result.errorMessage = 'Invalid SSH target' }
@@ -215,9 +240,15 @@ export class CommandParser {
       let closingBracket: number = hostPort.indexOf(']')
       if (closingBracket <= 1) { result.errorMessage = 'Invalid bracketed IPv6 hostname'; return }
       result.host = hostPort.substring(1, closingBracket)
-      if (closingBracket + 1 < hostPort.length && hostPort[closingBracket + 1] === ':') {
-        let p: number = parseInt(hostPort.substring(closingBracket + 2), 10)
-        if (isNaN(p) || p < 1 || p > 65535) { result.errorMessage = 'Port 1-65535'; return }
+      if (closingBracket + 1 < hostPort.length) {
+        if (hostPort[closingBracket + 1] !== ':') {
+          result.errorMessage = 'Unexpected text after bracketed SSH host'; return
+        }
+        let portText: string = hostPort.substring(closingBracket + 2)
+        let p: number = parseInt(portText, 10)
+        if (!/^\d+$/.test(portText) || isNaN(p) || p < 1 || p > 65535) {
+          result.errorMessage = 'Port 1-65535'; return
+        }
         result.port = p
       }
     } else {
@@ -225,8 +256,11 @@ export class CommandParser {
       let lastColon: number = hostPort.lastIndexOf(':')
       if (firstColon > 0 && firstColon === lastColon) {
         result.host = hostPort.substring(0, firstColon)
-        let p: number = parseInt(hostPort.substring(firstColon + 1), 10)
-        if (isNaN(p) || p < 1 || p > 65535) { result.errorMessage = 'Port 1-65535'; return }
+        let portText: string = hostPort.substring(firstColon + 1)
+        let p: number = parseInt(portText, 10)
+        if (!/^\d+$/.test(portText) || isNaN(p) || p < 1 || p > 65535) {
+          result.errorMessage = 'Port 1-65535'; return
+        }
         result.port = p
       } else {
         result.host = hostPort
@@ -238,13 +272,14 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.KEYGEN
     let parts: string[] = input.split(/\s+/)
-    if (parts.length >= 2 && parts[1] === '-R') {
-      result.kind = KeyCommandKind.HOST_KEY_REMOVE
+    if (parts.length >= 2 && (parts[1] === '-F' || parts[1] === '-R')) {
+      let mode: string = parts[1]
+      result.kind = mode === '-F' ? KeyCommandKind.HOST_KEY_FIND : KeyCommandKind.HOST_KEY_REMOVE
       if (parts.length !== 3) {
-        result.errorMessage = 'Usage: ssh-keygen -R <host> or ssh-keygen -R [<host>]:<port>'
+        result.errorMessage = 'Usage: ssh-keygen ' + mode + ' <host> or ssh-keygen ' + mode + ' [<host>]:<port>'
         return result
       }
-      CommandParser.parseKnownHostTarget(parts[2], result)
+      CommandParser.parseKnownHostTarget(parts[2], mode, result)
       return result
     }
     let publicMode: boolean = false
@@ -309,9 +344,9 @@ export class CommandParser {
     return result
   }
 
-  private static parseKnownHostTarget(target: string, result: KeyCommandResult): void {
+  private static parseKnownHostTarget(target: string, mode: string, result: KeyCommandResult): void {
     if (target.length === 0) {
-      result.errorMessage = 'ssh-keygen: missing host after -R'
+      result.errorMessage = 'ssh-keygen: missing host after ' + mode
       return
     }
     if (target.startsWith('[')) {
@@ -344,19 +379,30 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.KEYPUSH
     let parts: string[] = input.split(/\s+/)
+    let identitySpecified: boolean = false
+    let portSpecified: boolean = false
+    let targetSpecified: boolean = false
     let i: number = 1
     while (i < parts.length) {
       if (parts[i] === '-i') {
         if (i + 1 >= parts.length) { result.errorMessage = 'ssh-copy-id: missing key name after -i'; return result }
+        if (identitySpecified) { result.errorMessage = 'ssh-copy-id: duplicate option -i'; return result }
         result.keyName = parts[i + 1]; i += 1
+        identitySpecified = true
       } else if (parts[i] === '-p') {
         if (i + 1 >= parts.length) { result.errorMessage = 'ssh-copy-id: missing port after -p'; return result }
+        if (portSpecified) { result.errorMessage = 'ssh-copy-id: duplicate option -p'; return result }
+        let portText: string = parts[i + 1]
         let p: number = parseInt(parts[i + 1], 10)
-        if (isNaN(p) || p < 1 || p > 65535) { result.errorMessage = 'ssh-copy-id: port 1-65535'; return result }
+        if (!/^\d+$/.test(portText) || isNaN(p) || p < 1 || p > 65535) {
+          result.errorMessage = 'ssh-copy-id: port 1-65535'; return result
+        }
         result.sshPort = p; i += 1
+        portSpecified = true
       } else if (parts[i].startsWith('-')) {
         result.errorMessage = 'ssh-copy-id: unknown option ' + parts[i]; return result
       } else {
+        if (targetSpecified) { result.errorMessage = 'ssh-copy-id: unexpected target ' + parts[i]; return result }
         let target: string = parts[i]
         let atIdx: number = target.lastIndexOf('@')
         if (atIdx <= 0) { result.errorMessage = 'ssh-copy-id: expected user@host'; return result }
@@ -366,20 +412,30 @@ export class CommandParser {
           let closing: number = hostPort.indexOf(']')
           if (closing <= 1) { result.errorMessage = 'ssh-copy-id: invalid IPv6'; return result }
           result.sshHost = hostPort.substring(1, closing)
-          if (closing + 1 < hostPort.length && hostPort[closing + 1] === ':') {
-            let p: number = parseInt(hostPort.substring(closing + 2), 10)
-            if (isNaN(p) || p < 1 || p > 65535) { result.errorMessage = 'ssh-copy-id: port 1-65535'; return result }
+          if (closing + 1 < hostPort.length) {
+            if (hostPort[closing + 1] !== ':') {
+              result.errorMessage = 'ssh-copy-id: unexpected text after bracketed host'; return result
+            }
+            let portText: string = hostPort.substring(closing + 2)
+            let p: number = parseInt(portText, 10)
+            if (!/^\d+$/.test(portText) || isNaN(p) || p < 1 || p > 65535) {
+              result.errorMessage = 'ssh-copy-id: port 1-65535'; return result
+            }
             result.sshPort = p
           }
         } else {
           let colonIdx: number = hostPort.indexOf(':')
           if (colonIdx > 0 && hostPort.lastIndexOf(':') === colonIdx) {
             result.sshHost = hostPort.substring(0, colonIdx)
-            let p: number = parseInt(hostPort.substring(colonIdx + 1), 10)
-            if (isNaN(p) || p < 1 || p > 65535) { result.errorMessage = 'ssh-copy-id: port 1-65535'; return result }
+            let portText: string = hostPort.substring(colonIdx + 1)
+            let p: number = parseInt(portText, 10)
+            if (!/^\d+$/.test(portText) || isNaN(p) || p < 1 || p > 65535) {
+              result.errorMessage = 'ssh-copy-id: port 1-65535'; return result
+            }
             result.sshPort = p
           } else { result.sshHost = hostPort }
         }
+        targetSpecified = true
       }
       i += 1
     }
@@ -442,24 +498,53 @@ export class CommandParser {
     let result: KeyCommandResult = new KeyCommandResult()
     result.kind = KeyCommandKind.ALIAS_ADD
     let parts: string[] = input.split(/\s+/)
+    let operation: string = parts.length >= 2 && parts[1] === 'set' ? 'set' : 'add'
     if (parts.length !== 4) {
-      result.errorMessage = 'Usage: host add <host-name> <user>@<host>[:<port>]'
+      result.errorMessage = 'Usage: host ' + operation + ' <host-name> <user>@<host>[:<port>]'
       return result
     }
     result.keyName = parts[2]
+    if (!/^[A-Za-z0-9._-]+$/.test(result.keyName)) {
+      result.errorMessage = 'Host name may contain only letters, numbers, dot, underscore and hyphen'
+      return result
+    }
     let target: string = parts[3]
     let atIdx: number = target.lastIndexOf('@')
     if (atIdx <= 0) {
-      result.errorMessage = 'Usage: host add <host-name> <user>@<host>[:<port>]'
+      result.errorMessage = 'Usage: host ' + operation + ' <host-name> <user>@<host>[:<port>]'
       return result
     }
     result.sshUser = target.substring(0, atIdx)
     let hostPort: string = target.substring(atIdx + 1)
+    if (hostPort.length === 0) {
+      result.errorMessage = 'Usage: host ' + operation + ' <host-name> <user>@<host>[:<port>]'
+      return result
+    }
+    if (hostPort.startsWith('[')) {
+      let closing: number = hostPort.indexOf(']')
+      if (closing <= 1) { result.errorMessage = 'Invalid bracketed IPv6 host'; return result }
+      result.sshHost = hostPort.substring(1, closing)
+      if (closing + 1 < hostPort.length) {
+        if (hostPort[closing + 1] !== ':') {
+          result.errorMessage = 'Unexpected text after bracketed host'; return result
+        }
+        let portText: string = hostPort.substring(closing + 2)
+        let port: number = parseInt(portText, 10)
+        if (!/^\d+$/.test(portText) || isNaN(port) || port < 1 || port > 65535) {
+          result.errorMessage = 'Port 1-65535'; return result
+        }
+        result.sshPort = port
+      }
+      return result
+    }
     let colonIdx: number = hostPort.indexOf(':')
     if (colonIdx > 0 && hostPort.lastIndexOf(':') === colonIdx) {
       result.sshHost = hostPort.substring(0, colonIdx)
-      let p: number = parseInt(hostPort.substring(colonIdx + 1), 10)
-      if (isNaN(p) || p < 1 || p > 65535) { result.errorMessage = 'Port 1-65535'; return result }
+      let portText: string = hostPort.substring(colonIdx + 1)
+      let p: number = parseInt(portText, 10)
+      if (!/^\d+$/.test(portText) || isNaN(p) || p < 1 || p > 65535) {
+        result.errorMessage = 'Port 1-65535'; return result
+      }
       result.sshPort = p
     } else { result.sshHost = hostPort }
     return result

@@ -17,6 +17,13 @@ export declare function sshExportKeyPair(privatePath: string, publicPath: string
 export declare function sshReadPublicKey(keyPath: string): string
 export declare function sshInspectPrivateKey(keyPath: string): string
 export declare function sshProtectPrivateKey(keyPath: string): void
+export interface KnownHostsQueryResult {
+  output: string
+  found: number
+}
+export declare function sshFindKnownHostEntries(
+  content: string, host: string, port: number
+): KnownHostsQueryResult
 export interface KnownHostsRemovalResult {
   content: string
   removed: number
