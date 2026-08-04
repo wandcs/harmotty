@@ -381,6 +381,13 @@ impl Handler for FixtureServer {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if data.contains(&0x04) {
+            session.data(channel, b"logout\r\n".as_slice())?;
+            session.exit_status_request(channel, 0)?;
+            session.eof(channel)?;
+            session.close(channel)?;
+            return Ok(());
+        }
         session.data(channel, data.to_vec())?;
         Ok(())
     }
@@ -390,13 +397,18 @@ struct Arguments {
     listen: String,
     credentials_path: PathBuf,
     run_seconds: u64,
+    ready_path: Option<PathBuf>,
 }
 
 fn parse_arguments(mut arguments: impl Iterator<Item = String>) -> Result<Arguments, String> {
     let executable = arguments
         .next()
         .unwrap_or_else(|| "ssh-auth-fixture".to_string());
-    let usage = || format!("usage: {executable} <listen-address> <credentials-file> [run-seconds]");
+    let usage = || {
+        format!(
+            "usage: {executable} <listen-address> <credentials-file> [run-seconds] [ready-file]"
+        )
+    };
     let listen = arguments.next().ok_or_else(&usage)?;
     let credentials_path = PathBuf::from(arguments.next().ok_or_else(&usage)?);
     let run_seconds = arguments
@@ -411,6 +423,7 @@ fn parse_arguments(mut arguments: impl Iterator<Item = String>) -> Result<Argume
     if run_seconds == 0 {
         return Err("run-seconds must be greater than zero".to_string());
     }
+    let ready_path = arguments.next().map(PathBuf::from);
     if arguments.next().is_some() {
         return Err(usage());
     }
@@ -418,6 +431,7 @@ fn parse_arguments(mut arguments: impl Iterator<Item = String>) -> Result<Argume
         listen,
         credentials_path,
         run_seconds,
+        ready_path,
     })
 }
 
@@ -443,6 +457,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(Duration::from_secs(arguments.run_seconds)).await;
         handle.shutdown("fixture lifetime expired".into());
     });
+    if let Some(ready_path) = arguments.ready_path {
+        fs::write(
+            ready_path,
+            format!("address={address}\npid={}\n", std::process::id()),
+        )?;
+    }
     println!(
         "LEANTTY_SSH_AUTH_FIXTURE_READY address={address} pid={}",
         std::process::id()

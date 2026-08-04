@@ -213,7 +213,18 @@ Assert-Throws -Action {
         -KeyName '../unsafe'
 } -Message 'Device key-file verification accepted an unsafe generated-key name'
 
-foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1')) {
+$deviceRegressionSource = Get-Content -LiteralPath (
+    Join-Path $PSScriptRoot 'device-regression.ps1'
+) -Raw
+Assert-True (
+    $deviceRegressionSource.Contains('-T SessionViewModel,KeyCommandService,SshClient')
+) 'Device application log capture omits structured SshClient authentication events'
+
+foreach ($scriptName in @(
+    'device-regression.ps1',
+    'verify-key-passphrase-pc.ps1',
+    'verify-ssh-auth-pc.ps1'
+)) {
     $scriptPath = Join-Path $PSScriptRoot $scriptName
     if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
         throw "Device regression script is missing: $scriptName"
@@ -246,6 +257,29 @@ foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1
             $content.Contains('Wait-LeanTTYTerminalInputLayout') -and
             $content.Contains('deviceUnlock = $deviceUnlockResult')
         ) 'Device scenario does not record conditional local-credential unlock behavior'
+    }
+    if ($scriptName -eq 'verify-ssh-auth-pc.ps1') {
+        Assert-True (
+            $content.Contains('SSH authentication harness requires a clean committed tree') -and
+            $content.Contains('candidate.gitTree -ne $harnessTree') -and
+            $content.Contains('harness = [ordered]@{')
+        ) 'SSH authentication evidence is not bound to its clean retained candidate'
+        Assert-True (
+            $content.Contains('rport "tcp:$FixturePort"') -and
+            $content.Contains('fport rm "tcp:$FixturePort" "tcp:$FixturePort"') -and
+            $content.Contains('cleanup = [ordered]@{')
+        ) 'SSH authentication fixture mapping is not paired with recorded cleanup'
+        Assert-True (
+            $content.Contains('Assert-LeanTTYLayoutExcludesValues') -and
+            $content.Contains('HarmonyOS application logs exposed a temporary SSH fixture secret') -and
+            $content.Contains('fixedDelayUsedAsVerdict = $false')
+        ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
+        Assert-True (
+            $content.Contains("'password-success'") -and
+            $content.Contains("'password-then-keyboard-interactive-mixed-echo'") -and
+            $content.Contains("'keyboard-interactive-multi-round-wrong-answer-recovery'") -and
+            $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
+        ) 'SSH authentication scenario does not declare its bounded physical coverage'
     }
 }
 

@@ -32,6 +32,7 @@ foreach ($scriptName in @(
         'test-device-regression.ps1',
         'test-regression.ps1',
         'verify-key-passphrase-pc.ps1',
+        'verify-ssh-auth-pc.ps1',
         'test-build-workflows.ps1',
         'build-all.ps1',
         'dev-build.ps1',
