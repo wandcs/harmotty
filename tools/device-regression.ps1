@@ -207,6 +207,31 @@ function Get-LeanTTYTerminalInputText {
     return [string]$inputNode[0].attributes.text
 }
 
+function Wait-LeanTTYTerminalInputLayout {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$LocalPath,
+        [ValidateRange(1, 30)][int]$TimeoutSeconds = 20
+    )
+
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout `
+            -Hdc $Hdc `
+            -Target $Target `
+            -LocalPath $LocalPath
+        $inputNodes = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+            [string]$_.attributes.hint -eq 'Terminal input'
+        } | Select-Object -First 1)
+        if ($inputNodes.Count -eq 1) { return $layout }
+        if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+            Start-Sleep -Milliseconds 200
+        }
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds)
+    throw 'Timed out waiting for the LeanTTY terminal input accessibility node'
+}
+
 function Assert-LeanTTYLayoutExcludesValues {
     param(
         [Parameter(Mandatory = $true)]$Layout,

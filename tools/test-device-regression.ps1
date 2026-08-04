@@ -101,7 +101,8 @@ Assert-True (
 Assert-True (
     $null -ne (Get-Command ConvertTo-LeanTTYDevicePasswordKeyCommand -ErrorAction SilentlyContinue) -and
     $null -ne (Get-Command Assert-LeanTTYCredentialPathOutsideRepository -ErrorAction SilentlyContinue) -and
-    $null -ne (Get-Command Start-LeanTTYRegressionApp -ErrorAction SilentlyContinue)
+    $null -ne (Get-Command Start-LeanTTYRegressionApp -ErrorAction SilentlyContinue) -and
+    $null -ne (Get-Command Wait-LeanTTYTerminalInputLayout -ErrorAction SilentlyContinue)
 ) 'Device regression has no conditional local-credential unlock helpers'
 $passwordKeyCommand = ConvertTo-LeanTTYDevicePasswordKeyCommand -Password 'abc'
 Assert-True (
@@ -161,6 +162,7 @@ foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1
         Assert-True (
             $content.Contains('UnlockPasswordPath') -and
             $content.Contains('Start-LeanTTYRegressionApp') -and
+            $content.Contains('Wait-LeanTTYTerminalInputLayout') -and
             $content.Contains('deviceUnlock = $deviceUnlockResult')
         ) 'Device scenario does not record conditional local-credential unlock behavior'
     }

@@ -305,10 +305,11 @@ try {
 
     Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid | Out-Null
     $preflightLayoutPath = Join-Path $EvidenceDirectory 'layout-preflight.json'
-    $preflightLayout = Get-LeanTTYDeviceLayout `
+    $preflightLayout = Wait-LeanTTYTerminalInputLayout `
         -Hdc $hdc `
         -Target $Target `
-        -LocalPath $preflightLayoutPath
+        -LocalPath $preflightLayoutPath `
+        -TimeoutSeconds 20
     Get-LeanTTYTerminalInputText -Layout $preflightLayout | Out-Null
     Clear-LeanTTYDeviceInput `
         -Hdc $hdc `
