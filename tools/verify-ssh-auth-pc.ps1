@@ -206,13 +206,11 @@ function Save-SafeDiagnosticText {
     )
 }
 
-function Invoke-AuthShortcut {
-    param([Parameter(Mandatory = $true)][ValidateSet('split', 'close-pane')][string]$Action)
-    $keyCode = if ($Action -eq 'split') { 2020 } else { 2039 }
+function Invoke-AuthSplitShortcut {
     & $hdc -t $Target shell (
-        "uinput -K -d 2072 -d 2047 -d $keyCode -u $keyCode -u 2047 -u 2072"
+        'uinput -K -d 2072 -d 2047 -d 2020 -u 2020 -u 2047 -u 2072'
     ) | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Unable to invoke LeanTTY $Action shortcut" }
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY split shortcut' }
 }
 
 function Wait-AuthPaneCount {
@@ -261,21 +259,35 @@ function Activate-RegressionWindow {
     if ($activatedPid -ne $appPid) { throw 'LeanTTY process changed while activating its window' }
 }
 
+function Invoke-ActivePaneCloseButton {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    $layout = Wait-AuthPaneCount -Count 2 -LayoutName $LayoutName
+    $button = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        [string]$_.attributes.text -eq '×' -and
+        [string]$_.attributes.clickable -eq 'true' -and
+        [string]$_.attributes.visible -eq 'true'
+    } | Select-Object -First 1)
+    if ($button.Count -ne 1) { throw 'LeanTTY active-pane close button was not found' }
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$button[0].attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to click the LeanTTY active-pane close button' }
+}
+
 function Ensure-SingleAuthPane {
     param([Parameter(Mandatory = $true)][string]$LayoutName)
+    Activate-RegressionWindow
     $path = Join-Path $EvidenceDirectory $LayoutName
     $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
     $count = @(Get-LeanTTYTerminalInputNodes -Layout $layout).Count
     if ($count -eq 1) { return }
     if ($count -ne 2) { throw "Unexpected LeanTTY pane count: $count" }
     Focus-AuthPane -Side 'right' -LayoutName $LayoutName
-    Invoke-AuthShortcut -Action 'close-pane'
-    Activate-RegressionWindow
+    Invoke-ActivePaneCloseButton -LayoutName $LayoutName
     Wait-AuthPaneCount -Count 1 -LayoutName $LayoutName | Out-Null
 }
 
 function Split-AuthPane {
-    Invoke-AuthShortcut -Action 'split'
+    Invoke-AuthSplitShortcut
     Wait-AuthPaneCount -Count 2 -LayoutName 'layout-parallel-split.json' | Out-Null
 }
 

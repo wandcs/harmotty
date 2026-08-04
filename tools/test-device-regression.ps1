@@ -310,6 +310,8 @@ foreach ($scriptName in @(
             $content.Contains("'parallel-pane-independent-authentication'") -and
             $content.Contains("'minimize-restore-hidden-answer-continuity'") -and
             $content.Contains("'EnhanceMinimizeBtn'") -and
+            $content.Contains('LeanTTY active-pane close button was not found') -and
+            -not $content.Contains("Invoke-AuthShortcut -Action 'close-pane'") -and
             $content.Contains('LeanTTY process changed while activating its window') -and
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
