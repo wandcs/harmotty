@@ -124,5 +124,7 @@ run_case publickey-keyboard-interactive publickey-kbdint \
   -o PreferredAuthentications=publickey,keyboard-interactive -o IdentitiesOnly=yes -i "$fixture_root/id_ed25519"
 run_case keyboard-interactive-multiround kbdint-multiround \
   -o PreferredAuthentications=keyboard-interactive -o PubkeyAuthentication=no
+run_case keyboard-interactive-zero-prompt kbdint-zero \
+  -o PreferredAuthentications=keyboard-interactive -o PubkeyAuthentication=no
 
 echo 'SSH AUTH FIXTURE E2E SUCCESS'

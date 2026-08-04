@@ -19,6 +19,8 @@ const USER_PASSWORD_KBDINT: &str = "password-kbdint";
 const USER_PUBLICKEY_PASSWORD: &str = "publickey-password";
 const USER_PUBLICKEY_KBDINT: &str = "publickey-kbdint";
 const USER_KBDINT_MULTIROUND: &str = "kbdint-multiround";
+const USER_KBDINT_ZERO: &str = "kbdint-zero";
+const USER_UNSUPPORTED: &str = "unsupported";
 
 #[derive(Clone)]
 struct Credentials {
@@ -85,6 +87,8 @@ enum Scenario {
     PublicKeyPassword,
     PublicKeyKeyboardInteractive,
     KeyboardInteractiveMultiRound,
+    KeyboardInteractiveZeroPrompt,
+    UnsupportedMethod,
 }
 
 impl Scenario {
@@ -96,6 +100,8 @@ impl Scenario {
             USER_PUBLICKEY_PASSWORD => Some(Self::PublicKeyPassword),
             USER_PUBLICKEY_KBDINT => Some(Self::PublicKeyKeyboardInteractive),
             USER_KBDINT_MULTIROUND => Some(Self::KeyboardInteractiveMultiRound),
+            USER_KBDINT_ZERO => Some(Self::KeyboardInteractiveZeroPrompt),
+            USER_UNSUPPORTED => Some(Self::UnsupportedMethod),
             _ => None,
         }
     }
@@ -130,6 +136,14 @@ impl FixtureServer {
             proceed_with_methods: Some(MethodSet::from(methods)),
             partial_success,
         }
+    }
+
+    fn none(&self, user: &str) -> Auth {
+        if Scenario::for_user(user) == Some(Scenario::UnsupportedMethod) {
+            eprintln!("auth method=none scenario=UnsupportedMethod result=reject");
+            return Self::reject(&[MethodKind::HostBased], false);
+        }
+        Auth::reject()
     }
 
     fn password(&mut self, user: &str, password: &str) -> Auth {
@@ -247,6 +261,19 @@ impl FixtureServer {
                     return Self::reject(&[MethodKind::KeyboardInteractive], false);
                 }
             },
+            Scenario::KeyboardInteractiveZeroPrompt => match answers {
+                None => {
+                    return interactive_prompt(
+                        "LeanTTY zero-prompt authentication",
+                        "No response value is required.",
+                        &[],
+                    );
+                }
+                Some(answers) if answers.is_empty() => return Auth::Accept,
+                Some(_) => {
+                    return Self::reject(&[MethodKind::KeyboardInteractive], false);
+                }
+            },
             _ => {}
         }
         Self::reject(&scenario.initial_methods(), false)
@@ -260,7 +287,10 @@ impl Scenario {
             Self::PublicKey | Self::PublicKeyPassword | Self::PublicKeyKeyboardInteractive => {
                 vec![MethodKind::PublicKey]
             }
-            Self::KeyboardInteractiveMultiRound => vec![MethodKind::KeyboardInteractive],
+            Self::KeyboardInteractiveMultiRound | Self::KeyboardInteractiveZeroPrompt => {
+                vec![MethodKind::KeyboardInteractive]
+            }
+            Self::UnsupportedMethod => vec![MethodKind::HostBased],
         }
     }
 }
@@ -296,6 +326,10 @@ impl Server for FixtureServer {
 
 impl Handler for FixtureServer {
     type Error = russh::Error;
+
+    async fn auth_none(&mut self, user: &str) -> Result<Auth, Self::Error> {
+        Ok(self.none(user))
+    }
 
     async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
         Ok(self.password(user, password))
@@ -468,7 +502,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::id()
     );
     println!(
-        "users={USER_PASSWORD},{USER_PUBLICKEY},{USER_PASSWORD_KBDINT},{USER_PUBLICKEY_PASSWORD},{USER_PUBLICKEY_KBDINT},{USER_KBDINT_MULTIROUND}"
+        "users={USER_PASSWORD},{USER_PUBLICKEY},{USER_PASSWORD_KBDINT},{USER_PUBLICKEY_PASSWORD},{USER_PUBLICKEY_KBDINT},{USER_KBDINT_MULTIROUND},{USER_KBDINT_ZERO},{USER_UNSUPPORTED}"
     );
     running.await?;
     Ok(())
@@ -610,6 +644,23 @@ mod tests {
             USER_KBDINT_MULTIROUND,
             Some(vec![b"second-token-value".to_vec()]),
         ));
+    }
+
+    #[test]
+    fn accepts_zero_prompt_and_exposes_only_hostbased_for_unsupported_user() {
+        let mut fixture = FixtureServer::new(credentials());
+        match fixture.keyboard_interactive(USER_KBDINT_ZERO, None) {
+            Auth::Partial { prompts, .. } => assert!(prompts.is_empty()),
+            _ => panic!("expected zero-prompt interactive request"),
+        }
+        assert_accept(fixture.keyboard_interactive(USER_KBDINT_ZERO, Some(Vec::new())));
+
+        let fixture = FixtureServer::new(credentials());
+        assert_reject(
+            fixture.none(USER_UNSUPPORTED),
+            &[MethodKind::HostBased],
+            false,
+        );
     }
 
     #[test]
