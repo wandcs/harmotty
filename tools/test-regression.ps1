@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-  Run the mandatory LeanTTY software regression gate.
+  Run the complete LeanTTY formal-release software regression gate.
 .DESCRIPTION
   Runs source policy, script workflow, Web terminal, trusted ArkTS and WSL Rust
   checks, then writes a machine-readable local evidence record. This gate does
-  not build, sign, install or claim physical-device behavior.
+  not build, sign, install or claim physical-device behavior. Routine feature
+  iterations and bug fixes use only their mapped focused checks and quick main
+  path instead of this complete suite.
 #>
 [CmdletBinding()]
 param(
