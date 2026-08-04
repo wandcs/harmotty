@@ -308,6 +308,10 @@ foreach ($scriptName in @(
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
+            $content.Contains('[switch]$DiagnosticHap') -and
+            $content.Contains('-DiagnosticHap requires an explicit -HapPath') -and
+            $content.Contains("provenance = 'explicit-unretained-diagnostic-hap'") -and
+            $content.Contains("`$runMode = if (`$Only.Count -eq 0 -and -not `$DiagnosticHap)") -and
             $content.Contains("runMode = `$runMode") -and
             $content.Contains("failureDomain = `$failureDomain") -and
             $content.Contains('attemptId = $attemptId') -and

@@ -1,16 +1,19 @@
 <#
 .SYNOPSIS
-  Verify interactive SSH authentication on the retained HarmonyOS PC candidate.
+  Verify interactive SSH authentication on a HarmonyOS PC test package.
 .DESCRIPTION
   Starts the repository-only SSH fixture with temporary credentials, maps one
   device loopback port to it, drives LeanTTY through raw keyboard events, and
-  records non-secret behavior evidence. The retained HAP is installed without
-  rebuilding, and all temporary credentials and port mappings are removed.
+  records non-secret behavior evidence. By default, the retained HAP is
+  installed without rebuilding. -DiagnosticHap permits an explicit current
+  test package without promoting its evidence to a retained release candidate.
+  All temporary credentials and port mappings are removed.
 #>
 [CmdletBinding()]
 param(
     [string]$Target = '',
     [string]$HapPath = '',
+    [switch]$DiagnosticHap,
     [string]$EvidenceDirectory = '',
     [string]$CandidateBasePath = '',
     [string]$UnlockPasswordPath = '',
@@ -66,7 +69,25 @@ $candidateRoot = Get-LeanTTYCandidateRoot `
     -RepoRoot $repoRoot `
     -CandidateBasePath $CandidateBasePath
 $candidateRecords = @(Get-LeanTTYCandidateRecords -CandidateRoot $candidateRoot)
-if ([string]::IsNullOrWhiteSpace($HapPath)) {
+$harnessDifferencePaths = @()
+if ($DiagnosticHap) {
+    if ([string]::IsNullOrWhiteSpace($HapPath)) {
+        throw '-DiagnosticHap requires an explicit -HapPath'
+    }
+    $resolvedHap = [IO.Path]::GetFullPath($HapPath)
+    if (-not (Test-Path -LiteralPath $resolvedHap -PathType Leaf)) {
+        throw "Diagnostic HAP is missing: $resolvedHap"
+    }
+    $candidate = [pscustomobject][ordered]@{
+        sha256 = (Get-FileHash -LiteralPath $resolvedHap -Algorithm SHA256).Hash.ToLowerInvariant()
+        hapPath = $resolvedHap
+        gitCommit = $null
+        gitTree = $null
+        gitDirty = $null
+        retained = $false
+        provenance = 'explicit-unretained-diagnostic-hap'
+    }
+} elseif ([string]::IsNullOrWhiteSpace($HapPath)) {
     $candidate = $candidateRecords | Select-Object -First 1
     if ($null -eq $candidate) { throw 'No retained candidate exists; run tools/verify-pc.ps1 first' }
 } else {
@@ -78,23 +99,25 @@ if ([string]::IsNullOrWhiteSpace($HapPath)) {
     $candidate = $candidateRecords | Where-Object { $_.sha256 -eq $requestedHash } | Select-Object -First 1
     if ($null -eq $candidate) { throw 'The selected HAP is not a retained verified candidate' }
 }
-if ($candidate.gitDirty) {
-    throw 'SSH authentication evidence requires a clean committed candidate'
+if (-not $DiagnosticHap) {
+    if ($candidate.gitDirty) {
+        throw 'SSH authentication evidence requires a clean committed candidate'
+    }
+    $harnessDifferencePaths = @(Assert-LeanTTYCandidateHarnessCompatibility `
+        -RepoRoot $repoRoot `
+        -Candidate $candidate `
+        -AllowedHarnessPaths @(
+            'tools/verify-ssh-auth-pc.ps1',
+            'tools/device-regression.ps1',
+            'tools/test-device-regression.ps1',
+            'tools/candidate-store.ps1',
+            'tools/package-policy.ps1',
+            'tools/test-build-workflows.ps1',
+            'docs/quality-strategy.md',
+            'docs/design/ssh-authentication.md',
+            'docs/dev-environment.md'
+        ))
 }
-$harnessDifferencePaths = @(Assert-LeanTTYCandidateHarnessCompatibility `
-    -RepoRoot $repoRoot `
-    -Candidate $candidate `
-    -AllowedHarnessPaths @(
-        'tools/verify-ssh-auth-pc.ps1',
-        'tools/device-regression.ps1',
-        'tools/test-device-regression.ps1',
-        'tools/candidate-store.ps1',
-        'tools/package-policy.ps1',
-        'tools/test-build-workflows.ps1',
-        'docs/quality-strategy.md',
-        'docs/design/ssh-authentication.md',
-        'docs/dev-environment.md'
-    ))
 
 if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
     $EvidenceDirectory = Join-Path $repoRoot (
@@ -144,7 +167,7 @@ $stageStartedAt = $null
 $currentStage = 'initialization'
 $failureDomain = 'none'
 $attemptId = [Guid]::NewGuid().ToString('N')
-$runMode = if ($Only.Count -eq 0) { 'acceptance' } else { 'diagnostic' }
+$runMode = if ($Only.Count -eq 0 -and -not $DiagnosticHap) { 'acceptance' } else { 'diagnostic' }
 $availableStages = @(
     'password-success',
     'password-kbdint-mixed-echo',
@@ -665,6 +688,12 @@ function Write-AuthEvidence {
             gitCommit = $candidate.gitCommit
             gitTree = $candidate.gitTree
             gitDirty = $candidate.gitDirty
+            retained = $(if ($DiagnosticHap) { $false } else { $true })
+            provenance = $(if ($DiagnosticHap) {
+                'explicit-unretained-diagnostic-hap'
+            } else {
+                'retained-verified-candidate'
+            })
             reusedAcrossHarnessOnlyChanges = ($harnessDifferencePaths.Count -gt 0)
         }
         harness = [ordered]@{
@@ -1230,6 +1259,6 @@ if ($runMode -eq 'acceptance') {
 } else {
     Write-Host (
         'DIAGNOSTIC SUCCESS: ssh-interactive-authentication ' +
-        "(stages=$($Only -join ','), evidence=$evidencePath; candidate not promoted)"
+        "(stages=$($selectedStageNames -join ','), evidence=$evidencePath; candidate not promoted)"
     ) -ForegroundColor Yellow
 }
