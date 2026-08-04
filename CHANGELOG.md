@@ -17,6 +17,10 @@
   acceptance cases, including automatic empty-response submission, explicit
   error classification and a successful recovery connection without retaining
   authentication state.
+- Extended physical authentication acceptance with cancellation during hidden
+  input and Pane closure during an active challenge. Both paths discard the
+  partial answer, disconnect the abandoned Session and recover through a fresh
+  password connection without exposing fixture values.
 - Made the native SSH lifecycle tests executable in WSL through a dev-only
   dynamic N-API symbol mode. The regression gate now covers authentication
   exchange success/failure, response and exchange timeouts, cancellation,
