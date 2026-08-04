@@ -165,8 +165,17 @@ function Submit-AuthValue {
         [Parameter(Mandatory = $true)][string]$Value,
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
     Assert-NoSecretExposure -LayoutName $LayoutName
+    $logs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+    $delivered = [regex]::Matches(
+        $logs,
+        '(?m)SessionViewModel: D: 1 chars, mode='
+    ).Count
+    if ($delivered -ne $Value.Length) {
+        throw "Device auth input delivery length mismatch: expected $($Value.Length), observed $delivered"
+    }
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Start-Sleep -Milliseconds 150
 }
@@ -452,8 +461,9 @@ function Write-AuthEvidence {
         input = [ordered]@{
             method = 'raw-physical-key-events'
             secretInjection = 'runtime-generated-printable-ascii'
-            textChunkCharacters = 12
-            interChunkPacingMilliseconds = 25
+            textChunkCharacters = 1
+            interChunkPacingMilliseconds = 10
+            deliveryLengthVerifiedBeforeSubmit = $true
             interPromptSettleMilliseconds = 150
             fixedDelayUsedAsVerdict = $false
             paneRouting = 'sorted-terminal-input-accessibility-nodes'

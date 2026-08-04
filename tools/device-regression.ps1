@@ -355,7 +355,7 @@ function Invoke-LeanTTYDeviceText {
         [Parameter(Mandatory = $true)][string]$Text
     )
 
-    $chunkSize = 12
+    $chunkSize = 1
     for ($offset = 0; $offset -lt $Text.Length; $offset += $chunkSize) {
         $length = [Math]::Min($chunkSize, $Text.Length - $offset)
         $chunk = $Text.Substring($offset, $length)
@@ -363,7 +363,7 @@ function Invoke-LeanTTYDeviceText {
         & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
         if ($offset + $length -lt $Text.Length) {
-            Start-Sleep -Milliseconds 25
+            Start-Sleep -Milliseconds 10
         }
     }
 }

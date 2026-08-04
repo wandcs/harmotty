@@ -78,9 +78,9 @@ Assert-Throws -Action {
         -Hdc 'Invoke-FakeHdc' `
         -Target 'regression-device' `
         -Text 'echo LEANTTY_SMOKE'
-    $expectedChunks = @('echo LEANTTY', '_SMOKE')
+    $expectedChunks = @('echo LEANTTY_SMOKE'.ToCharArray() | ForEach-Object { $_.ToString() })
     Assert-True (
-        $script:capturedHdcCalls.Count -eq 2 -and
+        $script:capturedHdcCalls.Count -eq $expectedChunks.Count -and
         $script:capturedHdcCalls[0].Count -eq 4 -and
         $script:capturedHdcCalls[0][0] -eq '-t' -and
         $script:capturedHdcCalls[0][1] -eq 'regression-device' -and
@@ -88,8 +88,8 @@ Assert-Throws -Action {
         $script:capturedHdcCalls[0][3] -eq (
             ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[0]
         ) -and
-        $script:capturedHdcCalls[1][3] -eq (
-            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[1]
+        $script:capturedHdcCalls[-1][3] -eq (
+            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[-1]
         )
     ) 'Device text injection did not preserve and pace the requested echo command'
 }
@@ -297,6 +297,8 @@ foreach ($scriptName in @(
             $content.Contains('HarmonyOS application logs exposed a temporary SSH fixture secret') -and
             $content.Contains("'failure-fixture-stderr.txt'") -and
             $content.Contains("'[REDACTED]'") -and
+            $content.Contains('Device auth input delivery length mismatch') -and
+            $content.Contains('deliveryLengthVerifiedBeforeSubmit = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
