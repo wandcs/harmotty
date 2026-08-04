@@ -32,5 +32,8 @@ leantty-ssh-core = { path = "leantty-ssh-core" }
 [build-dependencies]
 napi-build-ohos = { version = "1.0" }
 
+[dev-dependencies]
+napi-ohos = { version = "1.0", default-features = false, features = ["dyn-symbols"] }
+
 [profile.release]
 lto = true

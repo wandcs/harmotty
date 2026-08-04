@@ -387,6 +387,7 @@ where
 async fn wait_for_auth_command(
     auth_rx: &mut tokio::sync::mpsc::Receiver<AuthMethod>,
     disconnect_rx: &mut tokio::sync::mpsc::Receiver<()>,
+    timeout: Duration,
 ) -> AuthWaitResult {
     tokio::select! {
       command = auth_rx.recv() => match command {
@@ -394,7 +395,7 @@ async fn wait_for_auth_command(
         None => AuthWaitResult::Cancelled,
       },
       _ = disconnect_rx.recv() => AuthWaitResult::Cancelled,
-      _ = tokio::time::sleep(AUTH_RESPONSE_TIMEOUT) => AuthWaitResult::TimedOut,
+      _ = tokio::time::sleep(timeout) => AuthWaitResult::TimedOut,
     }
 }
 
@@ -523,7 +524,13 @@ async fn run_authentication(
                         "authentication callback delivery failed".to_string(),
                     );
                 }
-                let mut command = match wait_for_auth_command(auth_rx, disconnect_rx).await {
+                let mut command = match wait_for_auth_command(
+                    auth_rx,
+                    disconnect_rx,
+                    AUTH_RESPONSE_TIMEOUT,
+                )
+                .await
+                {
                     AuthWaitResult::Command(command) => command,
                     AuthWaitResult::Cancelled => return AuthenticationOutcome::Cancelled,
                     AuthWaitResult::TimedOut => {
@@ -573,7 +580,13 @@ async fn run_authentication(
                         "authentication callback delivery failed".to_string(),
                     );
                 }
-                let mut command = match wait_for_auth_command(auth_rx, disconnect_rx).await {
+                let mut command = match wait_for_auth_command(
+                    auth_rx,
+                    disconnect_rx,
+                    AUTH_RESPONSE_TIMEOUT,
+                )
+                .await
+                {
                     AuthWaitResult::Command(command) => command,
                     AuthWaitResult::Cancelled => return AuthenticationOutcome::Cancelled,
                     AuthWaitResult::TimedOut => {
@@ -687,18 +700,23 @@ async fn run_authentication(
                                     "authentication callback delivery failed".to_string(),
                                 );
                             }
-                            let mut command =
-                                match wait_for_auth_command(auth_rx, disconnect_rx).await {
-                                    AuthWaitResult::Command(command) => command,
-                                    AuthWaitResult::Cancelled => {
-                                        return AuthenticationOutcome::Cancelled;
-                                    }
-                                    AuthWaitResult::TimedOut => {
-                                        return AuthenticationOutcome::Failed(
-                                            "authentication response timed out".to_string(),
-                                        );
-                                    }
-                                };
+                            let mut command = match wait_for_auth_command(
+                                auth_rx,
+                                disconnect_rx,
+                                AUTH_RESPONSE_TIMEOUT,
+                            )
+                            .await
+                            {
+                                AuthWaitResult::Command(command) => command,
+                                AuthWaitResult::Cancelled => {
+                                    return AuthenticationOutcome::Cancelled;
+                                }
+                                AuthWaitResult::TimedOut => {
+                                    return AuthenticationOutcome::Failed(
+                                        "authentication response timed out".to_string(),
+                                    );
+                                }
+                            };
                             let (round_id, responses) = match &mut command {
                                 AuthMethod::KeyboardInteractiveResponses {
                                     round_id,
@@ -1188,6 +1206,10 @@ fn parse_session_id(session_id: &str) -> Result<u32> {
         .map_err(|_| napi_error("invalid session id"))
 }
 
+fn is_current_auth_generation(session_generation: u32, received_generation: u32) -> bool {
+    received_generation != 0 && session_generation == received_generation
+}
+
 #[napi]
 pub fn ssh_auth_password(session_id: String, generation: u32, password: String) -> Result<()> {
     let id = parse_session_id(&session_id)?;
@@ -1197,7 +1219,7 @@ pub fn ssh_auth_password(session_id: String, generation: u32, password: String) 
     let session = sessions
         .get(&id)
         .ok_or_else(|| napi_error("session not found"))?;
-    if session.generation != generation {
+    if !is_current_auth_generation(session.generation, generation) {
         return Err(napi_error("stale authentication generation"));
     }
     session
@@ -1219,7 +1241,7 @@ pub fn ssh_auth_private_key_passphrase(
     let session = sessions
         .get(&id)
         .ok_or_else(|| napi_error("session not found"))?;
-    if session.generation != generation {
+    if !is_current_auth_generation(session.generation, generation) {
         return Err(napi_error("stale authentication generation"));
     }
     session
@@ -1242,7 +1264,7 @@ pub fn ssh_auth_keyboard_interactive_responses(
     let session = sessions
         .get(&id)
         .ok_or_else(|| napi_error("session not found"))?;
-    if session.generation != generation {
+    if !is_current_auth_generation(session.generation, generation) {
         return Err(napi_error("stale authentication generation"));
     }
     session
@@ -1446,9 +1468,10 @@ pub fn ssh_protect_private_key(key_path: String) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_client_config, should_flush_immediately, wait_for_auth_exchange, wait_for_connect,
-        AuthExchangeResult, ConnectProgress, ConnectWaitResult, OutputDeliveryMetrics,
-        AUTH_EXCHANGE_TIMEOUT, SSH_KEEPALIVE_INTERVAL, SSH_KEEPALIVE_MAX,
+        build_client_config, is_current_auth_generation, should_flush_immediately,
+        wait_for_auth_command, wait_for_auth_exchange, wait_for_connect, AuthExchangeResult,
+        AuthMethod, AuthWaitResult, ConnectProgress, ConnectWaitResult, OutputDeliveryMetrics,
+        AUTH_EXCHANGE_TIMEOUT, AUTH_RESPONSE_TIMEOUT, SSH_KEEPALIVE_INTERVAL, SSH_KEEPALIVE_MAX,
     };
     use napi_ohos::Status;
     use std::future::pending;
@@ -1508,6 +1531,35 @@ mod tests {
         assert_eq!(SSH_KEEPALIVE_INTERVAL, Duration::from_secs(30));
         assert_eq!(SSH_KEEPALIVE_MAX, 3);
         assert_eq!(AUTH_EXCHANGE_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(AUTH_RESPONSE_TIMEOUT, Duration::from_secs(300));
+    }
+
+    #[test]
+    fn auth_generation_rejects_zero_stale_and_cross_session_values() {
+        assert!(is_current_auth_generation(7, 7));
+        assert!(!is_current_auth_generation(7, 0));
+        assert!(!is_current_auth_generation(7, 6));
+        assert!(!is_current_auth_generation(7, 8));
+    }
+
+    #[tokio::test]
+    async fn auth_exchange_propagates_success_and_failure() {
+        let (_disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel(1);
+        let completed = wait_for_auth_exchange(
+            async { Ok::<u32, &'static str>(41) },
+            Duration::from_secs(1),
+            &mut disconnect_rx,
+        )
+        .await;
+        assert!(matches!(completed, AuthExchangeResult::Completed(41)));
+
+        let failed = wait_for_auth_exchange(
+            async { Err::<u32, &'static str>("rejected") },
+            Duration::from_secs(1),
+            &mut disconnect_rx,
+        )
+        .await;
+        assert!(matches!(failed, AuthExchangeResult::Failed("rejected")));
     }
 
     #[tokio::test]
@@ -1535,6 +1587,64 @@ mod tests {
         .await;
 
         assert!(matches!(result, AuthExchangeResult::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn auth_command_wait_times_out_and_can_be_cancelled() {
+        let (_auth_tx, mut auth_rx) = tokio::sync::mpsc::channel(1);
+        let (_disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel(1);
+        let timed_out =
+            wait_for_auth_command(&mut auth_rx, &mut disconnect_rx, Duration::from_millis(1)).await;
+        assert!(matches!(timed_out, AuthWaitResult::TimedOut));
+
+        let (_auth_tx, mut auth_rx) = tokio::sync::mpsc::channel(1);
+        let (disconnect_tx, mut disconnect_rx) = tokio::sync::mpsc::channel(1);
+        disconnect_tx.send(()).await.unwrap();
+        let cancelled =
+            wait_for_auth_command(&mut auth_rx, &mut disconnect_rx, Duration::from_secs(1)).await;
+        assert!(matches!(cancelled, AuthWaitResult::Cancelled));
+    }
+
+    #[tokio::test]
+    async fn parallel_auth_command_waits_keep_session_secrets_isolated() {
+        let (first_auth_tx, mut first_auth_rx) = tokio::sync::mpsc::channel(1);
+        let (second_auth_tx, mut second_auth_rx) = tokio::sync::mpsc::channel(1);
+        let (_first_disconnect_tx, mut first_disconnect_rx) = tokio::sync::mpsc::channel(1);
+        let (_second_disconnect_tx, mut second_disconnect_rx) = tokio::sync::mpsc::channel(1);
+        first_auth_tx
+            .send(AuthMethod::Password("first-secret".to_string()))
+            .await
+            .unwrap();
+        second_auth_tx
+            .send(AuthMethod::Password("second-secret".to_string()))
+            .await
+            .unwrap();
+
+        let (first, second) = tokio::join!(
+            wait_for_auth_command(
+                &mut first_auth_rx,
+                &mut first_disconnect_rx,
+                Duration::from_secs(1),
+            ),
+            wait_for_auth_command(
+                &mut second_auth_rx,
+                &mut second_disconnect_rx,
+                Duration::from_secs(1),
+            )
+        );
+
+        match first {
+            AuthWaitResult::Command(AuthMethod::Password(ref value)) => {
+                assert_eq!(value, "first-secret");
+            }
+            _ => panic!("first session did not receive its own command"),
+        }
+        match second {
+            AuthWaitResult::Command(AuthMethod::Password(ref value)) => {
+                assert_eq!(value, "second-secret");
+            }
+            _ => panic!("second session did not receive its own command"),
+        }
     }
 
     #[tokio::test]

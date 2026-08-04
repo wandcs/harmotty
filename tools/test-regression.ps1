@@ -217,6 +217,30 @@ Invoke-RegressionCheck -Name 'rust-native-clippy-wsl' -Action {
     )
 }
 
+Invoke-RegressionCheck -Name 'rust-native-test-isolation-wsl' -Action {
+    $wslRepoRoot = ConvertTo-LeanTTYWslPath -WindowsPath $repoRoot
+    $wslPrefix = Get-LeanTTYWslPrefix
+    $treeOutput = @(
+        & wsl.exe @wslPrefix --cd $wslRepoRoot -- env RUSTUP_TOOLCHAIN=stable cargo tree `
+            --locked --offline --manifest-path ./leantty_ssh/Cargo.toml -p leantty_ssh `
+            -e normal,build -f '{p} {f}' 2>&1
+    )
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect the production Rust feature tree' }
+    $productionNapiLines = @($treeOutput | Where-Object { $_ -match 'napi-(ohos|sys-ohos)' })
+    if ($productionNapiLines.Count -eq 0) { throw 'Production N-API feature tree is missing' }
+    if (($productionNapiLines -join "`n") -match '(dyn-symbols|noop)') {
+        throw 'Test-only N-API symbol features leaked into the production dependency tree'
+    }
+    $script:regressionDetail = 'production N-API tree excludes dyn-symbols and noop'
+}
+
+Invoke-RegressionCheck -Name 'rust-native-tests-wsl' -Action {
+    Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
+        'test', '--locked', '--offline', '--manifest-path', './leantty_ssh/Cargo.toml',
+        '-p', 'leantty_ssh'
+    )
+}
+
 Invoke-RegressionCheck -Name 'rust-core-tests-wsl' -Action {
     Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
         'test', '--locked', '--manifest-path', './leantty_ssh/Cargo.toml',
