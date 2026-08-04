@@ -464,6 +464,10 @@ export default function interactionFixesTest() {
       expect(actions[1].kind).assertEqual(TerminalInputActionKind.CURSOR_LEFT)
       expect(actions[2].kind).assertEqual(TerminalInputActionKind.CURSOR_RIGHT)
 
+      let interrupt: TerminalInputAction[] = TerminalInputParser.parse('\u0003', true)
+      expect(interrupt.length).assertEqual(1)
+      expect(interrupt[0].kind).assertEqual(TerminalInputActionKind.INTERRUPT)
+
       let line: LocalCommandLine = new LocalCommandLine()
       line.insert('ssh user@host')
       expect(line.moveLeft()).assertEqual(true)

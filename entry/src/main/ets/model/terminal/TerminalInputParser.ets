@@ -6,7 +6,8 @@ export enum TerminalInputActionKind {
   HISTORY_PREVIOUS = 4,
   HISTORY_NEXT = 5,
   CURSOR_LEFT = 6,
-  CURSOR_RIGHT = 7
+  CURSOR_RIGHT = 7,
+  INTERRUPT = 8
 }
 
 export class TerminalInputAction {
@@ -28,6 +29,8 @@ export class TerminalInputParser {
         actions.push(new TerminalInputAction(TerminalInputActionKind.SUBMIT))
       } else if (code === 10) {
         continue
+      } else if (code === 3) {
+        actions.push(new TerminalInputAction(TerminalInputActionKind.INTERRUPT))
       } else if (code === 127 || code === 8) {
         actions.push(new TerminalInputAction(TerminalInputActionKind.BACKSPACE))
       } else if (code === 9) {
