@@ -53,6 +53,77 @@ Assert-True (
     (Get-LeanTTYTerminalInputText -Layout $layout) -eq 'ssh-keygen -p -f regression_key'
 ) 'Terminal input text was not read from the accessibility layout'
 
+& {
+    $script:capturedHdcArgs = @()
+    function Invoke-FakeHdc {
+        $script:capturedHdcArgs = @($args)
+        $global:LASTEXITCODE = 0
+    }
+
+    Invoke-LeanTTYDeviceText `
+        -Hdc 'Invoke-FakeHdc' `
+        -Target 'regression-device' `
+        -Text 'echo LEANTTY_SMOKE'
+    Assert-True (
+        $script:capturedHdcArgs.Count -eq 4 -and
+        $script:capturedHdcArgs[0] -eq '-t' -and
+        $script:capturedHdcArgs[1] -eq 'regression-device' -and
+        $script:capturedHdcArgs[2] -eq 'shell' -and
+        $script:capturedHdcArgs[3] -eq "uitest uiInput text 'echo LEANTTY_SMOKE'"
+    ) 'Device text injection did not preserve the requested echo command'
+}
+
+& {
+    $script:readbackText = 'eho LEANTTY_SMOKE'
+    $script:injectedText = ''
+    $script:submittedKeyCodes = [Collections.Generic.List[int]]::new()
+    function Invoke-LeanTTYDeviceText {
+        param($Hdc, $Target, $Text)
+        $script:injectedText = $Text
+    }
+    function Get-LeanTTYDeviceLayout {
+        param($Hdc, $Target, $LocalPath)
+        return [pscustomobject]@{}
+    }
+    function Get-LeanTTYTerminalInputText {
+        param($Layout)
+        return $script:readbackText
+    }
+    function Invoke-LeanTTYDeviceKey {
+        param($Hdc, $Target, $KeyCode)
+        $script:submittedKeyCodes.Add($KeyCode)
+    }
+
+    $mismatchMessage = ''
+    try {
+        Submit-LeanTTYDeviceCommand `
+            -Hdc 'unused' `
+            -Target 'unused' `
+            -Command 'echo LEANTTY_SMOKE' `
+            -LayoutPath 'unused'
+    } catch {
+        $mismatchMessage = $_.Exception.Message
+    }
+    Assert-True (
+        $script:injectedText -eq 'echo LEANTTY_SMOKE' -and
+        $mismatchMessage -eq (
+            'Injected terminal command differs from the requested command: eho LEANTTY_SMOKE'
+        ) -and
+        $script:submittedKeyCodes.Count -eq 0
+    ) 'Device command submission accepted the historical echo-to-eho corruption'
+
+    $script:readbackText = 'echo LEANTTY_SMOKE'
+    Submit-LeanTTYDeviceCommand `
+        -Hdc 'unused' `
+        -Target 'unused' `
+        -Command 'echo LEANTTY_SMOKE' `
+        -LayoutPath 'unused'
+    Assert-True (
+        $script:submittedKeyCodes.Count -eq 1 -and
+        $script:submittedKeyCodes[0] -eq 2054
+    ) 'Device command submission did not press Enter after an exact text readback'
+}
+
 $center = Get-LeanTTYBoundsCenter -Bounds '[1900,1200][2200,1300]'
 Assert-True ($center.x -eq 2050 -and $center.y -eq 1250) (
     'Native-layout button coordinates were not calculated correctly'
