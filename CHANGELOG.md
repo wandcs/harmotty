@@ -76,7 +76,11 @@
 - Added owner-isolated persistent custody for SSH configuration, verified key
   pairs, trusted host keys, terminal font size and window geometry so the same
   application identity can rematerialize them after a normal uninstall and
-  reinstall without exposing a backup or restore workflow.
+  reinstall without exposing a backup or restore workflow. Physical ARM64
+  HarmonyOS PC validation covers Ed25519 and RSA-4096 keys with and without
+  passphrases, OpenSSH config, `known_hosts`, font and window state, explicit
+  deletion, lock and system-reboot continuity, owner reinstall after a
+  different-signature package boundary, and verified disposable-state cleanup.
 - Added a fail-fast AppGallery release preflight and a single build, comparison
   and archive command that keeps production upload artifacts separate from the
   test-signed HAP used for device acceptance and review media.
