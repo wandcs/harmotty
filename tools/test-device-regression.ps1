@@ -67,6 +67,20 @@ Assert-Throws -Action {
     Get-LeanTTYBoundsCenter -Bounds '[0,0][bad,20]'
 } -Message 'Malformed device bounds were accepted'
 
+$appLogParameters = (Get-Command Get-LeanTTYAppLogs).Parameters.Keys
+$waitLogParameters = (Get-Command Wait-LeanTTYAppLog).Parameters.Keys
+Assert-True (
+    $appLogParameters -notcontains 'Pid' -and
+    $waitLogParameters -notcontains 'Pid'
+) 'Device log helpers conflict with the read-only PowerShell PID automatic variable'
+
+$deviceRegressionText = Get-Content -LiteralPath (
+    Join-Path $PSScriptRoot 'device-regression.ps1'
+) -Raw
+Assert-True (
+    $deviceRegressionText -notmatch 'hilog\s+-x[^\r\n]*\s-z\s'
+) 'Device log query combines mutually exclusive hilog exit and tail modes'
+
 foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1')) {
     $scriptPath = Join-Path $PSScriptRoot $scriptName
     if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
@@ -76,6 +90,12 @@ foreach ($scriptName in @('device-regression.ps1', 'verify-key-passphrase-pc.ps1
     Assert-True ($content -notmatch '3QC[0-9A-Z]{8,}') (
         "$scriptName contains a fixed physical device identifier"
     )
+    if ($scriptName -eq 'verify-key-passphrase-pc.ps1') {
+        Assert-True (
+            $content.Contains('Device behavior harness requires a clean committed tree') -and
+            $content.Contains('harness = [ordered]@{')
+        ) 'Device behavior evidence is not bound to a clean committed harness'
+    }
 }
 
 Write-Host 'Device regression helper tests passed.' -ForegroundColor Green

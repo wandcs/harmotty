@@ -165,24 +165,35 @@ function Get-LeanTTYAppLogs {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
         [Parameter(Mandatory = $true)][string]$Target,
-        [Parameter(Mandatory = $true)][string]$Pid
+        [Parameter(Mandatory = $true)][string]$ProcessId
     )
 
-    return ((& $Hdc -t $Target shell "hilog -x -t app -z 500 -P $Pid -T SessionViewModel,KeyCommandService" 2>&1) -join "`n")
+    $output = @(
+        & $Hdc -t $Target shell (
+            "hilog -z 500 -t app -P $ProcessId " +
+            '-T SessionViewModel,KeyCommandService'
+        ) 2>&1
+    )
+    $exitCode = $LASTEXITCODE
+    $logs = $output -join "`n"
+    if ($exitCode -ne 0 -or $logs -match 'Mutlti commands can''t be used') {
+        throw 'HarmonyOS application log query failed'
+    }
+    return $logs
 }
 
 function Wait-LeanTTYAppLog {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
         [Parameter(Mandatory = $true)][string]$Target,
-        [Parameter(Mandatory = $true)][string]$Pid,
+        [Parameter(Mandatory = $true)][string]$ProcessId,
         [Parameter(Mandatory = $true)][string]$Pattern,
         [ValidateRange(1, 30)][int]$TimeoutSeconds = 10
     )
 
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
-        $logs = Get-LeanTTYAppLogs -Hdc $Hdc -Target $Target -Pid $Pid
+        $logs = Get-LeanTTYAppLogs -Hdc $Hdc -Target $Target -ProcessId $ProcessId
         if ($logs -match $Pattern) { return $logs }
         Start-Sleep -Milliseconds 200
     }

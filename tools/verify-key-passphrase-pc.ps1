@@ -21,6 +21,16 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'hdc-common.ps1')
 . (Join-Path $PSScriptRoot 'device-regression.ps1')
 
+$harnessStatus = @(git -C $repoRoot status --porcelain --untracked-files=all 2>&1)
+if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect device behavior harness source state' }
+if ($harnessStatus.Count -gt 0) {
+    throw 'Device behavior harness requires a clean committed tree'
+}
+$harnessCommit = (& git -C $repoRoot rev-parse HEAD 2>&1).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve device behavior harness commit' }
+$harnessTree = (& git -C $repoRoot rev-parse 'HEAD^{tree}' 2>&1).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve device behavior harness tree' }
+
 $hdc = Resolve-Hdc
 $Target = Resolve-LeanTTYRegressionTarget -Hdc $hdc -Target $Target
 $candidateRoot = Get-LeanTTYCandidateRoot `
@@ -84,7 +94,7 @@ function Start-BehaviorStage {
 function Complete-BehaviorStage {
     param([Parameter(Mandatory = $true)][string]$Name)
 
-    $logs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -Pid $appPid
+    $logs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
     foreach ($secret in $secrets) {
         if ($logs.Contains($secret)) {
             throw 'HarmonyOS application logs exposed a runtime regression secret'
@@ -131,7 +141,7 @@ function Wait-State {
     Wait-LeanTTYAppLog `
         -Hdc $hdc `
         -Target $Target `
-        -Pid $appPid `
+        -ProcessId $appPid `
         -Pattern $Pattern `
         -TimeoutSeconds 15 | Out-Null
 }
@@ -151,6 +161,11 @@ function Write-BehaviorEvidence {
             gitCommit = $candidate.gitCommit
             gitTree = $candidate.gitTree
             gitDirty = $candidate.gitDirty
+        }
+        harness = [ordered]@{
+            gitCommit = $harnessCommit
+            gitTree = $harnessTree
+            gitDirty = $false
         }
         device = [ordered]@{
             model = $deviceModel

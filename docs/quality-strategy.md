@@ -126,7 +126,9 @@ platform or affected server changes invalidate the corresponding evidence.
 
 Evidence files are machine-local and MUST NOT contain credentials, passphrases,
 private keys, fixed device identifiers, private host addresses or unredacted
-logs. Public summaries carry only the minimum redacted identity and result.
+logs. Physical evidence MUST identify both the tested candidate and the clean
+committed automation harness when they come from different commits. Public
+summaries carry only the minimum redacted identity and result.
 
 ## Physical automation protocol
 
