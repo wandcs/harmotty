@@ -349,6 +349,16 @@ function Invoke-LeanTTYDeviceCtrlC {
     if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS Ctrl+C injection failed' }
 }
 
+function Invoke-LeanTTYDeviceCtrlD {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target
+    )
+
+    & $Hdc -t $Target shell 'uinput -K -d 2072 -d 2020 -u 2020 -u 2072' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS Ctrl+D injection failed' }
+}
+
 function Clear-LeanTTYDeviceInput {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,
@@ -416,7 +426,7 @@ function Get-LeanTTYAppLogs {
     $output = @(
         & $Hdc -t $Target shell (
             "hilog -z 500 -t app -P $ProcessId " +
-            '-T SessionViewModel,KeyCommandService'
+            '-T SessionViewModel,KeyCommandService,SshClient'
         ) 2>&1
     )
     $exitCode = $LASTEXITCODE

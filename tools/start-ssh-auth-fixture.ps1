@@ -11,6 +11,7 @@ param(
     [string]$ListenAddress = '0.0.0.0:22222',
     [ValidateRange(1, 3600)]
     [int]$RunSeconds = 900,
+    [string]$ControlDirectory = '',
     [string]$Distribution = $env:LEANTTY_WSL_DISTRO
 )
 
@@ -24,8 +25,21 @@ function New-FixtureSecret {
     return [Convert]::ToHexString($bytes).ToLowerInvariant()
 }
 
-$fixtureDirectory = Join-Path ([IO.Path]::GetTempPath()) ('leantty-ssh-auth-' + [guid]::NewGuid().ToString('N'))
+$temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + `
+    [IO.Path]::DirectorySeparatorChar
+if ([string]::IsNullOrWhiteSpace($ControlDirectory)) {
+    $fixtureDirectory = Join-Path $temporaryRoot ('leantty-ssh-auth-' + [guid]::NewGuid().ToString('N'))
+} else {
+    $fixtureDirectory = [IO.Path]::GetFullPath($ControlDirectory)
+    if (-not $fixtureDirectory.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'SSH fixture control directory must be inside the system temporary directory'
+    }
+    if (Test-Path -LiteralPath $fixtureDirectory) {
+        throw "SSH fixture control directory already exists: $fixtureDirectory"
+    }
+}
 $credentialsPath = Join-Path $fixtureDirectory 'server-credentials'
+$readyPath = Join-Path $fixtureDirectory 'fixture-ready'
 New-Item -ItemType Directory -Path $fixtureDirectory | Out-Null
 
 try {
@@ -39,6 +53,7 @@ try {
     $lines = $null
 
     $wslCredentialsPath = ConvertTo-LeanTTYWslPath -WindowsPath $credentialsPath -Distribution $Distribution
+    $wslReadyPath = ConvertTo-LeanTTYWslPath -WindowsPath $readyPath -Distribution $Distribution
     Write-Host "Temporary fixture directory: $fixtureDirectory" -ForegroundColor Yellow
     Write-Host 'Credentials are available only in server-credentials while this process is running.'
     Write-Host 'Users: password, publickey, password-kbdint, publickey-password, publickey-kbdint, kbdint-multiround'
@@ -47,7 +62,7 @@ try {
     Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -Distribution $Distribution -CargoArguments @(
         'run', '--locked', '--offline', '--manifest-path', './leantty_ssh/Cargo.toml',
         '-p', 'leantty-ssh-auth-fixture', '--', $ListenAddress, $wslCredentialsPath,
-        $RunSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)
+        $RunSeconds.ToString([Globalization.CultureInfo]::InvariantCulture), $wslReadyPath
     )
 } finally {
     if (Test-Path -LiteralPath $fixtureDirectory) {
