@@ -313,7 +313,9 @@ foreach ($scriptName in @(
             $content.Contains('attemptId = $attemptId') -and
             $content.Contains('resourceManifest = [ordered]@{') -and
             $content.Contains('Write-AuthLiveStatus') -and
+            $content.Contains('Get-LeanTTYFixtureStageBudgetSeconds') -and
             $content.Contains('Get-LeanTTYFixtureRunSeconds') -and
+            $content.Contains('selectedStageBudgetsSeconds') -and
             $content.Contains("'diagnostic'") -and
             $content.Contains("'acceptance'")
         ) 'SSH authentication harness lacks targeted diagnostics or auditable live evidence'

@@ -192,11 +192,40 @@ function Test-AuthStageSelected {
     return $selectedStages.Contains($Name)
 }
 
+function Get-LeanTTYFixtureStageBudgetSeconds {
+    param([Parameter(Mandatory = $true)][string]$StageName)
+    $budgets = @{
+        'password-success' = 75
+        'password-kbdint-mixed-echo' = 120
+        'multiround-wrong-answer-recovery' = 180
+        'generated-disposable-auth-key' = 60
+        'publickey-unencrypted' = 60
+        'publickey-then-password' = 90
+        'publickey-then-keyboard-interactive' = 100
+        'keyboard-interactive-zero-prompt' = 60
+        'unsupported-method-error-and-recovery' = 90
+        'ctrl-c-authentication-cancellation-and-recovery' = 140
+        'pane-close-during-hidden-prompt-and-recovery' = 180
+        'encrypted-disposable-auth-key' = 90
+        'publickey-encrypted-passphrase' = 90
+        'parallel-pane-authentication' = 240
+        'minimize-restore-hidden-prompt' = 180
+        'process-stop-during-hidden-prompt-cleanup' = 180
+        'deleted-disposable-auth-key' = 90
+    }
+    if (-not $budgets.ContainsKey($StageName)) {
+        throw "No fixture budget is declared for SSH authentication stage: $StageName"
+    }
+    return [int]$budgets[$StageName]
+}
+
 function Get-LeanTTYFixtureRunSeconds {
     param([Parameter(Mandatory = $true)][string[]]$StageNames)
-    $stageBudgetSeconds = 55
-    $setupAndCleanupSeconds = 180
-    return [Math]::Max(300, $setupAndCleanupSeconds + ($StageNames.Count * $stageBudgetSeconds))
+    $runSeconds = 180
+    foreach ($stageName in $StageNames) {
+        $runSeconds += Get-LeanTTYFixtureStageBudgetSeconds -StageName $stageName
+    }
+    return [Math]::Max(300, $runSeconds)
 }
 
 $fixtureRunSeconds = Get-LeanTTYFixtureRunSeconds -StageNames $selectedStageNames
@@ -654,6 +683,12 @@ function Write-AuthEvidence {
             transport = 'hdc-reverse-to-repository-only-russh-server'
             credentials = 'runtime-generated-temporary-values'
             runSeconds = $fixtureRunSeconds
+            selectedStageBudgetsSeconds = @($selectedStageNames | ForEach-Object {
+                [ordered]@{
+                    stage = $_
+                    seconds = Get-LeanTTYFixtureStageBudgetSeconds -StageName $_
+                }
+            })
         }
         environment = [ordered]@{
             awakeLease = $awakeLeaseResult
@@ -1055,7 +1090,12 @@ try {
 } catch {
     $caughtError = $_
     $failure = $_.Exception.Message
-    $failureDomain = Resolve-AuthFailureDomain -Message $failure
+    if ($null -ne $fixtureProcess -and $fixtureProcess.HasExited) {
+        $failureDomain = 'infrastructure'
+        $failure = "[infrastructure] SSH fixture exited before stage completed: $failure"
+    } else {
+        $failureDomain = Resolve-AuthFailureDomain -Message $failure
+    }
     Write-AuthLiveStatus -State 'failed' -Stage $currentStage -Detail $failureDomain
     try {
         $failureLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid

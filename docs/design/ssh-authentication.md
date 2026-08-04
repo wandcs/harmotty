@@ -79,8 +79,9 @@ Pane 的新连接恢复。脚本独立检查沙箱文件已清理。debug/test �
 字段和 helper 符号均不存在。真实服务、断网、超时与其余错误矩阵仍保持独立门禁。
 
 脚本无 `-Only` 时运行完整 acceptance 矩阵并可提升候选；`-Only <stage>` 只运行目标
-场景及必要的密钥创建/产品删除依赖，证据标为 diagnostic，绝不提升候选。fixture 生命周期
-由所选场景预算计算，不再手工维护固定总超时。候选 commit/tree/HAP SHA-256 与 harness
+场景及必要的密钥创建/产品删除依赖，证据标为 diagnostic，绝不提升候选。每个阶段声明独立
+保守预算，fixture 生命周期按所选阶段预算之和再加设置/清理余量计算；fixture 提前退出归为
+infrastructure，不再手工维护固定总超时或用统一平均值。候选 commit/tree/HAP SHA-256 与 harness
 commit/tree 分别记录；只有二者间差异全部属于明确 allowlist 的测试脚本、测试回归或本文档
 时才可复用 HAP，任何产品输入变化都必须重新执行候选构建。
 

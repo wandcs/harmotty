@@ -140,8 +140,10 @@ matrix and reduce to the named diagnostic stage until the harness precondition
 is proved. A passing diagnostic never removes the requirement for one final
 complete matrix.
 
-The invoking terminal/agent timeout MUST exceed the scenario's published
-fixture budget plus cleanup margin. A client-side pipe timeout or `EPIPE` is an
+Each physical stage declares its own conservative fixture budget; the fixture
+lifetime is the sum of selected stages plus setup/cleanup margin, not a uniform
+per-stage estimate. The invoking terminal/agent timeout MUST exceed that
+published lifetime plus cleanup margin. A client-side pipe timeout or `EPIPE` is an
 interrupted run, not a product result; inspect `live-status.json`, let bounded
 cleanup finish when possible, then rerun only the affected diagnostic stage.
 
