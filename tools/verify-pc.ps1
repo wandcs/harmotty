@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-  Build and optionally deploy one clean LeanTTY verification candidate.
+  Build and optionally deploy one clean LeanTTY formal-release candidate.
 .DESCRIPTION
-  Requires a clean committed tree, runs the mandatory software regression gate
-  and performs one clean ARM64 debug HAP build. By default the resulting signed
-  HAP is installed and launched on a physical HarmonyOS PC and retained as
-  device-deployed evidence. Feature behavior needs a separate named scenario.
+  Reserved for formal release-package preparation. Requires a clean committed
+  tree, runs the complete software regression gate and performs one clean ARM64
+  debug HAP build. By default the resulting signed HAP is installed and launched
+  on a physical HarmonyOS PC and retained as device-deployed evidence. Feature
+  behavior needs separate named scenarios.
 #>
 param(
     [string]$Target = '',
@@ -20,7 +21,7 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $candidateSourceStatus = @(git -C $repoRoot status --porcelain --untracked-files=all 2>&1)
 if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect candidate source state' }
 if ($candidateSourceStatus.Count -gt 0) {
-    throw 'verify-pc requires a clean committed candidate; run tools/test-regression.ps1 before committing'
+    throw 'verify-pc requires a clean committed formal-release candidate'
 }
 
 foreach ($scriptName in @(
@@ -65,7 +66,7 @@ if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
 $softwareEvidencePath = Join-Path $EvidenceDirectory 'software.json'
 & (Join-Path $PSScriptRoot 'test-regression.ps1') -EvidencePath $softwareEvidencePath
-if ($LASTEXITCODE -ne 0) { throw 'Mandatory software regression gate failed' }
+if ($LASTEXITCODE -ne 0) { throw 'Formal-release software regression gate failed' }
 
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
 . (Join-Path $PSScriptRoot 'candidate-store.ps1')

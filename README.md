@@ -70,18 +70,24 @@ rustup target add aarch64-unknown-linux-ohos
 # Build only
 .\tools\build-all.ps1
 
-# Mandatory software regression gate
+# Formal release: complete software regression gate
 .\tools\test-regression.ps1
 
-# Normal maintainer loop: build, test-sign, install and launch
+# Routine change: build, test-sign, install and launch when relevant
 .\tools\dev-pc.ps1
 
-# Clean committed candidate: tests, ARM64 build and real-PC deployment
+# Formal release: clean committed candidate and real-PC deployment
 .\tools\verify-pc.ps1
 
-# Named physical behavior scenario against the retained candidate
+# Run only a named scenario affected by a routine change; run all at release
 .\tools\verify-key-passphrase-pc.ps1
 ```
+
+After a feature iteration or bug fix, run only tests for the changed event
+chain plus the smallest stable main-path smoke checks that finish quickly.
+Complete software regression, a clean ARM64 candidate build and the full
+physical-PC matrix are reserved for preparing a formal release package. See
+[the regression test standard](docs/quality-strategy.md).
 
 Device deployment requires a local signing configuration and certificate.
 Those files are deliberately excluded from the repository. See

@@ -89,20 +89,22 @@ not source and must remain untracked.
 
 ## Verification
 
-Mandatory software regression gate:
+For every feature iteration or bug fix, select only the tests mapped to the
+changed event chain and add the smallest stable main-path smoke that finishes
+quickly. Use the device loop only when the affected behavior needs it:
 
 ```powershell
-.\tools\test-regression.ps1
+.\tools\dev-pc.ps1
 ```
 
 Rust formatting, tests and compilation run in WSL. The maintainer scripts use
 the Windows DevEco SDK only for the OHOS target linker, HAP packaging and
 signing; they do not compile Rust with a native Windows toolchain.
 
-Maintainer application gate:
+Complete formal-release gates:
 
 ```powershell
-.\tools\dev-pc.ps1
+.\tools\test-regression.ps1
 .\tools\verify-pc.ps1
 .\tools\verify-key-passphrase-pc.ps1
 ```
@@ -114,9 +116,11 @@ margin; fixed sleeps may pace polling but cannot decide a test verdict.
 
 Automated tests prove pure logic and protocol behavior. ARM64 builds prove
 target integration. Install and launch prove only deployment. A named scenario
-against the same retained HAP is required to prove focus, keyboard, clipboard,
-windows, persistence, terminal interaction or SSH lifecycle. Follow the full
-mandatory sequence in [`quality-strategy.md`](quality-strategy.md).
+is required for a directly affected focus, keyboard, clipboard, window,
+persistence, terminal-interaction or SSH-lifecycle claim. Run the complete
+software/build/physical matrix only while preparing a formal release package.
+Follow the mandatory scope rules in
+[`quality-strategy.md`](quality-strategy.md).
 
 ## Change discipline
 

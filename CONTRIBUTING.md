@@ -33,13 +33,14 @@ Required tools:
 Useful commands:
 
 ```powershell
-# Mandatory software regression gate
-.\tools\test-regression.ps1
+# Routine device loop when relevant to the change
+.\tools\dev-pc.ps1
 
-# Clean ARM64 candidate build and physical-PC deployment
+# Formal release: complete software regression and clean ARM64 candidate
+.\tools\test-regression.ps1
 .\tools\verify-pc.ps1
 
-# Feature-owned behavior acceptance for the exact retained candidate
+# Formal release: feature-owned behavior matrix for the retained candidate
 .\tools\verify-key-passphrase-pc.ps1
 ```
 
@@ -57,10 +58,12 @@ DevEco compilation, signed HAP deployment and device-visible interaction remain
 maintainer gates because they require the HarmonyOS SDK, local signing material
 and a physical PC.
 
-All changes must follow the mandatory sequence and evidence classification in
-[`docs/quality-strategy.md`](docs/quality-strategy.md). Installation and launch
-record only `device-deployed`; changed device behavior is accepted only after a
-named scenario promotes the same clean retained HAP to `device-behavior`.
+All changes must follow the scope and evidence classification in
+[`docs/quality-strategy.md`](docs/quality-strategy.md). After an iteration or
+bug fix, run only checks for the changed event chain plus the smallest stable
+main-path smoke that finishes quickly. Complete regression and the full
+physical matrix are reserved for formal release-package preparation.
+Installation and launch alone do not prove changed device behavior.
 
 ## Change rules
 

@@ -52,8 +52,15 @@ points share one lock across worktrees belonging to the same Git repository.
 Starting another writer waits for the active task instead of cleaning or
 rewriting Cargo, Hvigor or HAP outputs concurrently.
 
-`tools/verify-pc.ps1` requires a clean committed tree and retains its signed test
-HAP only after the gate succeeds.
+Routine feature iterations and bug fixes run only change-related checks plus the
+smallest stable main-path smoke checks that finish quickly. Use `dev-pc.ps1`
+only when the affected behavior needs a device build, and run only its affected
+physical scenario. The complete software suite and physical matrix are not
+routine commit gates.
+
+`tools/verify-pc.ps1` is reserved for formal release-package preparation. It
+requires a clean committed tree and retains its signed test HAP only after the
+full gate succeeds.
 Candidates are stored outside build output directories under the current
 user's local application data, keyed to the Git repository. Retention has one
 rule: keep the five most recently verified unique HAPs. There is no age-based
@@ -66,11 +73,12 @@ For an acceptance-harness-only edit, run the focused non-product gate:
 .\tools\verify-ssh-auth-pc.ps1 -Only password-success
 ```
 
-The second command is diagnostic and never promotes the candidate. After the
-harness boundary is stable, run `verify-ssh-auth-pc.ps1` without `-Only` once
-for merge acceptance. A retained HAP may cross a later harness commit only when
+The second command is diagnostic and never promotes the candidate. During
+routine work, stop after the affected scenario and quick main path pass. Run
+`verify-ssh-auth-pc.ps1` without `-Only` as part of the applicable formal release
+matrix. A retained formal-release HAP may cross a later harness commit only when
 the script proves that every intervening file is on its explicit harness/doc
-allowlist; product-source or packaging changes require a new `verify-pc.ps1`.
+allowlist; product-source or packaging changes require a new release candidate.
 
 Device scenarios publish `live-status.json` while running and final JSON with
 candidate/harness identities, attempt lineage, selected stages, failure domain,

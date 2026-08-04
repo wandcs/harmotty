@@ -27,17 +27,28 @@ execution policy.
 ## Development and verification
 
 ```powershell
+# Routine change, only when the affected behavior needs a device build
 .\tools\dev-pc.ps1
+
+# Formal release-package preparation only
+.\tools\test-regression.ps1
 .\tools\verify-pc.ps1
 ```
 
 `dev-pc.ps1` is the normal build, test-sign, install and launch loop.
-`verify-pc.ps1` is the checkpoint gate for tests, Rust formatting, a clean ARM64
-native/debug HAP build and real-PC deployment.
+For each feature iteration or bug fix, run only the checks directly related to
+the changed event chain and the smallest stable main-path smoke checks that
+finish quickly. Do not run unrelated suites or the complete physical matrix.
 
-Use `-SkipDevice` only when device-visible validation is not required and no
-device is available. A physical PC is required for focus, keyboard, clipboard,
-window, persistence, terminal-interaction and SSH-lifecycle claims.
+`test-regression.ps1` and `verify-pc.ps1` are full gates reserved for preparing
+a formal release package. The latter runs the full software gate, Rust
+formatting, a clean ARM64 native/debug HAP build and real-PC deployment.
+
+During formal release verification, use `-SkipDevice` only when device-visible
+validation is not required and no device is available. A physical PC remains
+required for any focus, keyboard, clipboard, window, persistence,
+terminal-interaction or SSH-lifecycle claim directly affected by a routine
+change.
 
 Signing certificates, keystores and passwords are local-only and must never be
 added to the repository.

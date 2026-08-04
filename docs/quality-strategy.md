@@ -14,35 +14,52 @@ gaps belong only in [`next-work.md`](next-work.md).
 
 ## Mandatory workflow
 
-Every code change MUST use this sequence:
+Testing has two policy tiers.
+
+### Feature iteration and bug-fix verification
+
+Every routine code change MUST use this sequence:
 
 1. Before implementation, map the affected event chains to the
    [change-to-evidence matrix](#change-to-evidence-matrix). Add or update tests
-   and device scenarios for every newly exposed failure mode.
-2. During implementation, run focused tests as often as useful. All Rust
-   formatting, compilation, clippy and tests MUST run in WSL; Windows supplies
-   the OHOS SDK tools but is not a Rust build host.
-3. Before committing a product-input change, run `tools/test-regression.ps1`.
-   A failed or interrupted run is not a pass. A later change restricted to the
-   committed acceptance harness MAY use `tools/test-acceptance-harness.ps1`;
-   that focused result is diagnostic and cannot replace the product gate.
-4. Commit the intended product change so the device candidate has an exact,
-   clean Git identity. Run `tools/verify-pc.ps1` once to execute the software
-   gate again, perform one clean ARM64 HAP build and retain the exact signed
-   candidate. Do not rebuild that candidate for a harness-only correction.
-5. For device-visible behavior, first use a named diagnostic stage when a new
-   or repaired harness boundary needs proving, then run the applicable complete
-   `verify-*-pc.ps1` scenario once against that retained HAP without rebuilding
-   it. The complete scenario MUST verify
-   the changed behavior, relevant negative/recovery paths and secret/privacy
-   boundaries, not merely install and launch.
-6. Report the candidate SHA-256, verification mode, commands, concise results
-   and evidence paths in the pull request. Required remote checks MUST pass.
-   Administrative bypasses are not routine acceptance evidence.
+   for every newly exposed failure mode in those chains.
+2. During and after implementation, run only the unit, helper, fixture, build or
+   physical-PC checks that directly exercise the changed behavior, its relevant
+   negative/recovery paths and its trust boundaries. All Rust formatting,
+   compilation, clippy and tests MUST run in WSL; Windows supplies the OHOS SDK
+   tools but is not a Rust build host.
+3. Also run the smallest stable main-path smoke checks that finish quickly in
+   the current environment. Examples are application startup and, when the
+   change already requires a device/SSH session, one direct connect, basic
+   input/output and clean-close path. Do not expand this smoke into unrelated
+   suites or a complete physical matrix.
+4. Before committing, run `git diff --check` and record the focused commands,
+   concise results and any evidence paths. A failed or interrupted required
+   check is not a pass.
 
-Documentation-only changes MAY stop after the mapped documentation gate. A
-design or task MUST explicitly justify any omitted layer; convenience, a small
-diff or a previously successful build is not a justification.
+Routine iteration and bug-fix verification MUST NOT run
+`tools/test-regression.ps1`, `tools/verify-pc.ps1` or every named physical-PC
+scenario merely because they are available. A high-risk or device-visible
+change still requires its directly affected physical scenario; risk expands the
+depth of the affected-chain test, not the breadth of unrelated regression.
+
+Documentation-only changes MAY stop after their mapped documentation gate.
+
+### Formal release-package verification
+
+Only when preparing a formal release package MUST the maintainer:
+
+1. run `tools/test-regression.ps1` and `tools/verify-pc.ps1` from an exact clean
+   committed identity;
+2. retain the clean signed ARM64 candidate and run the complete applicable
+   `verify-*-pc.ps1` release matrix against that unchanged HAP;
+3. run the release/signing checks required by
+   [`release-process.md`](release-process.md); and
+4. report the candidate SHA-256, verification mode, commands, results and
+   evidence paths. Required remote checks MUST pass.
+
+A full test run before a formal package is built does not waive this release
+gate. Administrative bypasses are not acceptance evidence.
 
 ## Quality model
 
@@ -81,25 +98,29 @@ are not substitutes for a physical interaction result.
 
 ## Standard commands
 
-Mandatory software regression gate:
+Routine change-scoped examples (select only those mapped to the change):
+
+```powershell
+.\tools\test-acceptance-harness.ps1
+.\tools\dev-pc.ps1
+```
+
+`dev-pc.ps1` is the normal build/install/launch loop when the affected behavior
+needs a device build; it is not an acceptance result. Named diagnostic stages
+are focused evidence and MUST NOT be presented as complete release acceptance.
+
+Formal release software gate:
 
 ```powershell
 .\tools\test-regression.ps1
 ```
 
-Focused acceptance-harness gate and one SSH diagnostic stage:
+Formal release candidate build/deployment and named physical scenarios:
 
 ```powershell
-.\tools\test-acceptance-harness.ps1
-.\tools\verify-ssh-auth-pc.ps1 -Only password-success
-```
-
-Clean candidate build/deployment and current feature-specific physical scenario:
-
-```powershell
-.\tools\dev-pc.ps1
 .\tools\verify-pc.ps1
 .\tools\verify-key-passphrase-pc.ps1
+.\tools\verify-ssh-auth-pc.ps1
 ```
 
 `test-regression.ps1` runs public-source policy, workflow/helper tests, Web
@@ -107,12 +128,12 @@ terminal policy, trusted ArkTS tests, WSL Rust fmt/clippy/core tests and diff
 checks. It writes a local JSON result under `build/verification/` even when a
 check fails.
 
-`verify-pc.ps1` reruns that gate, verifies generated-native source policy,
+`verify-pc.ps1` is the formal release candidate gate. It reruns the software
+gate, verifies generated-native source policy,
 performs a clean ARM64 debug build and—unless `-SkipDevice` is used—installs and
 launches the signed HAP on a physical PC. It retains the exact HAP outside the
 volatile build tree with its SHA-256, Git identity and software evidence.
 
-`dev-pc.ps1` is the fast development loop, not an acceptance gate.
 `verify-key-passphrase-pc.ps1` is the first feature-owned physical scenario. It
 installs an already retained clean candidate, drives real application state,
 records JSON evidence and never rebuilds the HAP.
@@ -120,25 +141,27 @@ records JSON evidence and never rebuilds the HAP.
 Public CI independently repeats the public subset. Neither CI nor a clean HAP
 automatically proves a physical scenario.
 
-## Three-level execution and rerun policy
+## Execution and rerun policy
 
-Testing has exactly three execution levels:
+Evidence uses three execution levels inside the two policy tiers:
 
-1. **Focused diagnostic:** affected unit/helper/fixture checks and, when needed,
-   one named physical stage. It may reuse an unchanged retained HAP, writes
-   `runMode=diagnostic`, and MUST NOT promote candidate evidence.
-2. **Candidate checkpoint:** one full software gate and clean signed ARM64 build
-   after product inputs stabilize. This creates the HAP SHA-256 used by all
-   later physical evidence.
-3. **Merge acceptance:** one complete physical matrix against that exact HAP,
-   followed by required remote checks and an independent cleanup audit. Only
-   this level may promote `device-behavior`.
+1. **Change-scoped verification:** affected unit/helper/fixture checks, the
+   smallest quick main-path smoke and, when needed, one affected physical
+   scenario. It MAY use `runMode=diagnostic` and MUST NOT promote release
+   candidate evidence.
+2. **Formal release candidate:** one full software gate and clean signed ARM64
+   build when a formal package is being prepared. This creates the HAP SHA-256
+   used by all release physical evidence.
+3. **Formal release acceptance:** the complete applicable physical matrix
+   against that exact HAP, followed by required remote checks and an independent
+   cleanup audit. Only this level may claim complete release acceptance.
 
 After one harness failure, inspect its screenshot, layout, live status and
-failure domain. After the same boundary fails twice, stop rerunning the complete
-matrix and reduce to the named diagnostic stage until the harness precondition
-is proved. A passing diagnostic never removes the requirement for one final
-complete matrix.
+failure domain. During routine work, continue only with the affected diagnostic
+stage. During formal release verification, after the same boundary fails twice,
+stop rerunning the complete matrix and reduce to the named diagnostic stage
+until the harness precondition is proved. A passing diagnostic never removes
+the release requirement for one final complete matrix.
 
 Each physical stage declares its own conservative fixture budget; the fixture
 lifetime is the sum of selected stages plus setup/cleanup margin, not a uniform
@@ -151,7 +174,8 @@ Candidate source identity and harness source identity are separate. Reuse is
 allowed only when the candidate commit is an ancestor of the clean harness and
 every intervening path is on the scenario's explicit harness/document allowlist.
 Any ArkTS, Rust, packaged resource, dependency, build input or other product
-path change invalidates reuse and requires a new candidate checkpoint.
+path change invalidates release-candidate reuse and requires a new formal
+release candidate.
 
 ## Candidate and evidence states
 
@@ -159,7 +183,7 @@ Retained candidates use only these monotonic modes:
 
 | Mode | Meaning |
 | --- | --- |
-| `software` | Mandatory software gate and exact clean ARM64 HAP build passed |
+| `software` | Formal release software gate and exact clean ARM64 HAP build passed |
 | `device-deployed` | The same HAP was installed and launched on a physical ARM64 HarmonyOS PC |
 | `device-behavior` | One or more named physical behavior scenarios passed against the same HAP |
 
@@ -323,8 +347,8 @@ one real-duration production check.
 
 ## Permanent physical-PC regression areas
 
-For a candidate whose changes can affect them, exercise on a physical ARM64
-HarmonyOS PC:
+The formal release matrix exercises these areas on a physical ARM64 HarmonyOS
+PC:
 
 - application launch, window controls, geometry, theme and font restoration;
 - physical keyboard input, modifiers, IME, focus and terminal query responses;
@@ -340,8 +364,22 @@ HarmonyOS PC:
 - persistent asset create/update/delete, ordinary uninstall/reinstall, reboot,
   lock state and different signing identity when applicable.
 
-The exact feature-specific subset belongs in the design and current work item.
-This list defines the permanent regression domains, not a checkbox log.
+Routine feature iteration and bug fixes exercise only the affected subset plus
+the smallest quickly completed main path. The exact feature-specific subset
+belongs in the design and current work item. This list defines the permanent
+formal-release regression domains, not a daily checkbox log.
+
+## 2026-08-04 verification-scope decision
+
+- **Reason:** Full software, build and physical matrices after every small
+  iteration consume disproportionate time and make the evidence for the actual
+  change harder to identify.
+- **Decision:** Feature iterations and bug fixes use affected-chain tests plus a
+  very quick main-path smoke. Complete regression runs only while preparing a
+  formal release package.
+- **Safety boundary:** Focused does not mean superficial. The affected chain
+  still includes relevant failure, recovery, privacy and real-device behavior;
+  release preparation still repeats the full gate on the exact package source.
 
 ## Controlled environments
 
