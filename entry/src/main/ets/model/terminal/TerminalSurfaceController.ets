@@ -5,13 +5,14 @@ import { ClipboardManager } from '../clipboard/ClipboardManager'
 import { Logger } from '../../common/logger/Logger'
 import { TerminalOutputBuffer } from './TerminalOutputBuffer'
 import util from '@ohos.util'
+import { ACCEPTANCE_TESTS } from 'BuildProfile'
 
 class SnapshotCompletion {
   requestId: number
-  handler: () => void
+  handler: (captured: boolean) => void
   timerId: number
 
-  constructor(requestId: number, handler: () => void, timerId: number) {
+  constructor(requestId: number, handler: (captured: boolean) => void, timerId: number) {
     this.requestId = requestId
     this.handler = handler
     this.timerId = timerId
@@ -189,10 +190,10 @@ export class TerminalSurfaceController {
     }
   }
 
-  captureSnapshot(onCaptured: (() => void) | null = null): void {
+  captureSnapshot(onCaptured: ((captured: boolean) => void) | null = null): void {
     if (this.bridge === null) {
       if (onCaptured !== null) {
-        onCaptured()
+        onCaptured(false)
       }
       return
     }
@@ -201,11 +202,18 @@ export class TerminalSurfaceController {
     if (onCaptured !== null) {
       let timerId: number = setTimeout(() => {
         this.logger.warn('Terminal snapshot timed out, requestId=' + requestId.toString())
-        this.completeSnapshotRequest(requestId)
+        this.completeSnapshotRequest(requestId, false)
       }, TerminalSurfaceController.SNAPSHOT_COMPLETION_TIMEOUT_MS)
       this.snapshotCompletions.push(new SnapshotCompletion(requestId, onCaptured, timerId))
     }
     this.bridge.requestSnapshot(requestId)
+  }
+
+  terminateRendererForAcceptance(): boolean {
+    if (!ACCEPTANCE_TESTS || this.bridge === null) {
+      return false
+    }
+    return this.bridge.terminateRendererForAcceptance()
   }
 
   private handleBridgeMessage(sourceBridge: TerminalBridge, msg: BridgeMessage): void {
@@ -269,7 +277,7 @@ export class TerminalSurfaceController {
           this.outputBuffer.replaceSnapshot(msg.payload.substring(separator + 1))
           this.lastCommittedSnapshotRequestId = requestId
         }
-        this.completeSnapshotRequest(requestId)
+        this.completeSnapshotRequest(requestId, true)
       }
       return
     }
@@ -278,9 +286,9 @@ export class TerminalSurfaceController {
     }
   }
 
-  private completeSnapshotRequest(requestId: number): void {
+  private completeSnapshotRequest(requestId: number, captured: boolean): void {
     let remaining: SnapshotCompletion[] = []
-    let completedHandler: (() => void) | null = null
+    let completedHandler: ((captured: boolean) => void) | null = null
     for (let i = 0; i < this.snapshotCompletions.length; i++) {
       let completion: SnapshotCompletion = this.snapshotCompletions[i]
       if (completion.requestId === requestId) {
@@ -292,19 +300,19 @@ export class TerminalSurfaceController {
     }
     this.snapshotCompletions = remaining
     if (completedHandler !== null) {
-      completedHandler()
+      completedHandler(captured)
     }
   }
 
   private clearSnapshotCompletions(): void {
-    let handlers: (() => void)[] = []
+    let handlers: ((captured: boolean) => void)[] = []
     for (let i = 0; i < this.snapshotCompletions.length; i++) {
       clearTimeout(this.snapshotCompletions[i].timerId)
       handlers.push(this.snapshotCompletions[i].handler)
     }
     this.snapshotCompletions = []
     for (let i = 0; i < handlers.length; i++) {
-      handlers[i]()
+      handlers[i](false)
     }
   }
 

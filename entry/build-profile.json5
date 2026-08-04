@@ -9,8 +9,20 @@
   },
   "buildOptionSet": [
     {
+      "name": "debug",
+      "arkOptions": {
+        "buildProfileFields": {
+          "ACCEPTANCE_TESTS": true
+        }
+      }
+    },
+    {
       "name": "release",
       "arkOptions": {
+        "buildProfileFields": {
+          "ACCEPTANCE_TESTS": false
+        },
+        "branchElimination": true,
         "obfuscation": {
           "ruleOptions": {
             "enable": false,
