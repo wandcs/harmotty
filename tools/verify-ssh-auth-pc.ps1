@@ -395,6 +395,24 @@ function Invoke-DeleteKeyDialog {
     throw 'Delete-key confirmation did not appear'
 }
 
+function Invoke-ClosePaneDialog {
+    param([Parameter(Mandatory = $true)][string]$LayoutName)
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($stopwatch.Elapsed.TotalSeconds -lt 10) {
+        try {
+            Invoke-LeanTTYDialogButton `
+                -Hdc $hdc `
+                -Target $Target `
+                -ButtonText 'Close pane' `
+                -LayoutPath (Join-Path $EvidenceDirectory $LayoutName)
+            return
+        } catch {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    throw 'Close-pane confirmation did not appear'
+}
+
 function Remove-DisposableAuthKey {
     param([Parameter(Mandatory = $true)][string]$LayoutPrefix)
     if (-not (Test-LeanTTYDeviceKeyFilesPresent `
@@ -510,6 +528,8 @@ function Write-AuthEvidence {
             'publickey-then-keyboard-interactive',
             'keyboard-interactive-zero-prompt',
             'unsupported-method-error-and-recovery',
+            'ctrl-c-authentication-cancellation-and-recovery',
+            'pane-close-during-hidden-prompt-and-recovery',
             'publickey-encrypted-passphrase',
             'parallel-pane-independent-authentication',
             'minimize-restore-hidden-answer-continuity',
@@ -686,6 +706,48 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'unsupported-method-error-and-recovery'
+
+    Start-AuthStage -Name 'ctrl-c-authentication-cancellation-and-recovery'
+    Start-AuthCommand -User 'kbdint-multiround'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.account -LayoutName 'layout-cancel-auth-account.json'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
+    Assert-NoSecretExposure -LayoutName 'layout-cancel-auth-hidden-token.json'
+    Invoke-LeanTTYDeviceCtrlC -Hdc $hdc -Target $Target
+    Assert-NoSecretExposure -LayoutName 'layout-cancel-auth-cleared.json'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-cancel-auth-recovery-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'ctrl-c-authentication-cancellation-and-recovery'
+
+    Start-AuthStage -Name 'pane-close-during-hidden-prompt-and-recovery'
+    Split-AuthPane
+    Focus-AuthPane -Side 'right' -LayoutName 'layout-close-auth-right-prompt.json'
+    Start-AuthCommand -User 'kbdint-multiround'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-AuthValue -Value $credentials.account -LayoutName 'layout-close-auth-account.json'
+    Wait-AuthLog -Pattern 'native auth event kind=challenge'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
+    Assert-NoSecretExposure -LayoutName 'layout-close-auth-hidden-token.json'
+    Invoke-ActivePaneCloseButton -LayoutName 'layout-close-auth-button.json'
+    Invoke-ClosePaneDialog -LayoutName 'layout-close-auth-dialog.json'
+    Wait-AuthPaneCount -Count 1 -LayoutName 'layout-close-auth-single-pane.json' | Out-Null
+    Assert-NoSecretExposure -LayoutName 'layout-close-auth-cleared.json'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-close-auth-recovery-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'pane-close-during-hidden-prompt-and-recovery'
 
     Start-AuthStage -Name 'encrypted-disposable-auth-key'
     Submit-FocusedDeviceCommand `

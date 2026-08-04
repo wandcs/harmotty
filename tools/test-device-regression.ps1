@@ -315,6 +315,11 @@ foreach ($scriptName in @(
             $content.Contains("'keyboard-interactive-zero-prompt'") -and
             $content.Contains("'unsupported-method-error-and-recovery'") -and
             $content.Contains('AUTH:no supported authentication method is available') -and
+            $content.Contains("'ctrl-c-authentication-cancellation-and-recovery'") -and
+            $content.Contains('Invoke-LeanTTYDeviceCtrlC') -and
+            $content.Contains("'pane-close-during-hidden-prompt-and-recovery'") -and
+            $content.Contains("-ButtonText 'Close pane'") -and
+            $content.Contains("'layout-close-auth-single-pane.json'") -and
             $content.Contains("'-RunSeconds', '1200'") -and
             $content.Contains("'publickey-encrypted-passphrase'") -and
             $content.Contains("'parallel-pane-independent-authentication'") -and
