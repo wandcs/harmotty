@@ -134,14 +134,10 @@ function Complete-BehaviorStage {
 function Submit-Command {
     param([Parameter(Mandatory = $true)][string]$Command)
 
-    $layoutPath = Join-Path $EvidenceDirectory (
-        'layout-command-' + [Guid]::NewGuid().ToString('N') + '.json'
-    )
     Submit-LeanTTYDeviceCommand `
         -Hdc $hdc `
         -Target $Target `
-        -Command $Command `
-        -LayoutPath $layoutPath
+        -Command $Command
 }
 
 function Submit-Secret {
@@ -252,7 +248,7 @@ function Write-BehaviorEvidence {
             failure = $awakeLeaseFailure
         }
         input = [ordered]@{
-            commandInjection = 'uitest-focused-text-with-layout-readback'
+            commandInjection = 'raw-physical-key-events-with-structured-result'
             secretInjection = 'runtime-generated-printable-ascii'
             fixedDelayUsedAsVerdict = $false
         }
