@@ -415,6 +415,9 @@ assert.match(terminalSurfaceController, /takeDetachedChunks/,
   'a new terminal surface must take only output produced while no surface was attached');
 assert.doesNotMatch(terminalSurfaceController, /releaseBuffers|term\.clear|term\.reset/,
   'disconnect cleanup must not ask a live terminal surface to clear its screen or scrollback');
+assert.match(terminalSurfaceController,
+  /terminateRendererForAcceptance[\s\S]*?!ACCEPTANCE_TESTS[\s\S]*?bridge\.terminateRendererForAcceptance/,
+  'renderer termination must remain behind the compile-time acceptance flag at the surface boundary');
 
 const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
@@ -432,16 +435,33 @@ assert.match(indexPage, /BrowserLauncher\.open\(/,
   'the ArkUI shell must hand validated HTTP(S) links to the HarmonyOS system browser');
 assert.doesNotMatch(indexPage, /requestCopySelection|['"]Copy['"]/,
   'the tool menu must not keep a standalone Copy action');
-assert.match(indexPage, /for \(let i = 0; i < 6; i\+\+\)/,
-  'keyboard menu selection must traverse the six remaining actions');
-assert.match(indexPage, /\(next \+ direction \+ 6\) % 6/,
-  'keyboard menu selection must wrap across the six remaining actions');
+assert.match(indexPage, /const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS \? 7 : 6/,
+  'the acceptance-only menu action must not change the production menu count');
+assert.match(indexPage, /for \(let i = 0; i < MENU_ACTION_COUNT; i\+\+\)/,
+  'keyboard menu selection must traverse the compile-time action count');
+assert.match(indexPage, /\(next \+ direction \+ MENU_ACTION_COUNT\) % MENU_ACTION_COUNT/,
+  'keyboard menu selection must wrap across the compile-time action count');
 assert.match(indexPage,
   /selected === 3\) \{ this\.handleFontIncrease\(\)[\s\S]*selected === 4\) \{ this\.handleFontReset\(\)[\s\S]*selected === 5\) \{ this\.handleFontDecrease\(\)/,
   'Enter dispatch must map the reindexed font actions in menu order');
 assert.match(indexPage,
   /menuRow\(3, 'A⁺', 'Font Size \+'[\s\S]*menuRow\(4, 'Aa', 'Reset Font Size'[\s\S]*menuRow\(5, 'A⁻', 'Font Size -'/,
   'the rendered menu must retain the three font actions at indices 3 through 5');
+assert.match(indexPage,
+  /if \(ACCEPTANCE_TESTS\) \{[\s\S]*menuRow\(6, '↻', 'Acceptance: Rebuild Renderer'/,
+  'the renderer rebuild entry must be rendered only in acceptance-enabled packages');
+assert.match(indexPage,
+  /private rebuildRendererForAcceptance[\s\S]*?if \(!ACCEPTANCE_TESTS\)[\s\S]*?captureSnapshot\(\(captured: boolean\)[\s\S]*?terminateRendererForAcceptance/,
+  'the acceptance action must wait for a confirmed production snapshot before terminating the renderer');
+
+const moduleBuildProfile = readFileSync(
+  new URL('../../entry/build-profile.json5', import.meta.url), 'utf8');
+assert.match(moduleBuildProfile,
+  /"name": "debug"[\s\S]*?"ACCEPTANCE_TESTS": true/,
+  'debug packages must explicitly enable acceptance test entries');
+assert.match(moduleBuildProfile,
+  /"name": "release"[\s\S]*?"ACCEPTANCE_TESTS": false[\s\S]*?"branchElimination": true/,
+  'release packages must compile out acceptance-only branches');
 
 const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');

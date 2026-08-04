@@ -1,6 +1,7 @@
 import webview from '@ohos.web.webview'
 import { BridgeProtocol, BridgeMessage } from './BridgeProtocol'
 import { Logger } from '../../common/logger/Logger'
+import { ACCEPTANCE_TESTS } from 'BuildProfile'
 
 export class TerminalBridge {
   private webCtrl: webview.WebviewController
@@ -191,6 +192,18 @@ export class TerminalBridge {
   requestSnapshot(requestId: number): void {
     this.pendingSnapshotRequestIds.push(requestId)
     this.pumpSnapshotRequests()
+  }
+
+  terminateRendererForAcceptance(): boolean {
+    if (!ACCEPTANCE_TESTS) {
+      return false
+    }
+    try {
+      return this.webCtrl.terminateRenderProcess()
+    } catch (e) {
+      this.logger.error('Acceptance renderer termination failed: ' + e)
+      return false
+    }
   }
 
   private postTerminalPacket(data: Uint8Array): number {
