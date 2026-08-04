@@ -57,12 +57,6 @@
 技术边界与验收细节：
 [`design/ssh-authentication.md`](design/ssh-authentication.md)。
 
-- [ ] 在 Rust Session 中建立唯一认证状态机，按 `remaining_methods` 与
-  `partial_success` 处理方法和阶段；支持 authentication banner、名称、说明、零个或
-  多个 prompt、逐项 echo 规则和多轮回答，不根据厂商提示文字猜测认证类型。
-- [ ] 使用结构化 Rust/N-API/ArkTS 事件与
-  `sessionId + generation + roundId` 传递 challenge 和回答，拒绝过期、重复、数量
-  错误和跨 Session 回答；服务器显示文字按不可信输入过滤。
 - [ ] 保证密码、私钥口令、OTP 和认证回答不进入日志、错误快照、命令历史、
   Preferences、持久资产或 PTY 字节流；覆盖提交、拒绝、取消、超时和断线清理。
 - [ ] 自动化覆盖成功、普通失败、部分成功、不支持、零/多 prompt、多轮、混合 echo、

@@ -210,6 +210,13 @@ Invoke-RegressionCheck -Name 'rust-clippy-wsl' -Action {
     )
 }
 
+Invoke-RegressionCheck -Name 'rust-native-clippy-wsl' -Action {
+    Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
+        'clippy', '--locked', '--manifest-path', './leantty_ssh/Cargo.toml',
+        '-p', 'leantty_ssh', '--all-targets', '--', '-D', 'warnings'
+    )
+}
+
 Invoke-RegressionCheck -Name 'rust-core-tests-wsl' -Action {
     Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
         'test', '--locked', '--manifest-path', './leantty_ssh/Cargo.toml',

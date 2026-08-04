@@ -4,6 +4,11 @@
 
 ### Development
 
+- Added structured SSH keyboard-interactive and multi-method authentication across
+  Rust, N-API and ArkTS. The per-session state machine follows server-provided
+  remaining methods and partial success, supports banners, mixed-echo multi-prompt
+  and multi-round challenges, rejects stale or malformed responses, bounds protocol
+  stages and network/user waits, and clears submitted or cancelled secrets.
 - Added a repository-only controlled SSH authentication fixture for password,
   encrypted and unencrypted keys, partial-success method chains, mixed-echo
   prompts and multi-round keyboard-interactive acceptance. Runtime credentials

@@ -18,6 +18,13 @@ import { CommandBarViewModel } from '../main/ets/viewmodel/CommandBarViewModel'
 
 export default function interactionFixesTest() {
   describe('InteractionFixes', () => {
+    it('acceptsAuthEventsOnlyForTheCurrentSessionGeneration', 0, () => {
+      expect(SshClient.isCurrentAuthEvent('41', 7, '41', 7)).assertEqual(true)
+      expect(SshClient.isCurrentAuthEvent('41', 7, '42', 7)).assertEqual(false)
+      expect(SshClient.isCurrentAuthEvent('41', 7, '41', 8)).assertEqual(false)
+      expect(SshClient.isCurrentAuthEvent('', 7, '', 7)).assertEqual(false)
+    })
+
     it('parsesKeySubcommandsFromTheCorrectArgument', 0, () => {
       let config: SshConfig = new SshConfig()
       let showResult: CommandParseResult | KeyCommandResult | null = CommandParser.parseInput('key show deploy', config)

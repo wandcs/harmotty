@@ -1,6 +1,6 @@
 # SSH keyboard-interactive 与多方法认证技术方案
 
-> 状态：Implementing；产品范围已进入 1.1，协议细节与验证基线仍需在实现中闭合
+> 状态：Implementing；受控客户端链路已闭合，真实服务与完整生命周期矩阵仍需验证
 >
 > 目标 milestone：1.1.0
 >
@@ -43,9 +43,10 @@ SSH `keyboard-interactive`、authentication banner、一个请求中的多个提
 
 ## 已知现状与证据边界
 
-当前 Rust/N-API/ArkTS 路径使用类似 `PASSWORD_PROMPT`、`AUTH:rejected` 的字符串事件，
-并以“私钥失败后提示密码”的分支组织认证。这不足以表达结构化 challenge、
-`partial_success` 和 `remaining_methods`。
+Rust Session 现已成为认证协商的唯一状态机；N-API/ArkTS 使用结构化事件传递 banner、
+challenge 和 `sessionId + generation + roundId`，UI 不再根据私钥失败或服务器提示文字
+决定下一方法。网络认证交换使用 30 秒超时，等待用户回答使用 300 秒超时，断开与取消
+都会终止当前等待。
 
 `russh 0.62.4` 提供相关客户端 API 是实现候选事实，不等于 LeanTTY 已经在 ARM64 HAP
 和物理 HarmonyOS PC 上完成互操作。仓库现已提供独立的受控 russh 服务端和 OpenSSH
@@ -55,7 +56,10 @@ SSH `keyboard-interactive`、authentication banner、一个请求中的多个提
 或 HAP。运行 `tools/start-ssh-auth-fixture.ps1` 时才会在系统临时目录生成随机凭据，
 进程结束即删除。服务端按测试用户名提供直接密码、直接公钥、密码后 interactive、
 公钥后密码、公钥后 interactive 和多轮 interactive；`test-e2e.sh` 使用 OpenSSH 逐项
-验证未加密/加密私钥、partial success、多提示混合 echo 和多轮协议行为。
+验证未加密/加密私钥、partial success、多提示混合 echo 和多轮协议行为。物理 ARM64
+HarmonyOS PC 已使用同一夹具验证直接密码、未加密/加密私钥、密码后 interactive、
+公钥后密码、公钥后 interactive、多轮 interactive、混合 echo、banner 和取消；更广的
+真实服务、Pane 并行、最小化/恢复、断网与错误矩阵仍是发布门禁。
 
 ## 用户交互
 
@@ -113,6 +117,13 @@ AuthCommand
   KeyboardInteractiveResponses(roundId, responses[])
 ```
 
+纯策略位于 `leantty-ssh-core::authentication`：方法选择固定为“可用的配置私钥 →
+keyboard-interactive → 直接密码”，同一阶段不重复已失败的方法，`partial_success` 后进入
+新的有界阶段。当前上限为每次认证最多 8 个方法阶段、8 个 interactive 轮次、每轮最多
+16 个 prompt、name、instructions
+和单项 prompt/response 各 4096 bytes、单轮 prompt/response 各 16384 bytes；越界失败，
+不截断后继续提交。
+
 ## 结构化边界
 
 ```text
@@ -145,10 +156,11 @@ AuthChallenge
 
 ## 仍需讨论或在实现中确定
 
-- 各项协议上限的具体值，以及错误文案如何在安全与可诊断之间取平衡。
-- 直接密码与 `keyboard-interactive` 都被允许时的首次选择规则是否对现有服务器产生
-  额外往返；以受控基线和真实服务器兼容性决定，不凭直觉增加设置。
-- 零 prompt、多轮 prompt 和 banner 的具体终端排版，确保可读但不建立新 UI 面板。
+- 协议上限对应的用户错误文案如何在安全与可诊断之间取平衡。
+- 直接密码与 `keyboard-interactive` 都被允许时的既定优先顺序是否对真实服务器产生
+  额外往返；以真实服务兼容性决定，不凭直觉增加设置。
+- 零 prompt 的真实服务器互操作仍需补证；多轮 prompt 和 banner 已沿终端路径显示，
+  不建立新 UI 面板。
 - russh 对密码修改请求和所有失败组合的可观察接口；缺失时应明确失败，不做文本猜测。
 这些未决点不能改变已确认边界：服务器驱动、每 Session 唯一状态机、结构化事件、秘密
 不持久化和真机验证。
