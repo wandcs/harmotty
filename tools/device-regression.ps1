@@ -363,7 +363,7 @@ function Invoke-LeanTTYDeviceText {
         & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
         if ($offset + $length -lt $Text.Length) {
-            Start-Sleep -Milliseconds 50
+            Start-Sleep -Milliseconds 100
         }
     }
 }
@@ -536,5 +536,5 @@ function Save-LeanTTYDeviceScreenshot {
 }
 
 function New-LeanTTYRegressionSecret {
-    return 'T' + [Guid]::NewGuid().ToString('N').Substring(0, 23)
+    return 't' + [Guid]::NewGuid().ToString('N').Substring(0, 23)
 }

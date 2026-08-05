@@ -155,7 +155,7 @@ Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
-    $deviceRegressionText -match 'Start-Sleep -Milliseconds 50(?:\s|$)'
+    $deviceRegressionText -match 'Start-Sleep -Milliseconds 100(?:\s|$)'
 ) 'Device raw-key text injection does not leave enough time for ArkUI to consume modifier transitions'
 Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
@@ -271,7 +271,10 @@ foreach ($scriptName in @(
         ) 'Device behavior evidence does not record stage timing and cleanup outcome'
         Assert-True (
             $content.Contains("'device-harness-preflight'") -and
-            $content.Contains('Test-LeanTTYDeviceKeyFilesPresent')
+            $content.Contains('Test-LeanTTYDeviceKeyFilesPresent') -and
+            $content.Contains('Disposable key files disappeared after rejected old passphrase') -and
+            $content.Contains("'failure-app-logs.txt'") -and
+            $content.Contains("'[REDACTED]'")
         ) 'Device scenario does not preflight telemetry and independently verify cleanup'
         Assert-True (
             $content.Contains('Start-LeanTTYDeviceAwakeLease') -and
@@ -310,7 +313,7 @@ foreach ($scriptName in @(
             $content.Contains('Focus-ActiveCommandInput') -and
             $content.Contains('businessOutcomeRequired = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false') -and
-            $content.Contains('interChunkPacingMilliseconds = 50')
+            $content.Contains('interChunkPacingMilliseconds = 100')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
@@ -366,6 +369,14 @@ foreach ($scriptName in @(
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
     }
 }
+
+$deviceRegressionText = Get-Content -LiteralPath (
+    Join-Path $PSScriptRoot 'device-regression.ps1'
+) -Raw
+Assert-True (
+    $deviceRegressionText.Contains("return 't' + [Guid]::NewGuid()") -and
+    $deviceRegressionText.Contains('Start-Sleep -Milliseconds 100')
+) 'Device secret injection is not restricted to stable lowercase input with conservative pacing'
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $sessionViewModel = Get-Content -LiteralPath (

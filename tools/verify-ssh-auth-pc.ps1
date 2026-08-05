@@ -755,7 +755,7 @@ function Write-AuthEvidence {
             method = 'raw-physical-key-events'
             secretInjection = 'runtime-generated-printable-ascii'
             textChunkCharacters = 1
-            interChunkPacingMilliseconds = 50
+            interChunkPacingMilliseconds = 100
             submitTelemetry = 'compile-time-acceptance-marker-with-sequence-and-kind-only'
             businessOutcomeRequired = $true
             fixedDelayUsedAsVerdict = $false
