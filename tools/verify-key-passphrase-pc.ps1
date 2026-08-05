@@ -353,6 +353,12 @@ try {
     Submit-Secret -Value $secretB
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE result=failure reason=native'
     Complete-BehaviorStage -Name 'wrong-old-passphrase-made-no-change'
+    if (-not (Test-LeanTTYDeviceKeyFilesPresent `
+        -Hdc $hdc `
+        -Target $Target `
+        -KeyName $keyName)) {
+        throw 'Disposable key files disappeared after rejected old passphrase'
+    }
 
     Start-BehaviorStage -Name 'recovered-after-negative-paths-with-original-passphrase'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
@@ -412,6 +418,20 @@ try {
 } catch {
     $caughtError = $_
     $failure = $_.Exception.Message
+    try {
+        $failureLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+        foreach ($secret in $secrets) {
+            if (-not [string]::IsNullOrEmpty($secret)) {
+                $failureLogs = $failureLogs.Replace($secret, '[REDACTED]')
+            }
+        }
+        [IO.File]::WriteAllText(
+            (Join-Path $EvidenceDirectory 'failure-app-logs.txt'),
+            $failureLogs,
+            [Text.UTF8Encoding]::new($false)
+        )
+        $failureLogs = ''
+    } catch {}
     try {
         Save-LeanTTYDeviceScreenshot `
             -Hdc $hdc `
