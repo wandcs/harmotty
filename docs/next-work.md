@@ -2,7 +2,7 @@
 
 > 状态：唯一有效的项目 TODO
 >
-> 更新日期：2026-08-05
+> 更新日期：2026-08-06
 >
 > 当前 milestone：[`1.1 — 可信认证与工作连续性`](roadmap.md)
 >
@@ -14,17 +14,12 @@
 
 ## 当前完成定义
 
-使用新增 Downloads 目录授权的生产 Profile 准备确切 1.1.1 候选，完成 GitHub Release
-后再用同版本生产 APP、新应用介绍和版本更新说明提交 AppGallery；任何审核失败都顺延到
-下一 PATCH 版本。
+确认 AppGallery 上一版本审核已经处于终态，再用与 `v1.1.1` GitHub Release 对应的
+同版本生产 APP、新应用介绍和版本更新说明提交 AppGallery；任何审核失败都顺延到下一
+PATCH 版本。
 
-## 1. 1.1.1 发布与 AppGallery 提交
+## 1. 1.1.1 AppGallery 提交
 
-- [ ] 从已推送的确切 commit 干净构建并生产签名 1.1.1；确认签入包体的 release Profile
-  属于 `com.leantty.app` / AppGallery，保留原应用标识，并同时授权
-  `READ_PASTEBOARD` 与 `READ_WRITE_DOWNLOAD_DIRECTORY`；核对 APP/HAP 签名、manifest、
-  ARM64 ABI、版本和全部哈希后归档新候选，不修改 1.1.0 证据。
-- [ ] 在已验证 commit 上创建不可变签名标签 `v1.1.1`，发布并核对非草稿 GitHub Release。
 - [ ] 确认 AppGallery 应用记录及上一版本审核已处于终态，上传与 `v1.1.1` GitHub Release
   对应的同版本生产 APP，并只更新应用介绍和版本更新说明。本次不新增或替换截图、MP4
   和提交备注；记录 GitHub Release、标签、commit、包体哈希和商店提交状态的对应关系。
