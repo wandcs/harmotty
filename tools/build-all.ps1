@@ -312,9 +312,13 @@ if (-not $deveco) { throw 'DevEco Studio not found. Set DEVECO_HOME.' }
 
 $nodeExe = Join-Path $deveco 'tools\node\node.exe'
 $hvigorJs = Join-Path $deveco 'tools\hvigor\bin\hvigorw.js'
+$ohpm = Join-Path $deveco 'tools\ohpm\bin\ohpm.bat'
 $jbrBin = Join-Path $deveco 'jbr\bin'
 $javaExe = Join-Path $jbrBin 'java.exe'
 $signToolJar = Join-Path $deveco 'sdk\default\openharmony\toolchains\lib\hap-sign-tool.jar'
+if (-not (Test-Path -LiteralPath $ohpm -PathType Leaf)) {
+    throw "DevEco OHPM tool is missing: $ohpm"
+}
 
 $env:NODE_OPTIONS = ''
 $env:DEVECO_SDK_HOME = Join-Path $deveco 'sdk'
@@ -331,6 +335,20 @@ if ($Clean) {
         if (Test-Path -LiteralPath $directory) {
             Remove-Item -LiteralPath $directory -Recurse -Force
         }
+    }
+}
+
+$nativeTypePackage = Join-Path $repoRoot 'entry\oh_modules\libleantty_ssh.so'
+if (-not (Test-Path -LiteralPath $nativeTypePackage -PathType Container)) {
+    Push-Location $repoRoot
+    try {
+        & $ohpm install --all --lockfile_stable_order
+        if ($LASTEXITCODE -ne 0) { throw 'OHPM dependency restore failed' }
+    } finally {
+        Pop-Location
+    }
+    if (-not (Test-Path -LiteralPath $nativeTypePackage -PathType Container)) {
+        throw "Native OHPM type package is missing after restore: $nativeTypePackage"
     }
 }
 
