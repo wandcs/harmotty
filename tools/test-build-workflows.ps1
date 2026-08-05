@@ -281,6 +281,11 @@ try {
         $buildAllText.Contains('Invoke-WithLeanTTYAcceptanceSource')
     ) 'Formal release build does not reject acceptance-only package markers'
     Assert-True (
+        $buildAllText.Contains("tools\ohpm\bin\ohpm.bat") -and
+        $buildAllText.Contains('& $ohpm install --all --lockfile_stable_order') -and
+        $buildAllText.Contains("entry\oh_modules\libleantty_ssh.so")
+    ) 'Clean release build does not restore required OHPM dependencies'
+    Assert-True (
         Test-Path -LiteralPath (Join-Path $PSScriptRoot 'test-acceptance-harness.ps1') -PathType Leaf
     ) 'Focused acceptance-harness regression command is missing'
 
