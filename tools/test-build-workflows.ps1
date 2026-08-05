@@ -267,7 +267,9 @@ try {
     ) -Raw
     Assert-True (
         $verifyPcText.Contains('[IO.Path]::GetTempPath()') -and
-        -not $verifyPcText.Contains("Join-Path `$repoRoot 'build\verification'")
+        -not $verifyPcText.Contains("Join-Path `$repoRoot 'build\verification'") -and
+        $verifyPcText.Contains('verify-pc evidence directory must be outside the repository') -and
+        $verifyPcText.Contains('$evidenceDirectoryFullPath.StartsWith(')
     ) 'verify-pc evidence would be deleted by its own clean build'
 
     $buildAllText = Get-Content -LiteralPath (

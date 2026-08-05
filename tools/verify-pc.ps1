@@ -64,6 +64,19 @@ if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
     ) ('LeanTTY-verification-' + [Guid]::NewGuid().ToString('N'))
     $temporaryEvidenceDirectory = $true
 }
+$repositoryFullPath = [IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/')
+$repositoryPrefix = $repositoryFullPath + [IO.Path]::DirectorySeparatorChar
+$evidenceDirectoryFullPath = [IO.Path]::GetFullPath($EvidenceDirectory)
+if ($evidenceDirectoryFullPath.Equals(
+        $repositoryFullPath,
+        [StringComparison]::OrdinalIgnoreCase
+    ) -or $evidenceDirectoryFullPath.StartsWith(
+        $repositoryPrefix,
+        [StringComparison]::OrdinalIgnoreCase
+    )) {
+    throw 'verify-pc evidence directory must be outside the repository because the clean build removes repository build outputs'
+}
+$EvidenceDirectory = $evidenceDirectoryFullPath
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
 $softwareEvidencePath = Join-Path $EvidenceDirectory 'software.json'
 & (Join-Path $PSScriptRoot 'test-regression.ps1') -EvidencePath $softwareEvidencePath
