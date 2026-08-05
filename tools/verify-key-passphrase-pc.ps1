@@ -268,7 +268,7 @@ function Write-BehaviorEvidence {
         input = [ordered]@{
             commandInjection = 'device-paced-raw-physical-key-events-with-structured-result'
             secretInjection = 'device-paced-runtime-generated-printable-ascii'
-            deviceProgramIntervalMilliseconds = 250
+            deviceProgramIntervalMilliseconds = 500
             fixedDelayUsedAsVerdict = $false
         }
         checks = @($checks)

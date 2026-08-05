@@ -80,7 +80,7 @@ Assert-Throws -Action {
         -Text 'echo LEANTTY_SMOKE'
     $expectedCommand = ConvertTo-LeanTTYDeviceTextKeyCommand `
         -Text 'echo LEANTTY_SMOKE' `
-        -IntervalMilliseconds 250
+        -IntervalMilliseconds 500
     Assert-True (
         $script:capturedHdcCalls.Count -eq 1 -and
         $script:capturedHdcCalls[0].Count -eq 4 -and
@@ -152,7 +152,7 @@ Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
-    $deviceRegressionText -match '-IntervalMilliseconds 250(?:\s|$)'
+    $deviceRegressionText -match '-IntervalMilliseconds 500(?:\s|$)'
 ) 'Device raw-key text injection does not use native device pacing for modifier transitions'
 Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
@@ -355,7 +355,7 @@ foreach ($scriptName in @(
             $content.Contains('Set-LeanTTYTerminalInputFocus') -and
             $content.Contains('businessOutcomeRequired = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false') -and
-            $content.Contains('deviceProgramIntervalMilliseconds = 250')
+            $content.Contains('deviceProgramIntervalMilliseconds = 500')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
@@ -417,7 +417,7 @@ $deviceRegressionText = Get-Content -LiteralPath (
 ) -Raw
 Assert-True (
     $deviceRegressionText.Contains("return 't' + [Guid]::NewGuid()") -and
-    $deviceRegressionText.Contains('-IntervalMilliseconds 250')
+    $deviceRegressionText.Contains('-IntervalMilliseconds 500')
 ) 'Device secret injection is not restricted to stable lowercase input with conservative pacing'
 
 $repoRoot = Split-Path $PSScriptRoot -Parent

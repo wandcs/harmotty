@@ -403,7 +403,7 @@ function Invoke-LeanTTYDeviceText {
 
     $shellCommand = ConvertTo-LeanTTYDeviceTextKeyCommand `
         -Text $Text `
-        -IntervalMilliseconds 250
+        -IntervalMilliseconds 500
     & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
 }
