@@ -134,17 +134,23 @@ function Complete-BehaviorStage {
 function Submit-Command {
     param([Parameter(Mandatory = $true)][string]$Command)
 
-    Submit-LeanTTYDeviceCommand `
+    Invoke-LeanTTYObservedDeviceText `
         -Hdc $hdc `
         -Target $Target `
-        -Command $Command
+        -ProcessId $appPid `
+        -Text $Command
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
 }
 
 function Submit-Secret {
     param([string]$Value = '')
 
     if (-not [string]::IsNullOrEmpty($Value)) {
-        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
+        Invoke-LeanTTYObservedDeviceText `
+            -Hdc $hdc `
+            -Target $Target `
+            -ProcessId $appPid `
+            -Text $Value
         $layoutPath = Join-Path $EvidenceDirectory (
             'layout-secret-' + [Guid]::NewGuid().ToString('N') + '.json'
         )
@@ -248,8 +254,10 @@ function Write-BehaviorEvidence {
             failure = $awakeLeaseFailure
         }
         input = [ordered]@{
-            commandInjection = 'raw-physical-key-events-with-structured-result'
-            secretInjection = 'runtime-generated-printable-ascii'
+            commandInjection = 'receipt-confirmed-raw-physical-key-events'
+            secretInjection = 'receipt-confirmed-runtime-generated-printable-ascii'
+            receiptTimeoutSeconds = 3
+            maxAttemptsPerCharacter = 2
             fixedDelayUsedAsVerdict = $false
         }
         checks = @($checks)
@@ -374,7 +382,11 @@ try {
     Start-BehaviorStage -Name 'ctrl-c-cancelled-and-cleared-secret-input'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
-    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $secretB
+    Invoke-LeanTTYObservedDeviceText `
+        -Hdc $hdc `
+        -Target $Target `
+        -ProcessId $appPid `
+        -Text $secretB
     $cancelLayoutPath = Join-Path $EvidenceDirectory 'layout-cancel-secret.json'
     $cancelLayout = Get-LeanTTYDeviceLayout `
         -Hdc $hdc `

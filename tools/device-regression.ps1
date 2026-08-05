@@ -279,7 +279,10 @@ function Assert-LeanTTYLayoutExcludesValues {
 }
 
 function ConvertTo-LeanTTYDeviceTextKeyCommand {
-    param([Parameter(Mandatory = $true)][string]$Text)
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [ValidateRange(0, 1000)][int]$IntervalMilliseconds = 0
+    )
 
     if ($Text -notmatch '^[\x20-\x7E]*$') {
         throw 'Device regression text must be printable ASCII'
@@ -321,6 +324,9 @@ function ConvertTo-LeanTTYDeviceTextKeyCommand {
     }
     $parts = [Collections.Generic.List[string]]::new()
     $parts.Add('uinput -K')
+    if ($IntervalMilliseconds -gt 0) {
+        $parts.Add("-i $IntervalMilliseconds")
+    }
     foreach ($character in $Text.ToCharArray()) {
         $ascii = [int]$character
         $keyCode = 0
@@ -355,16 +361,75 @@ function Invoke-LeanTTYDeviceText {
         [Parameter(Mandatory = $true)][string]$Text
     )
 
-    $chunkSize = 1
-    for ($offset = 0; $offset -lt $Text.Length; $offset += $chunkSize) {
-        $length = [Math]::Min($chunkSize, $Text.Length - $offset)
-        $chunk = $Text.Substring($offset, $length)
-        $shellCommand = ConvertTo-LeanTTYDeviceTextKeyCommand -Text $chunk
-        & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
-        if ($offset + $length -lt $Text.Length) {
-            Start-Sleep -Milliseconds 100
+    $shellCommand = ConvertTo-LeanTTYDeviceTextKeyCommand `
+        -Text $Text `
+        -IntervalMilliseconds 100
+    & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
+}
+
+function Invoke-LeanTTYObservedDeviceText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][string]$ProcessId,
+        [Parameter(Mandatory = $true)][string]$Text,
+        [ValidateRange(1, 10)][int]$ReceiptTimeoutSeconds = 3,
+        [ValidateRange(1, 3)][int]$MaxAttemptsPerCharacter = 2
+    )
+
+    Clear-LeanTTYAppLogs -Hdc $Hdc -Target $Target
+    $receivedCharacters = 0
+    foreach ($character in $Text.ToCharArray()) {
+        $expectedCharacters = $receivedCharacters + 1
+        $characterReceived = $false
+        for ($attempt = 1; $attempt -le $MaxAttemptsPerCharacter; $attempt++) {
+            if ($attempt -gt 1) {
+                $logs = Get-LeanTTYAppLogs `
+                    -Hdc $Hdc `
+                    -Target $Target `
+                    -ProcessId $ProcessId
+                $observedCharacters = [regex]::Matches(
+                    $logs,
+                    'D: 1 chars, mode=\d+'
+                ).Count
+                if ($observedCharacters -gt $expectedCharacters) {
+                    throw 'HarmonyOS raw key injection produced duplicate character receipts'
+                }
+                if ($observedCharacters -eq $expectedCharacters) {
+                    $characterReceived = $true
+                    break
+                }
+            }
+            Invoke-LeanTTYDeviceText `
+                -Hdc $Hdc `
+                -Target $Target `
+                -Text $character.ToString()
+            $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+            do {
+                $logs = Get-LeanTTYAppLogs `
+                    -Hdc $Hdc `
+                    -Target $Target `
+                    -ProcessId $ProcessId
+                $observedCharacters = [regex]::Matches(
+                    $logs,
+                    'D: 1 chars, mode=\d+'
+                ).Count
+                if ($observedCharacters -gt $expectedCharacters) {
+                    throw 'HarmonyOS raw key injection produced duplicate character receipts'
+                }
+                if ($observedCharacters -eq $expectedCharacters) {
+                    $characterReceived = $true
+                    break
+                }
+                Start-Sleep -Milliseconds 50
+            } while ($stopwatch.Elapsed.TotalSeconds -lt $ReceiptTimeoutSeconds)
+            if ($characterReceived) { break }
         }
+        if (-not $characterReceived) {
+            throw 'Timed out waiting for a HarmonyOS raw key character receipt'
+        }
+        $receivedCharacters = $expectedCharacters
     }
 }
 

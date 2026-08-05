@@ -78,20 +78,17 @@ Assert-Throws -Action {
         -Hdc 'Invoke-FakeHdc' `
         -Target 'regression-device' `
         -Text 'echo LEANTTY_SMOKE'
-    $expectedChunks = @('echo LEANTTY_SMOKE'.ToCharArray() | ForEach-Object { $_.ToString() })
+    $expectedCommand = ConvertTo-LeanTTYDeviceTextKeyCommand `
+        -Text 'echo LEANTTY_SMOKE' `
+        -IntervalMilliseconds 100
     Assert-True (
-        $script:capturedHdcCalls.Count -eq $expectedChunks.Count -and
+        $script:capturedHdcCalls.Count -eq 1 -and
         $script:capturedHdcCalls[0].Count -eq 4 -and
         $script:capturedHdcCalls[0][0] -eq '-t' -and
         $script:capturedHdcCalls[0][1] -eq 'regression-device' -and
         $script:capturedHdcCalls[0][2] -eq 'shell' -and
-        $script:capturedHdcCalls[0][3] -eq (
-            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[0]
-        ) -and
-        $script:capturedHdcCalls[-1][3] -eq (
-            ConvertTo-LeanTTYDeviceTextKeyCommand -Text $expectedChunks[-1]
-        )
-    ) 'Device text injection did not preserve and pace the requested echo command'
+        $script:capturedHdcCalls[0][3] -eq $expectedCommand
+    ) 'Device text injection did not use one device-paced raw-key command'
 }
 
 & {
@@ -115,6 +112,65 @@ Assert-Throws -Action {
         $script:submittedKeyCodes.Count -eq 1 -and
         $script:submittedKeyCodes[0] -eq 2054
     ) 'Device command submission did not inject raw text before pressing Enter'
+}
+
+& {
+    $script:observedCharacters = [Collections.Generic.List[string]]::new()
+    $script:logClears = 0
+    function Clear-LeanTTYAppLogs {
+        param($Hdc, $Target)
+        $script:logClears++
+    }
+    function Invoke-LeanTTYDeviceText {
+        param($Hdc, $Target, $Text)
+        $script:observedCharacters.Add($Text)
+    }
+    function Get-LeanTTYAppLogs {
+        param($Hdc, $Target, $ProcessId)
+        return (($script:observedCharacters | ForEach-Object {
+            'D: 1 chars, mode=6'
+        }) -join "`n")
+    }
+
+    Invoke-LeanTTYObservedDeviceText `
+        -Hdc 'unused' `
+        -Target 'unused' `
+        -ProcessId '123' `
+        -Text 'ssx'
+    Assert-True (
+        $script:logClears -eq 1 -and
+        $script:observedCharacters.Count -eq 3 -and
+        ($script:observedCharacters -join '') -eq 'ssx'
+    ) 'Observed device text did not require one receipt-confirmed event per character'
+}
+
+& {
+    $script:injectionAttempts = 0
+    $script:receiptCount = 0
+    function Clear-LeanTTYAppLogs { param($Hdc, $Target) }
+    function Invoke-LeanTTYDeviceText {
+        param($Hdc, $Target, $Text)
+        $script:injectionAttempts++
+        if ($script:injectionAttempts -ge 2) { $script:receiptCount++ }
+    }
+    function Get-LeanTTYAppLogs {
+        param($Hdc, $Target, $ProcessId)
+        if ($script:receiptCount -eq 0) { return '' }
+        return ((1..$script:receiptCount | ForEach-Object {
+            'D: 1 chars, mode=0'
+        }) -join "`n")
+    }
+
+    Invoke-LeanTTYObservedDeviceText `
+        -Hdc 'unused' `
+        -Target 'unused' `
+        -ProcessId '123' `
+        -Text 's' `
+        -ReceiptTimeoutSeconds 1 `
+        -MaxAttemptsPerCharacter 2
+    Assert-True (
+        $script:injectionAttempts -eq 2 -and $script:receiptCount -eq 1
+    ) 'Observed device text did not recover one dropped raw-key event without duplication'
 }
 
 $submitCommandParameters = (Get-Command Submit-LeanTTYDeviceCommand).Parameters.Keys
@@ -155,8 +211,8 @@ Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
-    $deviceRegressionText -match 'Start-Sleep -Milliseconds 100(?:\s|$)'
-) 'Device raw-key text injection does not leave enough time for ArkUI to consume modifier transitions'
+    $deviceRegressionText -match '-IntervalMilliseconds 100(?:\s|$)'
+) 'Device raw-key text injection does not use native device pacing for modifier transitions'
 Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
     $deviceRegressionText -match 'shell\s+-b\s+com\.leantty\.app'
@@ -313,7 +369,7 @@ foreach ($scriptName in @(
             $content.Contains('Focus-ActiveCommandInput') -and
             $content.Contains('businessOutcomeRequired = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false') -and
-            $content.Contains('interChunkPacingMilliseconds = 100')
+            $content.Contains("perCharacterReceipt = 'structured-length-only-application-log'")
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
@@ -375,7 +431,7 @@ $deviceRegressionText = Get-Content -LiteralPath (
 ) -Raw
 Assert-True (
     $deviceRegressionText.Contains("return 't' + [Guid]::NewGuid()") -and
-    $deviceRegressionText.Contains('Start-Sleep -Milliseconds 100')
+    $deviceRegressionText.Contains('-IntervalMilliseconds 100')
 ) 'Device secret injection is not restricted to stable lowercase input with conservative pacing'
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
