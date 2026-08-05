@@ -14,26 +14,15 @@
 
 ## 当前完成定义
 
-1. 完成公共检查、干净 ARM64 构建和物理 HarmonyOS PC 集成矩阵。
-2. 按版本与发布流程准备确切 1.1.0 候选；生产验证前不创建版本标签，GitHub Release
-   完成前不提交 AppGallery。
+使用同版本生产 APP、新应用介绍和版本更新说明提交 AppGallery；任何审核失败都顺延到
+下一 PATCH 版本。
 
-验收可以使用测试包中克制、明确且对应具体门禁的专用入口；入口只触发生产事件链，
-并须由编译期常量控制且在正式包中完成分支裁剪。不得用模拟结果替代真机行为。
+## 1. 1.1 AppGallery 提交
 
-## 1. 1.1 集成与发布准备门禁
-
-本节是 1.1 唯一的全量测试时点；此前各功能迭代与缺陷修复只执行改动相关验证和可快速
-完成的最小主路径冒烟。
-
-- [ ] 运行公共测试、Rust 格式检查、`git diff --check` 和干净 ARM64 native/debug HAP
-  构建；可靠性修复、认证与导航保持可定位、可裁剪的边界。
-- [ ] 在物理 ARM64 HarmonyOS PC 上完成认证、键盘、焦点、Tab、双 Pane、剪贴板、
-  窗口、持久资产、密钥导出、密钥口令修改、known-hosts 查询/删除、命令错误边界、
-  常见 Shell/TUI、休眠、renderer 重建、断线和重连矩阵。
-- [ ] 按 [`versioning.md`](versioning.md) 与 [`release-process.md`](release-process.md)
-  准备确切 1.1.0 候选；生产验证后创建不可变标签并完成 GitHub Release，再提交同版本
-  AppGallery；任何审核失败都顺延到下一 PATCH 版本，不复用失败版本。
+- [ ] 确认 AppGallery 应用记录及上一版本审核已处于终态，上传与已发布
+  [`v1.1.0`](https://github.com/wandcs/leantty/releases/tag/v1.1.0) GitHub Release 对应的
+  同版本生产 APP，并只更新应用介绍和版本更新说明。本次不新增或替换截图、MP4 和提交
+  备注；记录 GitHub Release、标签、commit、包体哈希和商店提交状态的对应关系。
 
 ## 当前不活动
 

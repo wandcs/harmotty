@@ -13,15 +13,18 @@ Version 1.0.0 was rejected by Huawei AppGallery Connect because the former
 application name contained an unauthorized trademark; it was never published.
 [LeanTTY 1.0.1](https://github.com/wandcs/leantty/releases/tag/v1.0.1) passed
 AppGallery review and became the first public release on 2026-07-28.
+[LeanTTY 1.1.0](https://github.com/wandcs/leantty/releases/tag/v1.1.0) was
+published on GitHub on 2026-08-05; its AppGallery submission is pending.
 
 The `main` branch can contain behavior listed under `CHANGELOG.md` →
 `Unreleased`. Source-tree documentation marks that applicability explicitly;
 do not assume an unreleased command is present in the AppGallery version.
 
-The immutable `v1.0.0` and `v1.0.1` tags record the rejected submission and
-first published release respectively. Exact submitted-source mapping, artifact
-hashes and signing verification remain in the private release evidence archive.
-No signing credential or generated application package is stored in Git.
+The immutable `v1.0.0`, `v1.0.1` and `v1.1.0` tags record the rejected former
+identity, first AppGallery release and current GitHub release respectively.
+Exact submitted-source mapping, artifact hashes and signing verification remain
+in the private release evidence archive. No signing credential or generated
+application package is stored in Git.
 
 ## Features
 
