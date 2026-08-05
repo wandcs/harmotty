@@ -4,6 +4,21 @@
 
 ### Development
 
+- Added fixed workspace keyboard navigation: `Ctrl+Tab` and
+  `Ctrl+Shift+Tab` cycle connected tabs in visual order while restoring each
+  tab's active Pane, and `Ctrl+Alt+Left/Right` focuses the corresponding Pane
+  only when a split exists. Exact modifier matching preserves ordinary terminal
+  input and single-Pane pass-through.
+- Extended the repository-only SSH fixture with exact input-byte reporting for
+  workspace navigation acceptance. A three-tab, dual-Pane physical-PC matrix
+  verifies forward/reverse wrapping, active-Pane restoration and plain Tab or
+  single-Pane shortcut delivery without adding production HAP logic.
+- Added an explicit diagnostic-HAP mode to physical SSH authentication
+  verification. Diagnostic evidence is marked unretained and can never promote
+  a release candidate; static checks guard command-history and Preferences
+  boundaries, while an opt-in physical check compares in-memory Preferences
+  digests before and after authentication without reading content or persisting
+  either digest.
 - Added a retained-candidate physical-PC SSH authentication harness for direct
   password, password-to-keyboard-interactive mixed echo, multi-round wrong-answer
   recovery, unencrypted/encrypted public keys, key-to-password and
@@ -76,7 +91,11 @@
 - Added owner-isolated persistent custody for SSH configuration, verified key
   pairs, trusted host keys, terminal font size and window geometry so the same
   application identity can rematerialize them after a normal uninstall and
-  reinstall without exposing a backup or restore workflow.
+  reinstall without exposing a backup or restore workflow. Physical ARM64
+  HarmonyOS PC validation covers Ed25519 and RSA-4096 keys with and without
+  passphrases, OpenSSH config, `known_hosts`, font and window state, explicit
+  deletion, lock and system-reboot continuity, owner reinstall after a
+  different-signature package boundary, and verified disposable-state cleanup.
 - Added a fail-fast AppGallery release preflight and a single build, comparison
   and archive command that keeps production upload artifacts separate from the
   test-signed HAP used for device acceptance and review media.
@@ -86,12 +105,21 @@
 
 ### Fixed
 
+- Preserved the visible terminal and scrollback when SSH closes by delivering
+  final PTY bytes and the close event through one ordered native callback before
+  the disconnected prompt and terminal checkpoint.
 - Enabled the existing `russh` RSA feature so the advertised RSA-4096 key
   generation and passphrase-change paths use the supported implementation
   instead of failing with an unknown-algorithm error.
+- Moved CPU-bound SSH key generation from the ArkUI event thread to an
+  asynchronous native worker, preventing the system not-responding dialog
+  during RSA-4096 generation while keeping the terminal menu interactive.
 - Added bounded session-memory checkpoints so a terminal surface rebuilt after
   the app enters the background can recover its screen and scrollback even when
-  SSH disconnects; physical ARM64 PC lifecycle validation remains pending.
+  SSH disconnects. Physical ARM64 PC validation now covers long sleep with a
+  disconnect, renderer reconstruction without replayed side effects, and the
+  absence of terminal-content recovery after process termination or a normal
+  uninstall and reinstall.
 - Ended accepted SSH host-key confirmation input with a new line before showing
   the next authentication prompt.
 - Added OpenSSH-compatible `ssh-keygen -R` host-record removal and made changed
@@ -100,6 +128,10 @@
 - Accepted the default OSC 52 clipboard selector emitted when tmux mouse
   selection ends, allowing the standard `MouseDragEnd1Pane` copy path to reach
   the HarmonyOS system clipboard without Shift or a second right-click.
+  Physical ARM64 HarmonyOS PC validation covers exact tmux-buffer/system-
+  clipboard agreement with `set-clipboard external/on`, `Ms`, Chinese and
+  multiline text, tmux touchpad scrolling and TUI mouse input, Shift-drag local
+  copy followed by `Ctrl+C`, and ordinary terminal selection.
 
 ### Documentation
 

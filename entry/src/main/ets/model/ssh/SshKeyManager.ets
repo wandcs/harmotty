@@ -71,7 +71,7 @@ export class SshKeyManager {
     if (FileUtils.fileExists(targetPath) || FileUtils.fileExists(targetPath + '.pub')) {
       throw new Error('Key already exists: ' + keyName)
     }
-    let json: string = sshNative.sshGenerateKeyPair(algoStr, passphrase, sshDir, keyName, comment)
+    let json: string = await sshNative.sshGenerateKeyPair(algoStr, passphrase, sshDir, keyName, comment)
     let parsed: Record<string, string> = SshKeyManager.validateKeyGenResult(json)
     let result: KeyGenerationResult = new KeyGenerationResult()
     result.privateKey.algorithm = algo

@@ -155,6 +155,9 @@ Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
+    $deviceRegressionText -match 'Start-Sleep -Milliseconds 50(?:\s|$)'
+) 'Device raw-key text injection does not leave enough time for ArkUI to consume modifier transitions'
+Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
     $deviceRegressionText -match 'shell\s+-b\s+com\.leantty\.app'
 ) 'Device key-state inspection does not use the HarmonyOS bundle shell'
@@ -301,13 +304,21 @@ foreach ($scriptName in @(
             -not $content.Contains("SessionViewModel: D: 1 chars, mode=") -and
             $content.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
             $content.Contains('Submit-FocusedDeviceCommand') -and
+            $content.Contains('Assert-AuthCommandLoopbackTarget') -and
+            $content.Contains("'[environment] Device key injection changed the SSH command target'") -and
             $content.Contains('Activate-RegressionWindow') -and
             $content.Contains('Focus-ActiveCommandInput') -and
             $content.Contains('businessOutcomeRequired = $true') -and
-            $content.Contains('fixedDelayUsedAsVerdict = $false')
+            $content.Contains('fixedDelayUsedAsVerdict = $false') -and
+            $content.Contains('interChunkPacingMilliseconds = 50')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
+            $content.Contains('[switch]$DiagnosticHap') -and
+            $content.Contains('[switch]$VerifyPreferencesUnchanged') -and
+            $content.Contains('-DiagnosticHap requires an explicit -HapPath') -and
+            $content.Contains("provenance = 'explicit-unretained-diagnostic-hap'") -and
+            $content.Contains("`$runMode = if (`$Only.Count -eq 0 -and -not `$DiagnosticHap)") -and
             $content.Contains("runMode = `$runMode") -and
             $content.Contains("failureDomain = `$failureDomain") -and
             $content.Contains('attemptId = $attemptId') -and
@@ -319,6 +330,15 @@ foreach ($scriptName in @(
             $content.Contains("'diagnostic'") -and
             $content.Contains("'acceptance'")
         ) 'SSH authentication harness lacks targeted diagnostics or auditable live evidence'
+        Assert-True (
+            $content.Contains('Get-LeanTTYPreferencesDigest') -and
+            $content.Contains('sha256sum $preferencesPath') -and
+            $content.Contains('contentReadOrExported = $false') -and
+            $content.Contains('digestPersisted = $false') -and
+            $content.Contains('unchanged = $preferencesDigestUnchanged') -and
+            -not $content.Contains('beforeDigest =') -and
+            -not $content.Contains('afterDigest =')
+        ) 'SSH authentication harness does not compare Preferences safely without persisting digests'
         Assert-True (
             $content.Contains("'password-success'") -and
             $content.Contains("'password-then-keyboard-interactive-mixed-echo'") -and

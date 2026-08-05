@@ -9,7 +9,7 @@ import { ChromeBar } from '../view/components/ChromeBar'
 import { TerminalPane } from '../view/components/TerminalPane'
 import webview from '@ohos.web.webview'
 import { common } from '@kit.AbilityKit'
-import { InteractionPolicy } from '../model/ui/InteractionPolicy'
+import { InteractionPolicy, WorkspaceNavigationAction } from '../model/ui/InteractionPolicy'
 import { UserPreferences } from '../model/settings/UserPreferences'
 import { TerminalSurfaceController } from '../model/terminal/TerminalSurfaceController'
 import { BrowserLauncher } from '../model/browser/BrowserLauncher'
@@ -617,11 +617,33 @@ struct Index {
     }
     let ctrlKey: boolean = false
     let shiftKey: boolean = false
+    let altKey: boolean = false
     if (event.getModifierKeyState) {
       ctrlKey = event.getModifierKeyState(['Ctrl'])
       shiftKey = event.getModifierKeyState(['Shift'])
+      altKey = event.getModifierKeyState(['Alt'])
     } else {
       ctrlKey = (event.metaKey & 1) !== 0
+    }
+
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+      event.keyCode, ctrlKey, altKey, shiftKey)
+    if (navigationAction === WorkspaceNavigationAction.NEXT_TAB ||
+      navigationAction === WorkspaceNavigationAction.PREVIOUS_TAB) {
+      let direction: number = navigationAction === WorkspaceNavigationAction.PREVIOUS_TAB ? -1 : 1
+      let targetIndex: number = InteractionPolicy.wrappedTabIndex(
+        this.activeTabIndex, this.tabs.length, direction)
+      if (targetIndex >= 0 && targetIndex !== this.activeTabIndex) {
+        this.selectTab(targetIndex)
+      }
+      return true
+    }
+    let activeTab: TabInfo | null = this.activeTab()
+    let paneIndex: number = InteractionPolicy.workspacePaneIndex(
+      navigationAction, activeTab === null ? 0 : activeTab.panes.length)
+    if (activeTab !== null && paneIndex >= 0) {
+      this.focusPane(activeTab.panes[paneIndex].id, true)
+      return true
     }
 
     if (ctrlKey && shiftKey && event.keyCode === 2036) {

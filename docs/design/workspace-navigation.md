@@ -1,10 +1,10 @@
 # 工作区键盘导航技术方案
 
-> 状态：Implementing（Tab）；WIP（Pane），Pane 快捷键等待真机前置门禁
+> 状态：Implemented；已通过针对性自动化与物理机主路径验证
 >
 > 目标 milestone：1.1.0
 >
-> 更新日期：2026-08-03
+> 更新日期：2026-08-05
 >
 > 上位规则：[`project-principles.md`](../project-principles.md)
 >
@@ -97,13 +97,17 @@ Tab 切换复用 `selectTab(index)`；Pane 切换复用
 - 不采用 `Alt+Left/Right` 或 `Ctrl+Shift+Left/Right`。
 - 不增加自定义快捷键、MRU 模式或通用动作框架。
 
-## 待验证
+## 已完成验证与证据边界
 
-- `Ctrl+Shift+Tab` 是否在中英文输入法下稳定，不意外切换输入法。
-- `Ctrl+Alt+Left/Right` 是否由 HarmonyOS 稳定交给应用，不触发系统动作。
-- 内置键盘、常见 Windows 外接键盘和可得的 Mac 键盘修饰键映射。
-- 单 Pane 透传和双 Pane 拦截在 Shell、vim、tmux、less 等场景中的实际字节行为。
-- 焦点、隐藏终端输入组件、选择、复制粘贴和重连后的唯一活动 Pane。
+- 纯策略测试覆盖精确组合、额外/缺少修饰键、零/单/多 Tab、首尾回绕、单双 Pane
+  消费规则和活动 Pane 索引，共同随当前 ArkTS 测试运行。
+- 物理 ARM64 HarmonyOS PC 前置门禁确认 `Ctrl+Alt+Left/Right` 到达 SSH 终端时分别为
+  `1b 5b 31 3b 37 44` / `1b 5b 31 3b 37 43`，未触发系统动作，因此保留 Pane 导航。
+- 物理机三连接 Tab、双 Pane 场景已验证正反向首尾循环、目标 Tab 活动 Pane 恢复、
+  单 Pane 组合透传以及普通 Tab 的 `09` 字节透传。诊断证据位于
+  `build/verification/workspace-navigation-20260804T202847035Z/`。
+- 中英文输入法、不同外接键盘、vim/tmux/less、选择与剪贴板、断线与重连的组合矩阵
+  留到正式 1.1 候选的唯一全量发布门禁，不在日常功能迭代中重复执行。
 
 ## 验证门禁
 

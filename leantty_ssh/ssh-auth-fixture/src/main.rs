@@ -21,6 +21,9 @@ const USER_PUBLICKEY_KBDINT: &str = "publickey-kbdint";
 const USER_KBDINT_MULTIROUND: &str = "kbdint-multiround";
 const USER_KBDINT_ZERO: &str = "kbdint-zero";
 const USER_UNSUPPORTED: &str = "unsupported";
+const USER_NAVIGATION: &str = "navigation";
+const USER_NAVIGATION_TWO: &str = "navigation-two";
+const USER_NAVIGATION_THREE: &str = "navigation-three";
 
 #[derive(Clone)]
 struct Credentials {
@@ -89,6 +92,7 @@ enum Scenario {
     KeyboardInteractiveMultiRound,
     KeyboardInteractiveZeroPrompt,
     UnsupportedMethod,
+    Navigation,
 }
 
 impl Scenario {
@@ -102,6 +106,7 @@ impl Scenario {
             USER_KBDINT_MULTIROUND => Some(Self::KeyboardInteractiveMultiRound),
             USER_KBDINT_ZERO => Some(Self::KeyboardInteractiveZeroPrompt),
             USER_UNSUPPORTED => Some(Self::UnsupportedMethod),
+            USER_NAVIGATION | USER_NAVIGATION_TWO | USER_NAVIGATION_THREE => Some(Self::Navigation),
             _ => None,
         }
     }
@@ -119,6 +124,7 @@ struct FixtureServer {
     public_key_complete: bool,
     password_complete: bool,
     interactive_round: InteractiveRound,
+    session_scenario: Option<Scenario>,
 }
 
 impl FixtureServer {
@@ -128,6 +134,7 @@ impl FixtureServer {
             public_key_complete: false,
             password_complete: false,
             interactive_round: InteractiveRound::NotStarted,
+            session_scenario: None,
         }
     }
 
@@ -158,7 +165,10 @@ impl FixtureServer {
 
         eprintln!("auth method=password scenario={scenario:?} result=matched");
         match scenario {
-            Scenario::Password => Auth::Accept,
+            Scenario::Password | Scenario::Navigation => {
+                self.session_scenario = Some(scenario);
+                Auth::Accept
+            }
             Scenario::PasswordKeyboardInteractive => {
                 self.password_complete = true;
                 Self::reject(&[MethodKind::KeyboardInteractive], true)
@@ -283,7 +293,9 @@ impl FixtureServer {
 impl Scenario {
     fn initial_methods(self) -> Vec<MethodKind> {
         match self {
-            Self::Password | Self::PasswordKeyboardInteractive => vec![MethodKind::Password],
+            Self::Password | Self::PasswordKeyboardInteractive | Self::Navigation => {
+                vec![MethodKind::Password]
+            }
             Self::PublicKey | Self::PublicKeyPassword | Self::PublicKeyKeyboardInteractive => {
                 vec![MethodKind::PublicKey]
             }
@@ -422,9 +434,24 @@ impl Handler for FixtureServer {
             session.close(channel)?;
             return Ok(());
         }
+        if self.session_scenario == Some(Scenario::Navigation) {
+            let captured = format!(
+                "\r\nLEANTTY_INPUT_HEX:{}\r\nfixture> ",
+                format_input_hex(data)
+            );
+            session.data(channel, captured.into_bytes())?;
+            return Ok(());
+        }
         session.data(channel, data.to_vec())?;
         Ok(())
     }
+}
+
+fn format_input_hex(data: &[u8]) -> String {
+    data.iter()
+        .map(|value| format!("{value:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 struct Arguments {
@@ -502,7 +529,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::id()
     );
     println!(
-        "users={USER_PASSWORD},{USER_PUBLICKEY},{USER_PASSWORD_KBDINT},{USER_PUBLICKEY_PASSWORD},{USER_PUBLICKEY_KBDINT},{USER_KBDINT_MULTIROUND},{USER_KBDINT_ZERO},{USER_UNSUPPORTED}"
+        "users={USER_PASSWORD},{USER_PUBLICKEY},{USER_PASSWORD_KBDINT},{USER_PUBLICKEY_PASSWORD},{USER_PUBLICKEY_KBDINT},{USER_KBDINT_MULTIROUND},{USER_KBDINT_ZERO},{USER_UNSUPPORTED},{USER_NAVIGATION},{USER_NAVIGATION_TWO},{USER_NAVIGATION_THREE}"
     );
     running.await?;
     Ok(())
@@ -545,6 +572,21 @@ mod tests {
 
         let mut fixture = FixtureServer::new(credentials());
         assert_accept(fixture.public_key(USER_PUBLICKEY));
+
+        let mut fixture = FixtureServer::new(credentials());
+        assert_accept(fixture.password(USER_NAVIGATION, "password-value"));
+        assert_eq!(fixture.session_scenario, Some(Scenario::Navigation));
+
+        let mut fixture = FixtureServer::new(credentials());
+        assert_accept(fixture.password(USER_NAVIGATION_TWO, "password-value"));
+        let mut fixture = FixtureServer::new(credentials());
+        assert_accept(fixture.password(USER_NAVIGATION_THREE, "password-value"));
+    }
+
+    #[test]
+    fn formats_navigation_input_as_lowercase_hex() {
+        assert_eq!(format_input_hex(b"\x1b[1;7D"), "1b 5b 31 3b 37 44");
+        assert_eq!(format_input_hex(b"\t"), "09");
     }
 
     #[test]

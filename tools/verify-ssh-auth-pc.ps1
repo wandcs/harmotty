@@ -1,16 +1,23 @@
 <#
 .SYNOPSIS
-  Verify interactive SSH authentication on the retained HarmonyOS PC candidate.
+  Verify interactive SSH authentication on a HarmonyOS PC test package.
 .DESCRIPTION
   Starts the repository-only SSH fixture with temporary credentials, maps one
   device loopback port to it, drives LeanTTY through raw keyboard events, and
-  records non-secret behavior evidence. The retained HAP is installed without
-  rebuilding, and all temporary credentials and port mappings are removed.
+  records non-secret behavior evidence. By default, the retained HAP is
+  installed without rebuilding. -DiagnosticHap permits an explicit current
+  test package without promoting its evidence to a retained release candidate.
+  -VerifyPreferencesUnchanged compares an in-memory SHA-256 before and after
+  the selected authentication stages without reading, exporting or persisting
+  the Preferences content or digest.
+  All temporary credentials and port mappings are removed.
 #>
 [CmdletBinding()]
 param(
     [string]$Target = '',
     [string]$HapPath = '',
+    [switch]$DiagnosticHap,
+    [switch]$VerifyPreferencesUnchanged,
     [string]$EvidenceDirectory = '',
     [string]$CandidateBasePath = '',
     [string]$UnlockPasswordPath = '',
@@ -66,7 +73,25 @@ $candidateRoot = Get-LeanTTYCandidateRoot `
     -RepoRoot $repoRoot `
     -CandidateBasePath $CandidateBasePath
 $candidateRecords = @(Get-LeanTTYCandidateRecords -CandidateRoot $candidateRoot)
-if ([string]::IsNullOrWhiteSpace($HapPath)) {
+$harnessDifferencePaths = @()
+if ($DiagnosticHap) {
+    if ([string]::IsNullOrWhiteSpace($HapPath)) {
+        throw '-DiagnosticHap requires an explicit -HapPath'
+    }
+    $resolvedHap = [IO.Path]::GetFullPath($HapPath)
+    if (-not (Test-Path -LiteralPath $resolvedHap -PathType Leaf)) {
+        throw "Diagnostic HAP is missing: $resolvedHap"
+    }
+    $candidate = [pscustomobject][ordered]@{
+        sha256 = (Get-FileHash -LiteralPath $resolvedHap -Algorithm SHA256).Hash.ToLowerInvariant()
+        hapPath = $resolvedHap
+        gitCommit = $null
+        gitTree = $null
+        gitDirty = $null
+        retained = $false
+        provenance = 'explicit-unretained-diagnostic-hap'
+    }
+} elseif ([string]::IsNullOrWhiteSpace($HapPath)) {
     $candidate = $candidateRecords | Select-Object -First 1
     if ($null -eq $candidate) { throw 'No retained candidate exists; run tools/verify-pc.ps1 first' }
 } else {
@@ -78,23 +103,25 @@ if ([string]::IsNullOrWhiteSpace($HapPath)) {
     $candidate = $candidateRecords | Where-Object { $_.sha256 -eq $requestedHash } | Select-Object -First 1
     if ($null -eq $candidate) { throw 'The selected HAP is not a retained verified candidate' }
 }
-if ($candidate.gitDirty) {
-    throw 'SSH authentication evidence requires a clean committed candidate'
+if (-not $DiagnosticHap) {
+    if ($candidate.gitDirty) {
+        throw 'SSH authentication evidence requires a clean committed candidate'
+    }
+    $harnessDifferencePaths = @(Assert-LeanTTYCandidateHarnessCompatibility `
+        -RepoRoot $repoRoot `
+        -Candidate $candidate `
+        -AllowedHarnessPaths @(
+            'tools/verify-ssh-auth-pc.ps1',
+            'tools/device-regression.ps1',
+            'tools/test-device-regression.ps1',
+            'tools/candidate-store.ps1',
+            'tools/package-policy.ps1',
+            'tools/test-build-workflows.ps1',
+            'docs/quality-strategy.md',
+            'docs/design/ssh-authentication.md',
+            'docs/dev-environment.md'
+        ))
 }
-$harnessDifferencePaths = @(Assert-LeanTTYCandidateHarnessCompatibility `
-    -RepoRoot $repoRoot `
-    -Candidate $candidate `
-    -AllowedHarnessPaths @(
-        'tools/verify-ssh-auth-pc.ps1',
-        'tools/device-regression.ps1',
-        'tools/test-device-regression.ps1',
-        'tools/candidate-store.ps1',
-        'tools/package-policy.ps1',
-        'tools/test-build-workflows.ps1',
-        'docs/quality-strategy.md',
-        'docs/design/ssh-authentication.md',
-        'docs/dev-environment.md'
-    ))
 
 if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
     $EvidenceDirectory = Join-Path $repoRoot (
@@ -140,11 +167,14 @@ $fixtureProcessAbsent = $false
 $failure = ''
 $scenarioResult = 'failed'
 $caughtError = $null
+$preferencesDigestBefore = ''
+$preferencesDigestAfter = ''
+$preferencesDigestUnchanged = $null
 $stageStartedAt = $null
 $currentStage = 'initialization'
 $failureDomain = 'none'
 $attemptId = [Guid]::NewGuid().ToString('N')
-$runMode = if ($Only.Count -eq 0) { 'acceptance' } else { 'diagnostic' }
+$runMode = if ($Only.Count -eq 0 -and -not $DiagnosticHap) { 'acceptance' } else { 'diagnostic' }
 $availableStages = @(
     'password-success',
     'password-kbdint-mixed-echo',
@@ -378,6 +408,25 @@ function Submit-FocusedDeviceCommand {
     Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
 }
 
+function Assert-AuthCommandLoopbackTarget {
+    $logs = ''
+    try {
+        $logs = Wait-LeanTTYAppLog `
+            -Hdc $hdc `
+            -Target $Target `
+            -ProcessId $appPid `
+            -Pattern 'SSH connect initiated:' `
+            -TimeoutSeconds 5
+    } catch {
+        throw '[environment] Device key injection changed the SSH command target'
+    }
+    $matches = [regex]::Matches($logs, 'SSH connect initiated:\s+(?<host>[^\s]+)')
+    if ($matches.Count -eq 0 -or
+        $matches[$matches.Count - 1].Groups['host'].Value -cne '127.0.0.1') {
+        throw '[environment] Device key injection changed the SSH command target'
+    }
+}
+
 function Start-AuthCommand {
     param(
         [Parameter(Mandatory = $true)][string]$User,
@@ -387,6 +436,7 @@ function Start-AuthCommand {
     Submit-FocusedDeviceCommand `
         -Command "ssh -p $FixturePort$identityOption $User@127.0.0.1" `
         -LayoutName 'layout-command-focus.json'
+    Assert-AuthCommandLoopbackTarget
 }
 
 function Close-FixtureShell {
@@ -665,6 +715,12 @@ function Write-AuthEvidence {
             gitCommit = $candidate.gitCommit
             gitTree = $candidate.gitTree
             gitDirty = $candidate.gitDirty
+            retained = $(if ($DiagnosticHap) { $false } else { $true })
+            provenance = $(if ($DiagnosticHap) {
+                'explicit-unretained-diagnostic-hap'
+            } else {
+                'retained-verified-candidate'
+            })
             reusedAcrossHarnessOnlyChanges = ($harnessDifferencePaths.Count -gt 0)
         }
         harness = [ordered]@{
@@ -699,12 +755,21 @@ function Write-AuthEvidence {
             method = 'raw-physical-key-events'
             secretInjection = 'runtime-generated-printable-ascii'
             textChunkCharacters = 1
-            interChunkPacingMilliseconds = 10
+            interChunkPacingMilliseconds = 50
             submitTelemetry = 'compile-time-acceptance-marker-with-sequence-and-kind-only'
             businessOutcomeRequired = $true
             fixedDelayUsedAsVerdict = $false
             paneRouting = 'sorted-terminal-input-accessibility-nodes'
             minimizeTrigger = 'HarmonyOS-EnhanceMinimizeBtn'
+        }
+        preferences = [ordered]@{
+            verificationRequested = [bool]$VerifyPreferencesUnchanged
+            algorithm = 'SHA-256'
+            contentReadOrExported = $false
+            digestPersisted = $false
+            beforeCaptured = (-not [string]::IsNullOrWhiteSpace($preferencesDigestBefore))
+            afterCaptured = (-not [string]::IsNullOrWhiteSpace($preferencesDigestAfter))
+            unchanged = $preferencesDigestUnchanged
         }
         coverage = @($checks | Where-Object { $_.name -ne 'fixture-and-device-preflight' } |
             ForEach-Object { $_.name })
@@ -748,6 +813,24 @@ function Write-AuthEvidence {
         (ConvertTo-Json -InputObject $evidence -Depth 7),
         [Text.UTF8Encoding]::new($false)
     )
+}
+
+function Get-LeanTTYPreferencesDigest {
+    $preferencesPath = '/data/app/el2/100/base/com.leantty.app/haps/entry/preferences/leantty_settings'
+    $output = @(
+        & $hdc -t $Target shell -b com.leantty.app "sha256sum $preferencesPath" 2>&1
+    )
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to compute the LeanTTY Preferences digest in the application sandbox'
+    }
+    $match = [regex]::Match(
+        ($output -join "`n").Trim(),
+        '^(?<digest>[0-9a-fA-F]{64})\s+/data/app/el2/100/base/com\.leantty\.app/haps/entry/preferences/leantty_settings$'
+    )
+    if (-not $match.Success) {
+        throw 'Unexpected LeanTTY Preferences digest response'
+    }
+    return $match.Groups['digest'].Value.ToLowerInvariant()
 }
 
 try {
@@ -825,6 +908,9 @@ try {
             -TimeoutSeconds 10 | Out-Null
     }
     Add-AuthCheck -Name 'fixture-and-device-preflight' -DurationMs $preflight.ElapsedMilliseconds
+    if ($VerifyPreferencesUnchanged) {
+        $preferencesDigestBefore = Get-LeanTTYPreferencesDigest
+    }
 
     if (Test-AuthStageSelected -Name 'password-success') {
     Start-AuthStage -Name 'password-success'
@@ -1086,6 +1172,17 @@ try {
     Submit-FocusedDeviceCommand `
         -Command "ssh-keygen -R [127.0.0.1]:$FixturePort" `
         -LayoutName 'layout-final-known-hosts-command-focus.json'
+    if ($VerifyPreferencesUnchanged) {
+        $preferencesCheck = [Diagnostics.Stopwatch]::StartNew()
+        $preferencesDigestAfter = Get-LeanTTYPreferencesDigest
+        $preferencesDigestUnchanged = ($preferencesDigestBefore -ceq $preferencesDigestAfter)
+        if (-not $preferencesDigestUnchanged) {
+            throw 'LeanTTY Preferences changed during the selected SSH authentication stages'
+        }
+        Add-AuthCheck `
+            -Name 'preferences-unchanged-during-authentication' `
+            -DurationMs $preferencesCheck.ElapsedMilliseconds
+    }
     $scenarioResult = 'passed'
 } catch {
     $caughtError = $_
@@ -1230,6 +1327,6 @@ if ($runMode -eq 'acceptance') {
 } else {
     Write-Host (
         'DIAGNOSTIC SUCCESS: ssh-interactive-authentication ' +
-        "(stages=$($Only -join ','), evidence=$evidencePath; candidate not promoted)"
+        "(stages=$($selectedStageNames -join ','), evidence=$evidencePath; candidate not promoted)"
     ) -ForegroundColor Yellow
 }

@@ -1,3 +1,11 @@
+export enum WorkspaceNavigationAction {
+  NONE,
+  NEXT_TAB,
+  PREVIOUS_TAB,
+  FOCUS_LEFT_PANE,
+  FOCUS_RIGHT_PANE
+}
+
 export class InteractionPolicy {
   static readonly DEFAULT_FONT_SIZE: number = 16
   static readonly MIN_FONT_SIZE: number = 8
@@ -40,5 +48,47 @@ export class InteractionPolicy {
   static shouldConfirmApplicationClose(hasActiveSession: boolean,
     confirmationSuppressed: boolean): boolean {
     return hasActiveSession && !confirmationSuppressed
+  }
+
+  static workspaceNavigationAction(keyCode: number, ctrlKey: boolean,
+    altKey: boolean, shiftKey: boolean): WorkspaceNavigationAction {
+    if (!ctrlKey) {
+      return WorkspaceNavigationAction.NONE
+    }
+    if (keyCode === 2049 && !altKey) {
+      return shiftKey ? WorkspaceNavigationAction.PREVIOUS_TAB :
+        WorkspaceNavigationAction.NEXT_TAB
+    }
+    if (altKey && !shiftKey && keyCode === 2014) {
+      return WorkspaceNavigationAction.FOCUS_LEFT_PANE
+    }
+    if (altKey && !shiftKey && keyCode === 2015) {
+      return WorkspaceNavigationAction.FOCUS_RIGHT_PANE
+    }
+    return WorkspaceNavigationAction.NONE
+  }
+
+  static wrappedTabIndex(currentIndex: number, tabCount: number,
+    direction: number): number {
+    if (tabCount <= 0) {
+      return -1
+    }
+    if (currentIndex < 0 || currentIndex >= tabCount) {
+      return direction < 0 ? tabCount - 1 : 0
+    }
+    return (currentIndex + (direction < 0 ? -1 : 1) + tabCount) % tabCount
+  }
+
+  static workspacePaneIndex(action: WorkspaceNavigationAction, paneCount: number): number {
+    if (paneCount !== 2) {
+      return -1
+    }
+    if (action === WorkspaceNavigationAction.FOCUS_LEFT_PANE) {
+      return 0
+    }
+    if (action === WorkspaceNavigationAction.FOCUS_RIGHT_PANE) {
+      return 1
+    }
+    return -1
   }
 }

@@ -27,8 +27,34 @@ type AuthSender = tokio::sync::mpsc::Sender<AuthMethod>;
 type DisconnectSender = tokio::sync::mpsc::Sender<()>;
 type OutputPauseSender = tokio::sync::mpsc::Sender<bool>;
 type JsCallback = Arc<ThreadsafeFunction<String, (), String, Status, false, false, 64>>;
-type JsDataCallback = Arc<ThreadsafeFunction<Uint8Array, (), Uint8Array, Status, false, false, 64>>;
+type JsTransportCallback =
+    Arc<ThreadsafeFunction<TransportEvent, (), TransportEvent, Status, false, false, 64>>;
 type JsAuthCallback = Arc<ThreadsafeFunction<AuthEvent, (), AuthEvent, Status, false, false, 64>>;
+
+#[napi(object)]
+pub struct TransportEvent {
+    pub kind: String,
+    pub data: Uint8Array,
+    pub result: String,
+}
+
+impl TransportEvent {
+    fn data(data: Vec<u8>) -> Self {
+        Self {
+            kind: "data".to_string(),
+            data: data.into(),
+            result: String::new(),
+        }
+    }
+
+    fn close(result: String) -> Self {
+        Self {
+            kind: "close".to_string(),
+            data: Vec::new().into(),
+            result,
+        }
+    }
+}
 
 #[napi(object)]
 pub struct AuthPromptEvent {
@@ -198,12 +224,27 @@ fn try_send_callback(callback: &JsCallback, value: String, label: &str) -> bool 
     true
 }
 
-fn try_send_data_callback(callback: &JsDataCallback, value: Vec<u8>) -> Status {
-    let status = callback.call(value.into(), ThreadsafeFunctionCallMode::NonBlocking);
+fn try_send_transport_data(callback: &JsTransportCallback, value: Vec<u8>) -> Status {
+    let status = callback.call(
+        TransportEvent::data(value),
+        ThreadsafeFunctionCallMode::NonBlocking,
+    );
     if status != Status::Ok && status != Status::QueueFull {
-        eprintln!("[LTTY_SSH] callback=data status={}", status);
+        eprintln!("[LTTY_SSH] callback=transport_data status={}", status);
     }
     status
+}
+
+fn send_transport_close(callback: &JsTransportCallback, result: String) -> bool {
+    let status = callback.call(
+        TransportEvent::close(result),
+        ThreadsafeFunctionCallMode::Blocking,
+    );
+    if status != Status::Ok {
+        eprintln!("[LTTY_SSH] callback=transport_close status={}", status);
+        return false;
+    }
+    true
 }
 
 fn send_control(callback: &JsCallback, event: &str) {
@@ -825,8 +866,7 @@ async fn run_session(
     private_key_requires_passphrase: bool,
     known_hosts_path: String,
     connect_timeout: Duration,
-    data_callback: JsDataCallback,
-    close_callback: JsCallback,
+    transport_callback: JsTransportCallback,
     control_callback: JsCallback,
     auth_callback: JsAuthCallback,
     mut receivers: SessionReceivers,
@@ -953,7 +993,7 @@ async fn run_session(
             if !pending_output.is_empty() {
               let output = std::mem::take(&mut pending_output);
               let output_len = output.len() as u64;
-              let status = try_send_data_callback(&data_callback, output.clone());
+              let status = try_send_transport_data(&transport_callback, output.clone());
               if !delivery_metrics.record_callback_attempt(status, output_len) {
                 pending_output = output;
               }
@@ -976,7 +1016,7 @@ async fn run_session(
                 if immediate || pending_output.len() >= 64 * 1024 {
                   let output = std::mem::take(&mut pending_output);
                   let output_len = output.len() as u64;
-                  let status = try_send_data_callback(&data_callback, output.clone());
+                  let status = try_send_transport_data(&transport_callback, output.clone());
                   if !delivery_metrics.record_callback_attempt(status, output_len) {
                     pending_output = output;
                   }
@@ -1032,7 +1072,7 @@ async fn run_session(
         let output_len = final_output.len() as u64;
         let mut delivered = false;
         for attempt in 0..FINAL_DELIVERY_RETRY_ATTEMPTS {
-            let status = try_send_data_callback(&data_callback, final_output.clone());
+            let status = try_send_transport_data(&transport_callback, final_output.clone());
             if delivery_metrics.record_callback_attempt(status, output_len) {
                 delivered = true;
                 break;
@@ -1082,7 +1122,7 @@ async fn run_session(
     } else {
         exit_code.to_string()
     };
-    let _ = try_send_callback(&close_callback, close_result, "close");
+    let _ = send_transport_close(&transport_callback, close_result);
 
     eprintln!("[LTTY_SSH] session={} stage=closed", session_id);
 }
@@ -1098,8 +1138,7 @@ pub fn ssh_connect(
     known_hosts_path: String,
     connect_timeout_ms: u32,
     generation: u32,
-    on_data: Function<'_, Uint8Array, ()>,
-    on_close: Function<'_, String, ()>,
+    on_transport: Function<'_, TransportEvent, ()>,
     on_control: Function<'_, String, ()>,
     on_auth: Function<'_, AuthEvent, ()>,
 ) -> Result<String> {
@@ -1122,15 +1161,9 @@ pub fn ssh_connect(
         return Err(napi_error("generation must be positive"));
     }
 
-    let data_callback = Arc::new(
-        on_data
-            .build_threadsafe_function::<Uint8Array>()
-            .max_queue_size::<64>()
-            .build()?,
-    );
-    let close_callback = Arc::new(
-        on_close
-            .build_threadsafe_function::<String>()
+    let transport_callback = Arc::new(
+        on_transport
+            .build_threadsafe_function::<TransportEvent>()
             .max_queue_size::<64>()
             .build()?,
     );
@@ -1190,8 +1223,7 @@ pub fn ssh_connect(
         private_key_requires_passphrase,
         known_hosts_path,
         Duration::from_millis(connect_timeout_ms as u64),
-        data_callback,
-        close_callback,
+        transport_callback,
         control_callback,
         auth_callback,
         receivers,
@@ -1355,16 +1387,19 @@ pub fn ssh_disconnect(session_id: String) -> Result<()> {
 }
 
 #[napi]
-pub fn ssh_generate_key_pair(
+pub async fn ssh_generate_key_pair(
     algorithm: String,
     passphrase: String,
     output_dir: String,
     file_name: String,
     comment: String,
 ) -> Result<String> {
-    let result =
+    let result = tokio::task::spawn_blocking(move || {
         keygen::generate_key_pair(&algorithm, &output_dir, &file_name, &passphrase, &comment)
-            .map_err(|e| napi_error(&e))?;
+    })
+    .await
+    .map_err(|error| napi_error(&format!("key generation task failed: {error}")))?
+    .map_err(|error| napi_error(&error))?;
     let json = format!(
         "{{\"privatePath\":\"{}\",\"publicPath\":\"{}\",\"fingerprint\":\"{}\"}}",
         result.private_path, result.public_path, result.fingerprint
