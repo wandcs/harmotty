@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-06
+
+### Fixed
+
+- Corrected the AppGallery production-package authorization for key export by
+  using a release Profile that grants the requested Downloads directory access.
+
 ## [1.1.0] - 2026-08-05
 
 ### Development
