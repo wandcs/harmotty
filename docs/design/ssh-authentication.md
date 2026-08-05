@@ -1,6 +1,6 @@
 # SSH keyboard-interactive 与多方法认证技术方案
 
-> 状态：Implemented；受控物理机矩阵已闭合，待补 Preferences 不变性证据与正式候选门禁
+> 状态：Implemented；受控物理机与 Preferences 边界已闭合，待正式候选门禁
 >
 > 目标 milestone：1.1.0
 >
@@ -65,6 +65,12 @@ HarmonyOS PC 已使用同一夹具验证直接密码、未加密/加密私钥、
 输入期间 `Ctrl+C`、认证中关闭 Pane、进程停止清理和一次性密钥删除，共 18 个阶段全部
 通过；证据位于 `build/verification/device-ssh-auth-20260804T195329418Z/`。该次运行使用
 显式未保留的诊断 HAP，不提升或替代正式候选。
+
+2026-08-05 的针对性诊断进一步在密码后 mixed-echo interactive、隐藏输入取消、加密
+私钥口令和隐藏输入期间进程停止路径前后计算应用沙箱 Preferences 的 SHA-256。前后摘要
+一致；文件内容未读取或导出，摘要值仅在脚本内存中比较且未写入证据。证据位于
+`build/verification/device-ssh-auth-20260805T002009859Z/`，其中明确记录
+`contentReadOrExported=false`、`digestPersisted=false`、`unchanged=true` 与完整清理结果。
 
 `tools/verify-ssh-auth-pc.ps1` 将这些主路径固化为保留候选验收：脚本
 只在系统临时目录生成凭据，通过可清理的 HDC reverse 映射让设备标准 `ssh` 命令连接
@@ -191,7 +197,6 @@ AuthChallenge
 
 ## 发布前证据边界
 
-- 在不读取或导出 Preferences 内容的前提下，仍需补齐物理机认证前后不变性证据。
 - 真实服务、断网、超时、输入法和外接键盘组合在正式候选全量门禁验证；未实际完成的
   厂商或服务不得写入兼容性声明。
 - 协议上限、密码修改请求及未支持组合继续明确失败，不做提示文本猜测或厂商特例。

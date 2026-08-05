@@ -15,8 +15,10 @@
   single-Pane shortcut delivery without adding production HAP logic.
 - Added an explicit diagnostic-HAP mode to physical SSH authentication
   verification. Diagnostic evidence is marked unretained and can never promote
-  a release candidate; static checks also guard command-history and Preferences
-  boundaries for authentication input.
+  a release candidate; static checks guard command-history and Preferences
+  boundaries, while an opt-in physical check compares in-memory Preferences
+  digests before and after authentication without reading content or persisting
+  either digest.
 - Added a retained-candidate physical-PC SSH authentication harness for direct
   password, password-to-keyboard-interactive mixed echo, multi-round wrong-answer
   recovery, unencrypted/encrypted public keys, key-to-password and
