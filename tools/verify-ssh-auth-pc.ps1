@@ -368,11 +368,8 @@ function Submit-AuthValue {
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
     Focus-ActiveCommandInput -LayoutName ($LayoutName + '.focus.json')
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $Value
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
     Assert-NoSecretExposure -LayoutName $LayoutName
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT' -TimeoutSeconds 10
@@ -405,11 +402,8 @@ function Submit-FocusedDeviceCommand {
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
     Focus-ActiveCommandInput -LayoutName $LayoutName
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $Command
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
 }
@@ -759,11 +753,9 @@ function Write-AuthEvidence {
         }
         input = [ordered]@{
             method = 'raw-physical-key-events'
-            secretInjection = 'receipt-confirmed-runtime-generated-printable-ascii'
-            textChunkCharacters = 1
-            perCharacterReceipt = 'structured-length-only-application-log'
-            receiptTimeoutSeconds = 3
-            maxAttemptsPerCharacter = 2
+            secretInjection = 'device-paced-runtime-generated-printable-ascii'
+            textCommandCharacters = 'complete-value'
+            deviceProgramIntervalMilliseconds = 250
             submitTelemetry = 'compile-time-acceptance-marker-with-sequence-and-kind-only'
             businessOutcomeRequired = $true
             fixedDelayUsedAsVerdict = $false
@@ -906,11 +898,7 @@ try {
     if (-not (Test-AuthStageSelected -Name 'password-success')) {
         Start-AuthCommand -User 'password'
         Wait-AuthLog -Pattern 'rust event: HOST_KEY_PROMPT:'
-        Invoke-LeanTTYObservedDeviceText `
-            -Hdc $hdc `
-            -Target $Target `
-            -ProcessId $appPid `
-            -Text 'yes'
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'yes'
         Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
         Wait-AuthLog -Pattern 'native auth event kind=password'
         Invoke-LeanTTYDeviceCtrlC -Hdc $hdc -Target $Target
@@ -929,11 +917,7 @@ try {
     Start-AuthStage -Name 'password-success'
     Start-AuthCommand -User 'password'
     Wait-AuthLog -Pattern 'rust event: HOST_KEY_PROMPT:'
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text 'yes'
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'yes'
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Wait-AuthLog -Pattern 'native auth event kind=password'
     Submit-AuthValue -Value $credentials.password -LayoutName 'layout-password-value.json'
@@ -1054,11 +1038,7 @@ try {
     Submit-AuthValue -Value $credentials.account -LayoutName 'layout-cancel-auth-account.json'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $credentials.second_token
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
     Assert-NoSecretExposure -LayoutName 'layout-cancel-auth-hidden-token.json'
     Invoke-LeanTTYDeviceCtrlC -Hdc $hdc -Target $Target
     Assert-NoSecretExposure -LayoutName 'layout-cancel-auth-cleared.json'
@@ -1081,11 +1061,7 @@ try {
     Submit-AuthValue -Value $credentials.account -LayoutName 'layout-close-auth-account.json'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $credentials.second_token
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
     Assert-NoSecretExposure -LayoutName 'layout-close-auth-hidden-token.json'
     Invoke-ActivePaneCloseButton -LayoutName 'layout-close-auth-button.json'
     Invoke-ClosePaneDialog -LayoutName 'layout-close-auth-dialog.json'
@@ -1162,11 +1138,7 @@ try {
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-AuthValue -Value $credentials.account -LayoutName 'layout-minimize-account.json'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $credentials.second_token
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
     Assert-NoSecretExposure -LayoutName 'layout-minimize-hidden-token.json'
     Minimize-RegressionWindow
     Restore-RegressionWindow
@@ -1185,11 +1157,7 @@ try {
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-AuthValue -Value $credentials.account -LayoutName 'layout-cancel-account.json'
     Wait-AuthLog -Pattern 'native auth event kind=challenge'
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $credentials.second_token
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $credentials.second_token
     Assert-NoSecretExposure -LayoutName 'layout-cancel-hidden-token.json'
     Restart-RegressionApp
     Assert-NoSecretExposure -LayoutName 'layout-cancel-restarted.json'

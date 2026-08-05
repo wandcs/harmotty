@@ -134,23 +134,17 @@ function Complete-BehaviorStage {
 function Submit-Command {
     param([Parameter(Mandatory = $true)][string]$Command)
 
-    Invoke-LeanTTYObservedDeviceText `
+    Submit-LeanTTYDeviceCommand `
         -Hdc $hdc `
         -Target $Target `
-        -ProcessId $appPid `
-        -Text $Command
-    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+        -Command $Command
 }
 
 function Submit-Secret {
     param([string]$Value = '')
 
     if (-not [string]::IsNullOrEmpty($Value)) {
-        Invoke-LeanTTYObservedDeviceText `
-            -Hdc $hdc `
-            -Target $Target `
-            -ProcessId $appPid `
-            -Text $Value
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Value
         $layoutPath = Join-Path $EvidenceDirectory (
             'layout-secret-' + [Guid]::NewGuid().ToString('N') + '.json'
         )
@@ -254,10 +248,9 @@ function Write-BehaviorEvidence {
             failure = $awakeLeaseFailure
         }
         input = [ordered]@{
-            commandInjection = 'receipt-confirmed-raw-physical-key-events'
-            secretInjection = 'receipt-confirmed-runtime-generated-printable-ascii'
-            receiptTimeoutSeconds = 3
-            maxAttemptsPerCharacter = 2
+            commandInjection = 'device-paced-raw-physical-key-events-with-structured-result'
+            secretInjection = 'device-paced-runtime-generated-printable-ascii'
+            deviceProgramIntervalMilliseconds = 250
             fixedDelayUsedAsVerdict = $false
         }
         checks = @($checks)
@@ -382,11 +375,7 @@ try {
     Start-BehaviorStage -Name 'ctrl-c-cancelled-and-cleared-secret-input'
     Submit-Command -Command "ssh-keygen -p -f $keyName"
     Wait-State -Pattern 'KEY_PASSPHRASE_CHANGE stage=old'
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc $hdc `
-        -Target $Target `
-        -ProcessId $appPid `
-        -Text $secretB
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $secretB
     $cancelLayoutPath = Join-Path $EvidenceDirectory 'layout-cancel-secret.json'
     $cancelLayout = Get-LeanTTYDeviceLayout `
         -Hdc $hdc `
