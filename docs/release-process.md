@@ -216,7 +216,7 @@ git status --short
 | Production and review HAPs cannot be confidently compared | They were built from different commits, trees, versions, ABIs or native outputs | Discard the review evidence and rebuild both through the formal command |
 | It is unclear which HAP/APP to submit or install | Artifact roles were carried only in operator notes | Read the archived `artifact-roles.txt`; upload only the production signed APP |
 
-## Submit for AppGallery Review
+## Publish the GitHub Release and Submit for AppGallery Review
 
 Only after the exact release artifact passes the final real-PC smoke test:
 
@@ -229,42 +229,45 @@ Only after the exact release artifact passes the final real-PC smoke test:
    `git tag -s vX.Y.Z <release-commit-sha> -m "vX.Y.Z"`.
 4. Confirm the tag resolves to the commit recorded by
    `build-manifest.json`, then push it: `git push origin vX.Y.Z`.
-5. Upload the production signed APP and store materials to AppGallery. Do not
+5. Publish the non-draft GitHub Release on that tag. Attach
+   `build-manifest.json`, `licenses/` and the SHA-256 checksum file, then verify
+   the release points to the expected tag and commit and exposes the archived
+   assets. The GitHub Release is the canonical version identity and consumes
+   the version number.
+6. Only after the GitHub Release is complete, upload the same-version production
+   signed APP and store materials to AppGallery. Do not
    attempt to install its release-Profile HAP with HDC. Use only the separately
    test-signed review HAP from the same commit/tree/native build for direct
    installation, final device acceptance, screenshots and self-test video.
-6. Record the submitted version, tag, exact commit, build manifest, artifact
-   hashes and AppGallery submission state.
-7. Do not publish the GitHub Release while AppGallery review is pending.
+7. Record the submitted version, GitHub Release, tag, exact commit, build
+   manifest, artifact hashes and AppGallery submission state.
 
-If rejection can be resolved only by changing store listing text, screenshots,
-qualifications or other metadata outside the APP, keep the same tag and exact
-artifact and resubmit it.
+If AppGallery review fails for any reason, including store listing text,
+screenshots, qualifications or metadata outside the APP, the published GitHub
+version is still consumed. Keep its release, tag and evidence immutable. Return
+to the development checkout, advance to the next PATCH version, increase
+`versionCode`, apply the smallest required correction, and repeat the entire
+release process with a new pushed commit, clean build, signed tag and GitHub
+Release before submitting the new version. Never replace or resubmit artifacts
+under the failed version.
 
-If rejection requires any code, resource, dependency, permission, signature,
-version or package change, the rejected tag and evidence remain immutable.
-Return to the development checkout, advance to the next PATCH version, increase
-`versionCode`, apply the smallest release-blocking fix, and repeat the entire
-release process with a new pushed commit and tag. Never replace artifacts
-recorded under an existing tag.
+An unpublished development target does not consume a version. Publication of
+the GitHub Release is the boundary: after `1.1.0` is published, any failed
+AppGallery review is followed by `1.1.1`.
 
-Do not increment twice for a development version that has not been submitted.
-If `1.0.1` is already the development target when `1.0.0` review fails, the
-changed replacement submission remains `1.0.1`; it does not become `1.0.2`.
-
-## Finalize an Approved Release
+## Record an Approved AppGallery Release
 
 Only after AppGallery reports the submitted version as `Released`:
 
 1. Confirm the approved APP hash, existing signed tag and recorded release
    commit.
-2. Create the matching GitHub Release and attach `build-manifest.json`,
-   `licenses/` and the SHA-256 checksum file.
-3. Update current-status documentation and remove the release branch after any
-   required fixes have been forwarded to `main`.
+2. Confirm the already-published GitHub Release still points to that tag and
+   commit; do not replace its assets.
+3. Record the AppGallery `Released` state and approval mapping in the release
+   archive, then update current-status documentation.
 
-Never move or reuse a pushed version tag, including one whose AppGallery
-submission was rejected.
+Never move or reuse a pushed version tag or published GitHub Release, including
+one whose AppGallery submission was rejected.
 
 ## Checksum Verification
 
