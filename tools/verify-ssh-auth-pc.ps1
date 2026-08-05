@@ -391,9 +391,12 @@ function Focus-ActiveCommandInput {
     } else {
         throw '[environment] Unable to identify the active terminal input before command submission'
     }
-    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$inputNode.attributes.bounds)
-    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw '[environment] Unable to focus the terminal before command submission' }
+    Set-LeanTTYTerminalInputFocus `
+        -Hdc $hdc `
+        -Target $Target `
+        -InputNode $inputNode `
+        -LocalPath (Join-Path $EvidenceDirectory $LayoutName) `
+        -TimeoutSeconds 10 | Out-Null
 }
 
 function Submit-FocusedDeviceCommand {
@@ -755,7 +758,7 @@ function Write-AuthEvidence {
             method = 'raw-physical-key-events'
             secretInjection = 'device-paced-runtime-generated-printable-ascii'
             textCommandCharacters = 'complete-value'
-            deviceProgramIntervalMilliseconds = 250
+            deviceProgramIntervalMilliseconds = 500
             submitTelemetry = 'compile-time-acceptance-marker-with-sequence-and-kind-only'
             businessOutcomeRequired = $true
             fixedDelayUsedAsVerdict = $false
