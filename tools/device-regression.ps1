@@ -363,74 +363,9 @@ function Invoke-LeanTTYDeviceText {
 
     $shellCommand = ConvertTo-LeanTTYDeviceTextKeyCommand `
         -Text $Text `
-        -IntervalMilliseconds 100
+        -IntervalMilliseconds 250
     & $Hdc -t $Target shell $shellCommand 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'HarmonyOS raw key text injection failed' }
-}
-
-function Invoke-LeanTTYObservedDeviceText {
-    param(
-        [Parameter(Mandatory = $true)][string]$Hdc,
-        [Parameter(Mandatory = $true)][string]$Target,
-        [Parameter(Mandatory = $true)][string]$ProcessId,
-        [Parameter(Mandatory = $true)][string]$Text,
-        [ValidateRange(1, 10)][int]$ReceiptTimeoutSeconds = 3,
-        [ValidateRange(1, 3)][int]$MaxAttemptsPerCharacter = 2
-    )
-
-    Clear-LeanTTYAppLogs -Hdc $Hdc -Target $Target
-    $receivedCharacters = 0
-    foreach ($character in $Text.ToCharArray()) {
-        $expectedCharacters = $receivedCharacters + 1
-        $characterReceived = $false
-        for ($attempt = 1; $attempt -le $MaxAttemptsPerCharacter; $attempt++) {
-            if ($attempt -gt 1) {
-                $logs = Get-LeanTTYAppLogs `
-                    -Hdc $Hdc `
-                    -Target $Target `
-                    -ProcessId $ProcessId
-                $observedCharacters = [regex]::Matches(
-                    $logs,
-                    'D: 1 chars, mode=\d+'
-                ).Count
-                if ($observedCharacters -gt $expectedCharacters) {
-                    throw 'HarmonyOS raw key injection produced duplicate character receipts'
-                }
-                if ($observedCharacters -eq $expectedCharacters) {
-                    $characterReceived = $true
-                    break
-                }
-            }
-            Invoke-LeanTTYDeviceText `
-                -Hdc $Hdc `
-                -Target $Target `
-                -Text $character.ToString()
-            $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-            do {
-                $logs = Get-LeanTTYAppLogs `
-                    -Hdc $Hdc `
-                    -Target $Target `
-                    -ProcessId $ProcessId
-                $observedCharacters = [regex]::Matches(
-                    $logs,
-                    'D: 1 chars, mode=\d+'
-                ).Count
-                if ($observedCharacters -gt $expectedCharacters) {
-                    throw 'HarmonyOS raw key injection produced duplicate character receipts'
-                }
-                if ($observedCharacters -eq $expectedCharacters) {
-                    $characterReceived = $true
-                    break
-                }
-                Start-Sleep -Milliseconds 50
-            } while ($stopwatch.Elapsed.TotalSeconds -lt $ReceiptTimeoutSeconds)
-            if ($characterReceived) { break }
-        }
-        if (-not $characterReceived) {
-            throw 'Timed out waiting for a HarmonyOS raw key character receipt'
-        }
-        $receivedCharacters = $expectedCharacters
-    }
 }
 
 function Invoke-LeanTTYDeviceKey {

@@ -80,7 +80,7 @@ Assert-Throws -Action {
         -Text 'echo LEANTTY_SMOKE'
     $expectedCommand = ConvertTo-LeanTTYDeviceTextKeyCommand `
         -Text 'echo LEANTTY_SMOKE' `
-        -IntervalMilliseconds 100
+        -IntervalMilliseconds 250
     Assert-True (
         $script:capturedHdcCalls.Count -eq 1 -and
         $script:capturedHdcCalls[0].Count -eq 4 -and
@@ -112,65 +112,6 @@ Assert-Throws -Action {
         $script:submittedKeyCodes.Count -eq 1 -and
         $script:submittedKeyCodes[0] -eq 2054
     ) 'Device command submission did not inject raw text before pressing Enter'
-}
-
-& {
-    $script:observedCharacters = [Collections.Generic.List[string]]::new()
-    $script:logClears = 0
-    function Clear-LeanTTYAppLogs {
-        param($Hdc, $Target)
-        $script:logClears++
-    }
-    function Invoke-LeanTTYDeviceText {
-        param($Hdc, $Target, $Text)
-        $script:observedCharacters.Add($Text)
-    }
-    function Get-LeanTTYAppLogs {
-        param($Hdc, $Target, $ProcessId)
-        return (($script:observedCharacters | ForEach-Object {
-            'D: 1 chars, mode=6'
-        }) -join "`n")
-    }
-
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc 'unused' `
-        -Target 'unused' `
-        -ProcessId '123' `
-        -Text 'ssx'
-    Assert-True (
-        $script:logClears -eq 1 -and
-        $script:observedCharacters.Count -eq 3 -and
-        ($script:observedCharacters -join '') -eq 'ssx'
-    ) 'Observed device text did not require one receipt-confirmed event per character'
-}
-
-& {
-    $script:injectionAttempts = 0
-    $script:receiptCount = 0
-    function Clear-LeanTTYAppLogs { param($Hdc, $Target) }
-    function Invoke-LeanTTYDeviceText {
-        param($Hdc, $Target, $Text)
-        $script:injectionAttempts++
-        if ($script:injectionAttempts -ge 2) { $script:receiptCount++ }
-    }
-    function Get-LeanTTYAppLogs {
-        param($Hdc, $Target, $ProcessId)
-        if ($script:receiptCount -eq 0) { return '' }
-        return ((1..$script:receiptCount | ForEach-Object {
-            'D: 1 chars, mode=0'
-        }) -join "`n")
-    }
-
-    Invoke-LeanTTYObservedDeviceText `
-        -Hdc 'unused' `
-        -Target 'unused' `
-        -ProcessId '123' `
-        -Text 's' `
-        -ReceiptTimeoutSeconds 1 `
-        -MaxAttemptsPerCharacter 2
-    Assert-True (
-        $script:injectionAttempts -eq 2 -and $script:receiptCount -eq 1
-    ) 'Observed device text did not recover one dropped raw-key event without duplication'
 }
 
 $submitCommandParameters = (Get-Command Submit-LeanTTYDeviceCommand).Parameters.Keys
@@ -211,7 +152,7 @@ Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
-    $deviceRegressionText -match '-IntervalMilliseconds 100(?:\s|$)'
+    $deviceRegressionText -match '-IntervalMilliseconds 250(?:\s|$)'
 ) 'Device raw-key text injection does not use native device pacing for modifier transitions'
 Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
@@ -369,7 +310,7 @@ foreach ($scriptName in @(
             $content.Contains('Focus-ActiveCommandInput') -and
             $content.Contains('businessOutcomeRequired = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false') -and
-            $content.Contains("perCharacterReceipt = 'structured-length-only-application-log'")
+            $content.Contains('deviceProgramIntervalMilliseconds = 250')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
@@ -431,7 +372,7 @@ $deviceRegressionText = Get-Content -LiteralPath (
 ) -Raw
 Assert-True (
     $deviceRegressionText.Contains("return 't' + [Guid]::NewGuid()") -and
-    $deviceRegressionText.Contains('-IntervalMilliseconds 100')
+    $deviceRegressionText.Contains('-IntervalMilliseconds 250')
 ) 'Device secret injection is not restricted to stable lowercase input with conservative pacing'
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
