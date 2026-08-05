@@ -136,6 +136,9 @@ compatibility after LeanTTY is published.
   pushed commit and a new clean build from the isolated release checkout.
 - Once a version is released, its source and artifacts must not be replaced.
   Any modification requires a new version.
+- A published GitHub Release is the canonical version identity. AppGallery
+  submission and review status are recorded against that version but do not
+  redefine or roll it back.
 - Reliability fixes after `1.0.0` use patch versions such as `1.0.1`.
 - Backward-compatible product capabilities use a minor version such as
   `1.1.0`.
@@ -159,15 +162,16 @@ tested and releasable.
   feature must not be merged into that line before the PATCH release is frozen.
 - A `release/X.Y.Z` branch is created only for release preparation. It accepts
   version metadata and release-blocking fixes only, never new product scope.
-- After the verified tag is pushed, the release branch may be deleted. The
-  immutable tag, commit and archived build evidence remain the submission
-  identity.
+- After the verified tag is pushed and the matching GitHub Release is
+  published, the release branch may be deleted. The immutable release, tag,
+  commit and archived build evidence remain the submission identity.
 
-The default is to finish and submit the current release before merging work for
-the next higher version. After a version is tagged and submitted, `main` may
-advance. If review later requires an APP change, create the next PATCH release
-from the appropriate submitted tag or current compatible `main`, apply and
-verify the fix, and forward-port it wherever needed.
+The default is to publish and submit the current release before merging work
+for the next higher version. After its GitHub Release is published and the same
+version is submitted to AppGallery, `main` may advance. If review later fails,
+create the next PATCH release from the appropriate published tag or current
+compatible `main`, apply and verify the required changes, and forward-port them
+wherever needed.
 
 ## Changelog Workflow
 
@@ -184,20 +188,20 @@ verify the fix, and forward-port it wherever needed.
    section.
 6. If a change is dropped before release, remove its pending entry rather than
    documenting behavior that was never published.
-7. If a tagged AppGallery submission is rejected and never distributed, retain
-   its version section and mark it `AppGallery submission rejected; not
-   published`.
-8. Release notes for the next published version summarize all user-visible
-   changes since the last version actually published to users, including
-   changes carried through a rejected intermediate version.
+7. Once the GitHub Release is published, retain its dated version section even
+   if AppGallery later rejects the submission. Record the store result as
+   `GitHub Release published; AppGallery review rejected` where release status
+   is tracked; do not describe the version as unpublished.
+8. Release notes for the next version summarize user-visible changes since the
+   preceding GitHub Release. Changes required by an AppGallery rejection are
+   recorded under the new version that will replace it in the store.
 
 ## Store Review and Release Identity
 
 For an update release, complete development and validation while the previous
 version is under review, but do not submit its successor until that review
-reaches a terminal result. Normally the previous version is `Released`. If it
-is rejected and changing the APP is required, the next PATCH package may
-replace it.
+reaches a terminal result. Normally the previous version is `Released`. If the
+review fails for any reason, the next PATCH version replaces it in AppGallery.
 
 The release lifecycle is:
 
@@ -209,25 +213,29 @@ The release lifecycle is:
 4. Create and push the immutable signed `vX.Y.Z` tag on the verified commit.
    Confirm that it matches the commit and artifacts recorded by the build
    manifest.
-5. Submit the signed APP and record the AppGallery submission against the tag,
-   commit, manifest and artifact hashes.
-6. If review succeeds, publish the matching GitHub Release on the existing tag.
-7. If review fails but only store listing, screenshot, qualification or other
-   external metadata changes, keep the same tag and APP and resubmit.
-8. If review requires any source, resource, dependency, permission, signature,
-   version or package change, keep the rejected tag immutable, advance to the
-   next PATCH version, increase `versionCode`, and repeat the full release
-   lifecycle with a new commit, build and tag.
+5. Publish the non-draft GitHub Release on that tag and verify its commit and
+   archived release assets. Publication consumes the version number.
+6. Only after the GitHub Release is complete, submit the same-version signed APP
+   and record the AppGallery submission against the release, tag, commit,
+   manifest and artifact hashes.
+7. If review succeeds, record the AppGallery state as `Released`; the existing
+   GitHub Release remains unchanged.
+8. If review fails for any reason, including store listing, screenshot,
+   qualification or other external metadata, keep the failed version's release,
+   tag and artifacts immutable. Advance to the next PATCH version, increase
+   `versionCode`, and repeat the full lifecycle with a new commit, build, tag,
+   GitHub Release and AppGallery submission.
 
-A previously selected but unsubmitted development version does not consume
-another version number. For example, if `1.0.0` review fails after `1.0.1`
-development has started, the changed successor submission is still `1.0.1`,
-not `1.0.2`.
+A previously selected but unpublished development version does not consume a
+version number. Once its GitHub Release is published, that version is consumed
+regardless of its later AppGallery result. For example, if published `1.1.0`
+fails review, the replacement is `1.1.1`, even when only store metadata must
+change.
 
-A pushed version tag identifies one exact submission package whether review
-succeeds or fails. It is never moved or reused. GitHub Release publication is
-the public distribution signal and occurs only after AppGallery reports the
-tagged version as `Released`.
+A published GitHub Release identifies one exact version and its submission
+package whether AppGallery review succeeds or fails. It is the primary public
+version identity and must exist before the matching AppGallery submission. Its
+tag, artifacts and version number are never moved, replaced or reused.
 
 ## Version Sources
 

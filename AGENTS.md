@@ -61,9 +61,11 @@ Develop changes on focused short-lived branches and merge them through pull
 requests. Record pending user-visible changes under `CHANGELOG.md` →
 `Unreleased` or the selected version's `In development` section as defined by
 the versioning policy. Create the immutable signed version tag only after
-production verification and before AppGallery submission. Never move or reuse
-a pushed tag. Publish the matching GitHub Release only after AppGallery reports
-the version as `Released`.
+production verification, then publish the matching GitHub Release before
+submitting that version to AppGallery. GitHub Release is the canonical version
+identity. Never move or reuse a pushed tag or published release. If AppGallery
+review fails for any reason, advance the version and repeat the release process
+instead of resubmitting under the failed version.
 
 ## Editing and filesystem safety
 
