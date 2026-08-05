@@ -217,6 +217,46 @@ function Get-LeanTTYTerminalInputNodes {
     })
 }
 
+function Set-LeanTTYTerminalInputFocus {
+    param(
+        [Parameter(Mandatory = $true)][string]$Hdc,
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)]$InputNode,
+        [Parameter(Mandatory = $true)][string]$LocalPath,
+        [ValidateRange(1, 30)][int]$TimeoutSeconds = 10
+    )
+
+    $inputBounds = [string]$InputNode.attributes.bounds
+    $center = Get-LeanTTYBoundsCenter -Bounds $inputBounds
+    & $Hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw '[environment] Unable to focus the LeanTTY terminal input'
+    }
+
+    $stableFocusedSnapshots = 0
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout `
+            -Hdc $Hdc `
+            -Target $Target `
+            -LocalPath $LocalPath
+        $focusedTarget = @(Get-LeanTTYTerminalInputNodes -Layout $layout | Where-Object {
+            [string]$_.attributes.bounds -eq $inputBounds -and
+            [string]$_.attributes.focused -eq 'true'
+        })
+        if ($focusedTarget.Count -eq 1) {
+            $stableFocusedSnapshots++
+            if ($stableFocusedSnapshots -ge 2) { return $layout }
+        } else {
+            $stableFocusedSnapshots = 0
+        }
+        if ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+            Start-Sleep -Milliseconds 200
+        }
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds)
+    throw '[environment] Timed out waiting for stable LeanTTY terminal input focus'
+}
+
 function Wait-LeanTTYTerminalInputCount {
     param(
         [Parameter(Mandatory = $true)][string]$Hdc,

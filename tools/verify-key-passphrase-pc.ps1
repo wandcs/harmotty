@@ -134,6 +134,24 @@ function Complete-BehaviorStage {
 function Submit-Command {
     param([Parameter(Mandatory = $true)][string]$Command)
 
+    $layoutPath = Join-Path $EvidenceDirectory (
+        'layout-command-focus-' + [Guid]::NewGuid().ToString('N') + '.json'
+    )
+    $layout = Wait-LeanTTYTerminalInputLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath $layoutPath `
+        -TimeoutSeconds 10
+    $inputNodes = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+    if ($inputNodes.Count -ne 1) {
+        throw '[environment] Unable to identify the terminal input before command submission'
+    }
+    Set-LeanTTYTerminalInputFocus `
+        -Hdc $hdc `
+        -Target $Target `
+        -InputNode $inputNodes[0] `
+        -LocalPath $layoutPath `
+        -TimeoutSeconds 10 | Out-Null
     Submit-LeanTTYDeviceCommand `
         -Hdc $hdc `
         -Target $Target `

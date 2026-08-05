@@ -391,9 +391,12 @@ function Focus-ActiveCommandInput {
     } else {
         throw '[environment] Unable to identify the active terminal input before command submission'
     }
-    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$inputNode.attributes.bounds)
-    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw '[environment] Unable to focus the terminal before command submission' }
+    Set-LeanTTYTerminalInputFocus `
+        -Hdc $hdc `
+        -Target $Target `
+        -InputNode $inputNode `
+        -LocalPath (Join-Path $EvidenceDirectory $LayoutName) `
+        -TimeoutSeconds 10 | Out-Null
 }
 
 function Submit-FocusedDeviceCommand {

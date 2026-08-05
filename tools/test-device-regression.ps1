@@ -243,6 +243,49 @@ Assert-True (
     $splitInputs[1].attributes.bounds -eq '[1694,135][1712,176]'
 ) 'Terminal input nodes are not sorted into stable left/right pane order'
 
+& {
+    $script:focusLayoutIndex = 0
+    $script:focusClickCalls = [Collections.Generic.List[object]]::new()
+    $focusLayouts = @(
+        (@'
+{"attributes":{"bounds":"[0,0][3120,1955]","hint":""},"children":[{"attributes":{"bounds":"[127,495][145,536]","hint":"Terminal input","focused":"false"},"children":[]},{"attributes":{"bounds":"[1694,135][1712,176]","hint":"Terminal input","focused":"true"},"children":[]}]}
+'@ | ConvertFrom-Json -Depth 20),
+        (@'
+{"attributes":{"bounds":"[0,0][3120,1955]","hint":""},"children":[{"attributes":{"bounds":"[127,495][145,536]","hint":"Terminal input","focused":"true"},"children":[]},{"attributes":{"bounds":"[1694,135][1712,176]","hint":"Terminal input","focused":"false"},"children":[]}]}
+'@ | ConvertFrom-Json -Depth 20),
+        (@'
+{"attributes":{"bounds":"[0,0][3120,1955]","hint":""},"children":[{"attributes":{"bounds":"[127,495][145,536]","hint":"Terminal input","focused":"true"},"children":[]},{"attributes":{"bounds":"[1694,135][1712,176]","hint":"Terminal input","focused":"false"},"children":[]}]}
+'@ | ConvertFrom-Json -Depth 20)
+    )
+    function Invoke-FocusHdc {
+        $script:focusClickCalls.Add(@($args))
+        $global:LASTEXITCODE = 0
+    }
+    function Get-LeanTTYDeviceLayout {
+        param($Hdc, $Target, $LocalPath)
+        $layout = $focusLayouts[[Math]::Min($script:focusLayoutIndex, $focusLayouts.Count - 1)]
+        $script:focusLayoutIndex++
+        return $layout
+    }
+
+    $focusedLayout = Set-LeanTTYTerminalInputFocus `
+        -Hdc 'Invoke-FocusHdc' `
+        -Target 'regression-device' `
+        -InputNode $splitInputs[0] `
+        -LocalPath 'unused.json' `
+        -TimeoutSeconds 2
+    $focusedNodes = @(Get-LeanTTYTerminalInputNodes -Layout $focusedLayout | Where-Object {
+        [string]$_.attributes.focused -eq 'true'
+    })
+    Assert-True (
+        $script:focusClickCalls.Count -eq 1 -and
+        ($script:focusClickCalls[0] -join ' ') -match 'uiInput click 136 516' -and
+        $script:focusLayoutIndex -eq 3 -and
+        $focusedNodes.Count -eq 1 -and
+        $focusedNodes[0].attributes.bounds -eq '[127,495][145,536]'
+    ) 'Terminal focus gate did not wait for two stable focused snapshots of the clicked input'
+}
+
 foreach ($scriptName in @(
     'device-regression.ps1',
     'verify-key-passphrase-pc.ps1',
@@ -281,6 +324,7 @@ foreach ($scriptName in @(
             $content.Contains('UnlockPasswordPath') -and
             $content.Contains('Start-LeanTTYRegressionApp') -and
             $content.Contains('Wait-LeanTTYTerminalInputLayout') -and
+            $content.Contains('Set-LeanTTYTerminalInputFocus') -and
             $content.Contains('deviceUnlock = $deviceUnlockResult')
         ) 'Device scenario does not record conditional local-credential unlock behavior'
     }
@@ -308,6 +352,7 @@ foreach ($scriptName in @(
             $content.Contains("'[environment] Device key injection changed the SSH command target'") -and
             $content.Contains('Activate-RegressionWindow') -and
             $content.Contains('Focus-ActiveCommandInput') -and
+            $content.Contains('Set-LeanTTYTerminalInputFocus') -and
             $content.Contains('businessOutcomeRequired = $true') -and
             $content.Contains('fixedDelayUsedAsVerdict = $false') -and
             $content.Contains('deviceProgramIntervalMilliseconds = 250')
