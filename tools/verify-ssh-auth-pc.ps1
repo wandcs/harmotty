@@ -7,6 +7,9 @@
   records non-secret behavior evidence. By default, the retained HAP is
   installed without rebuilding. -DiagnosticHap permits an explicit current
   test package without promoting its evidence to a retained release candidate.
+  -VerifyPreferencesUnchanged compares an in-memory SHA-256 before and after
+  the selected authentication stages without reading, exporting or persisting
+  the Preferences content or digest.
   All temporary credentials and port mappings are removed.
 #>
 [CmdletBinding()]
@@ -14,6 +17,7 @@ param(
     [string]$Target = '',
     [string]$HapPath = '',
     [switch]$DiagnosticHap,
+    [switch]$VerifyPreferencesUnchanged,
     [string]$EvidenceDirectory = '',
     [string]$CandidateBasePath = '',
     [string]$UnlockPasswordPath = '',
@@ -163,6 +167,9 @@ $fixtureProcessAbsent = $false
 $failure = ''
 $scenarioResult = 'failed'
 $caughtError = $null
+$preferencesDigestBefore = ''
+$preferencesDigestAfter = ''
+$preferencesDigestUnchanged = $null
 $stageStartedAt = $null
 $currentStage = 'initialization'
 $failureDomain = 'none'
@@ -735,6 +742,15 @@ function Write-AuthEvidence {
             paneRouting = 'sorted-terminal-input-accessibility-nodes'
             minimizeTrigger = 'HarmonyOS-EnhanceMinimizeBtn'
         }
+        preferences = [ordered]@{
+            verificationRequested = [bool]$VerifyPreferencesUnchanged
+            algorithm = 'SHA-256'
+            contentReadOrExported = $false
+            digestPersisted = $false
+            beforeCaptured = (-not [string]::IsNullOrWhiteSpace($preferencesDigestBefore))
+            afterCaptured = (-not [string]::IsNullOrWhiteSpace($preferencesDigestAfter))
+            unchanged = $preferencesDigestUnchanged
+        }
         coverage = @($checks | Where-Object { $_.name -ne 'fixture-and-device-preflight' } |
             ForEach-Object { $_.name })
         declaredCoverage = @(
@@ -777,6 +793,24 @@ function Write-AuthEvidence {
         (ConvertTo-Json -InputObject $evidence -Depth 7),
         [Text.UTF8Encoding]::new($false)
     )
+}
+
+function Get-LeanTTYPreferencesDigest {
+    $preferencesPath = '/data/app/el2/100/base/com.leantty.app/haps/entry/preferences/leantty_settings'
+    $output = @(
+        & $hdc -t $Target shell -b com.leantty.app "sha256sum $preferencesPath" 2>&1
+    )
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to compute the LeanTTY Preferences digest in the application sandbox'
+    }
+    $match = [regex]::Match(
+        ($output -join "`n").Trim(),
+        '^(?<digest>[0-9a-fA-F]{64})\s+/data/app/el2/100/base/com\.leantty\.app/haps/entry/preferences/leantty_settings$'
+    )
+    if (-not $match.Success) {
+        throw 'Unexpected LeanTTY Preferences digest response'
+    }
+    return $match.Groups['digest'].Value.ToLowerInvariant()
 }
 
 try {
@@ -854,6 +888,9 @@ try {
             -TimeoutSeconds 10 | Out-Null
     }
     Add-AuthCheck -Name 'fixture-and-device-preflight' -DurationMs $preflight.ElapsedMilliseconds
+    if ($VerifyPreferencesUnchanged) {
+        $preferencesDigestBefore = Get-LeanTTYPreferencesDigest
+    }
 
     if (Test-AuthStageSelected -Name 'password-success') {
     Start-AuthStage -Name 'password-success'
@@ -1115,6 +1152,17 @@ try {
     Submit-FocusedDeviceCommand `
         -Command "ssh-keygen -R [127.0.0.1]:$FixturePort" `
         -LayoutName 'layout-final-known-hosts-command-focus.json'
+    if ($VerifyPreferencesUnchanged) {
+        $preferencesCheck = [Diagnostics.Stopwatch]::StartNew()
+        $preferencesDigestAfter = Get-LeanTTYPreferencesDigest
+        $preferencesDigestUnchanged = ($preferencesDigestBefore -ceq $preferencesDigestAfter)
+        if (-not $preferencesDigestUnchanged) {
+            throw 'LeanTTY Preferences changed during the selected SSH authentication stages'
+        }
+        Add-AuthCheck `
+            -Name 'preferences-unchanged-during-authentication' `
+            -DurationMs $preferencesCheck.ElapsedMilliseconds
+    }
     $scenarioResult = 'passed'
 } catch {
     $caughtError = $_

@@ -309,6 +309,7 @@ foreach ($scriptName in @(
         Assert-True (
             $content.Contains('[string[]]$Only') -and
             $content.Contains('[switch]$DiagnosticHap') -and
+            $content.Contains('[switch]$VerifyPreferencesUnchanged') -and
             $content.Contains('-DiagnosticHap requires an explicit -HapPath') -and
             $content.Contains("provenance = 'explicit-unretained-diagnostic-hap'") -and
             $content.Contains("`$runMode = if (`$Only.Count -eq 0 -and -not `$DiagnosticHap)") -and
@@ -323,6 +324,15 @@ foreach ($scriptName in @(
             $content.Contains("'diagnostic'") -and
             $content.Contains("'acceptance'")
         ) 'SSH authentication harness lacks targeted diagnostics or auditable live evidence'
+        Assert-True (
+            $content.Contains('Get-LeanTTYPreferencesDigest') -and
+            $content.Contains('sha256sum $preferencesPath') -and
+            $content.Contains('contentReadOrExported = $false') -and
+            $content.Contains('digestPersisted = $false') -and
+            $content.Contains('unchanged = $preferencesDigestUnchanged') -and
+            -not $content.Contains('beforeDigest =') -and
+            -not $content.Contains('afterDigest =')
+        ) 'SSH authentication harness does not compare Preferences safely without persisting digests'
         Assert-True (
             $content.Contains("'password-success'") -and
             $content.Contains("'password-then-keyboard-interactive-mixed-echo'") -and
