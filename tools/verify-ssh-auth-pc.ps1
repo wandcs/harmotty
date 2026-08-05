@@ -408,6 +408,25 @@ function Submit-FocusedDeviceCommand {
     Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
 }
 
+function Assert-AuthCommandLoopbackTarget {
+    $logs = ''
+    try {
+        $logs = Wait-LeanTTYAppLog `
+            -Hdc $hdc `
+            -Target $Target `
+            -ProcessId $appPid `
+            -Pattern 'SSH connect initiated:' `
+            -TimeoutSeconds 5
+    } catch {
+        throw '[environment] Device key injection changed the SSH command target'
+    }
+    $matches = [regex]::Matches($logs, 'SSH connect initiated:\s+(?<host>[^\s]+)')
+    if ($matches.Count -eq 0 -or
+        $matches[$matches.Count - 1].Groups['host'].Value -cne '127.0.0.1') {
+        throw '[environment] Device key injection changed the SSH command target'
+    }
+}
+
 function Start-AuthCommand {
     param(
         [Parameter(Mandatory = $true)][string]$User,
@@ -417,6 +436,7 @@ function Start-AuthCommand {
     Submit-FocusedDeviceCommand `
         -Command "ssh -p $FixturePort$identityOption $User@127.0.0.1" `
         -LayoutName 'layout-command-focus.json'
+    Assert-AuthCommandLoopbackTarget
 }
 
 function Close-FixtureShell {
@@ -735,7 +755,7 @@ function Write-AuthEvidence {
             method = 'raw-physical-key-events'
             secretInjection = 'runtime-generated-printable-ascii'
             textChunkCharacters = 1
-            interChunkPacingMilliseconds = 10
+            interChunkPacingMilliseconds = 50
             submitTelemetry = 'compile-time-acceptance-marker-with-sequence-and-kind-only'
             businessOutcomeRequired = $true
             fixedDelayUsedAsVerdict = $false

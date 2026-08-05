@@ -155,6 +155,9 @@ Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
+    $deviceRegressionText -match 'Start-Sleep -Milliseconds 50(?:\s|$)'
+) 'Device raw-key text injection does not leave enough time for ArkUI to consume modifier transitions'
+Assert-True (
     $deviceRegressionText -notmatch 'shell\s+run-as\s+com\.leantty\.app' -and
     $deviceRegressionText -match 'shell\s+-b\s+com\.leantty\.app'
 ) 'Device key-state inspection does not use the HarmonyOS bundle shell'
@@ -301,10 +304,13 @@ foreach ($scriptName in @(
             -not $content.Contains("SessionViewModel: D: 1 chars, mode=") -and
             $content.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
             $content.Contains('Submit-FocusedDeviceCommand') -and
+            $content.Contains('Assert-AuthCommandLoopbackTarget') -and
+            $content.Contains("'[environment] Device key injection changed the SSH command target'") -and
             $content.Contains('Activate-RegressionWindow') -and
             $content.Contains('Focus-ActiveCommandInput') -and
             $content.Contains('businessOutcomeRequired = $true') -and
-            $content.Contains('fixedDelayUsedAsVerdict = $false')
+            $content.Contains('fixedDelayUsedAsVerdict = $false') -and
+            $content.Contains('interChunkPacingMilliseconds = 50')
         ) 'SSH authentication scenario does not enforce the layout/log secret boundary'
         Assert-True (
             $content.Contains('[string[]]$Only') -and
