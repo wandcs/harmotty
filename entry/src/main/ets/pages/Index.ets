@@ -646,6 +646,14 @@ struct Index {
       return true
     }
 
+    if (InteractionPolicy.isTerminalSearchShortcut(event.keyCode, ctrlKey, altKey, shiftKey)) {
+      let runtime: PaneRuntime | null = this.activePaneRuntime()
+      if (runtime !== null) {
+        runtime.surface.openSearch()
+      }
+      return true
+    }
+
     if (ctrlKey && shiftKey && event.keyCode === 2036) {
       this.newTab()
       return true

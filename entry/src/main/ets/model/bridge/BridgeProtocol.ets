@@ -35,6 +35,7 @@ export class BridgeProtocol {
   static readonly KIND_SNAPSHOT_REQUEST: string = 'snapshotRequest'
   static readonly KIND_RESTORE_SNAPSHOT: string = 'restoreSnapshot'
   static readonly KIND_RESTORE_COMPLETE: string = 'restoreComplete'
+  static readonly KIND_SEARCH_OPEN: string = 'searchOpen'
 
   static readonly KIND_READY: string = 'ready'
   static readonly KIND_RESIZE: string = 'resize'
@@ -83,6 +84,9 @@ export class BridgeProtocol {
       return null
     }
     if (kind === BridgeProtocol.KIND_RESTORE_COMPLETE && payload.length > 0) {
+      return null
+    }
+    if (kind === BridgeProtocol.KIND_SEARCH_OPEN && payload.length > 0) {
       return null
     }
     if ((kind === BridgeProtocol.KIND_RESTORE_SNAPSHOT || kind === BridgeProtocol.KIND_SNAPSHOT) &&
@@ -148,6 +152,10 @@ export class BridgeProtocol {
     return BridgeProtocol.nativeControl(BridgeProtocol.KIND_RESTORE_SNAPSHOT, snapshot)
   }
 
+  static searchOpen(): BridgeMessage {
+    return BridgeProtocol.nativeControl(BridgeProtocol.KIND_SEARCH_OPEN)
+  }
+
   static copySelection(): BridgeMessage {
     return BridgeProtocol.nativeControl(BridgeProtocol.KIND_COPY_SELECTION)
   }
@@ -198,7 +206,8 @@ export class BridgeProtocol {
         kind === BridgeProtocol.KIND_COPY_SELECTION ||
         kind === BridgeProtocol.KIND_SECONDARY_ACTION ||
         kind === BridgeProtocol.KIND_SNAPSHOT_REQUEST ||
-        kind === BridgeProtocol.KIND_RESTORE_SNAPSHOT
+        kind === BridgeProtocol.KIND_RESTORE_SNAPSHOT ||
+        kind === BridgeProtocol.KIND_SEARCH_OPEN
     }
     return kind === BridgeProtocol.KIND_READY ||
       kind === BridgeProtocol.KIND_RESIZE ||

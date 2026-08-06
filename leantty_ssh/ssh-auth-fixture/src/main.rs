@@ -24,6 +24,13 @@ const USER_UNSUPPORTED: &str = "unsupported";
 const USER_NAVIGATION: &str = "navigation";
 const USER_NAVIGATION_TWO: &str = "navigation-two";
 const USER_NAVIGATION_THREE: &str = "navigation-three";
+const PERF_PREPARE_COMMAND: &str = "ltty-perf-prepare";
+const PERF_RUN_COMMAND: &str = "ltty-perf-run";
+const PERF_MAX_CASE_ID_LENGTH: usize = 24;
+const PERF_MAX_LINES: usize = 12_000;
+const PERF_MIN_LINE_WIDTH: usize = 48;
+const PERF_MAX_LINE_WIDTH: usize = 160;
+const PERF_OUTPUT_CHUNK_BYTES: usize = 16 * 1024;
 
 #[derive(Clone)]
 struct Credentials {
@@ -125,6 +132,8 @@ struct FixtureServer {
     password_complete: bool,
     interactive_round: InteractiveRound,
     session_scenario: Option<Scenario>,
+    shell_input: Vec<u8>,
+    pending_perf_request: Option<PerfStreamRequest>,
 }
 
 impl FixtureServer {
@@ -135,7 +144,28 @@ impl FixtureServer {
             password_complete: false,
             interactive_round: InteractiveRound::NotStarted,
             session_scenario: None,
+            shell_input: Vec::new(),
+            pending_perf_request: None,
         }
+    }
+
+    fn take_perf_command(&mut self, data: &[u8]) -> Option<PerfCommand> {
+        let mut command = None;
+        for byte in data {
+            if matches!(*byte, b'\r' | b'\n') {
+                if command.is_none() {
+                    command = parse_perf_command(&self.shell_input);
+                }
+                self.shell_input.clear();
+            } else if byte.is_ascii() && !byte.is_ascii_control() {
+                if self.shell_input.len() < 256 {
+                    self.shell_input.push(*byte);
+                } else {
+                    self.shell_input.clear();
+                }
+            }
+        }
+        command
     }
 
     fn reject(methods: &[MethodKind], partial_success: bool) -> Auth {
@@ -443,8 +473,110 @@ impl Handler for FixtureServer {
             return Ok(());
         }
         session.data(channel, data.to_vec())?;
+        match self.take_perf_command(data) {
+            Some(PerfCommand::Prepare(request)) => {
+                let expected_bytes = perf_stream_expected_bytes(&request);
+                let begin = format!(
+                    "\x1b]0;LTTY_PERF_BEGIN__:{}:{}\x07\r\nfixture> ",
+                    request.case_id, expected_bytes
+                );
+                self.pending_perf_request = Some(request);
+                session.data(channel, begin.into_bytes())?;
+            }
+            Some(PerfCommand::Run(case_id)) => {
+                let Some(request) = self.pending_perf_request.take() else {
+                    return Ok(());
+                };
+                if request.case_id != case_id {
+                    self.pending_perf_request = Some(request);
+                    return Ok(());
+                }
+                let payload = build_perf_stream_payload(&request);
+                let end = format!(
+                    "\x1b]0;LTTY_PERF_END__:{}\x07\r\nfixture> ",
+                    request.case_id
+                );
+                let handle = session.handle();
+                tokio::spawn(async move {
+                    for chunk in payload.chunks(PERF_OUTPUT_CHUNK_BYTES) {
+                        if handle.data(channel, chunk.to_vec()).await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                    }
+                    let _ = handle.data(channel, end.into_bytes()).await;
+                });
+            }
+            None => {}
+        }
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PerfStreamRequest {
+    case_id: String,
+    lines: usize,
+    line_width: usize,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum PerfCommand {
+    Prepare(PerfStreamRequest),
+    Run(String),
+}
+
+fn is_valid_perf_case_id(case_id: &str) -> bool {
+    !case_id.is_empty()
+        && case_id.len() <= PERF_MAX_CASE_ID_LENGTH
+        && case_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn parse_perf_command(input: &[u8]) -> Option<PerfCommand> {
+    let command = std::str::from_utf8(input).ok()?;
+    let mut parts = command.split_ascii_whitespace();
+    let kind = parts.next()?;
+    let case_id = parts.next()?;
+    if !is_valid_perf_case_id(case_id) {
+        return None;
+    }
+    if kind == PERF_RUN_COMMAND {
+        return (parts.next().is_none()).then(|| PerfCommand::Run(case_id.to_string()));
+    }
+    if kind != PERF_PREPARE_COMMAND {
+        return None;
+    }
+    let lines = parts.next()?.parse::<usize>().ok()?;
+    let line_width = parts.next()?.parse::<usize>().ok()?;
+    if parts.next().is_some()
+        || !(1..=PERF_MAX_LINES).contains(&lines)
+        || !(PERF_MIN_LINE_WIDTH..=PERF_MAX_LINE_WIDTH).contains(&line_width)
+    {
+        return None;
+    }
+    Some(PerfCommand::Prepare(PerfStreamRequest {
+        case_id: case_id.to_string(),
+        lines,
+        line_width,
+    }))
+}
+
+fn build_perf_stream_payload(request: &PerfStreamRequest) -> Vec<u8> {
+    let mut payload = Vec::with_capacity((request.line_width + 2) * request.lines);
+    for line in 0..request.lines {
+        let prefix = format!("LTTY_PERF_{}_{line:05} ", request.case_id);
+        payload.extend_from_slice(prefix.as_bytes());
+        payload.resize(payload.len() + request.line_width - prefix.len(), b'X');
+        payload.extend_from_slice(b"\r\n");
+    }
+    payload
+}
+
+fn perf_stream_expected_bytes(request: &PerfStreamRequest) -> usize {
+    let prefix = format!("LTTY_PERF_{}_{:05} ", request.case_id, 0);
+    (request.line_width - prefix.len()) * request.lines
 }
 
 fn format_input_hex(data: &[u8]) -> String {
@@ -587,6 +719,55 @@ mod tests {
     fn formats_navigation_input_as_lowercase_hex() {
         assert_eq!(format_input_hex(b"\x1b[1;7D"), "1b 5b 31 3b 37 44");
         assert_eq!(format_input_hex(b"\t"), "09");
+    }
+
+    #[test]
+    fn parses_only_bounded_perf_stream_commands() {
+        assert_eq!(
+            parse_perf_command(b"ltty-perf-prepare baseline_01 12000 80"),
+            Some(PerfCommand::Prepare(PerfStreamRequest {
+                case_id: "baseline_01".to_string(),
+                lines: 12_000,
+                line_width: 80,
+            }))
+        );
+        assert_eq!(
+            parse_perf_command(b"ltty-perf-run baseline_01"),
+            Some(PerfCommand::Run("baseline_01".to_string()))
+        );
+        assert_eq!(
+            parse_perf_command(b"ltty-perf-prepare baseline:01 100 80"),
+            None
+        );
+        assert_eq!(
+            parse_perf_command(b"ltty-perf-prepare baseline 12001 80"),
+            None
+        );
+        assert_eq!(
+            parse_perf_command(b"ltty-perf-prepare baseline 100 47"),
+            None
+        );
+        assert_eq!(parse_perf_command(b"ltty-perf-run baseline extra"), None);
+        assert_eq!(parse_perf_command(b"help"), None);
+    }
+
+    #[test]
+    fn builds_exact_width_perf_stream_payload() {
+        let request = PerfStreamRequest {
+            case_id: "sample01".to_string(),
+            lines: 3,
+            line_width: 64,
+        };
+        let payload = build_perf_stream_payload(&request);
+        assert_eq!(payload.len(), (64 + 2) * 3);
+        assert_eq!(
+            payload.iter().filter(|byte| **byte == b'X').count(),
+            perf_stream_expected_bytes(&request)
+        );
+        for (index, line) in payload.chunks_exact(66).enumerate() {
+            assert_eq!(&line[64..], b"\r\n");
+            assert!(line.starts_with(format!("LTTY_PERF_sample01_{index:05} ").as_bytes()));
+        }
     }
 
     #[test]

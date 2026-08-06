@@ -41,10 +41,11 @@ function Add-LeanTTYAcceptanceSource {
         "import { BrowserLauncher } from '../model/browser/BrowserLauncher'`nimport { ACCEPTANCE_TESTS } from 'BuildProfile'"
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index `
         'const MENU_ACTION_COUNT: number = 6' `
-        'const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 7 : 6'
+        'const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 8 : 6'
     $selectionAnchor = "    if (selected === 5) { this.handleFontDecrease(); return }"
     $selectionReplacement = $selectionAnchor + "`n" +
-        "    if (selected === 6 && ACCEPTANCE_TESTS) { this.rebuildRendererForAcceptance(); return }"
+        "    if (selected === 6 && ACCEPTANCE_TESTS) { this.rebuildRendererForAcceptance(); return }`n" +
+        "    if (selected === 7 && ACCEPTANCE_TESTS) { this.openSearchForAcceptance(); return }"
     $text.index = Set-LeanTTYAcceptanceSourceText `
         $text.index $selectionAnchor $selectionReplacement
     $rendererMethod = @'
@@ -69,6 +70,18 @@ function Add-LeanTTYAcceptanceSource {
     })
   }
 
+  private openSearchForAcceptance(): void {
+    if (!ACCEPTANCE_TESTS) {
+      return
+    }
+    let runtime: PaneRuntime | null = this.activePaneRuntime()
+    if (runtime === null) {
+      logger.error('Acceptance search open has no active pane')
+      return
+    }
+    runtime.surface.openSearch()
+  }
+
 '@
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index `
         "  @Builder`n  menuPanel() {" `
@@ -82,6 +95,8 @@ function Add-LeanTTYAcceptanceSource {
         this.menuDivider()
         this.menuRow(6, '↻', 'Acceptance: Rebuild Renderer', '', true,
           () => { this.rebuildRendererForAcceptance() })
+        this.menuRow(7, '⌕', 'Acceptance: Open Search', '', true,
+          () => { this.openSearchForAcceptance() })
       }
 '@
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index $menuAnchor $menuAddition

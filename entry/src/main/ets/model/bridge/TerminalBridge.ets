@@ -17,6 +17,7 @@ export class TerminalBridge {
   private pendingFit: boolean = false
   private pendingRestoreSnapshot: string = ''
   private pendingSnapshotRequestIds: number[] = []
+  private pendingSearchOpen: boolean = false
   private awaitingRestoreComplete: boolean = false
   private readyHandlerNotified: boolean = false
   private inFlightBytes: number = 0
@@ -80,6 +81,7 @@ export class TerminalBridge {
     this.pendingFit = false
     this.pendingRestoreSnapshot = ''
     this.pendingSnapshotRequestIds = []
+    this.pendingSearchOpen = false
     this.awaitingRestoreComplete = false
     this.readyHandlerNotified = false
     this.inFlightBytes = 0
@@ -175,6 +177,11 @@ export class TerminalBridge {
     if (this.ready) {
       this.send(BridgeProtocol.copySelection())
     }
+  }
+
+  openSearch(): void {
+    this.pendingSearchOpen = true
+    this.pumpSearchOpen()
   }
 
   restoreSnapshot(snapshot: string): void {
@@ -299,6 +306,7 @@ export class TerminalBridge {
       }
       this.pumpPendingData()
       this.pumpSnapshotRequests()
+      this.pumpSearchOpen()
       this.logger.info('Web terminal ready, flushed ' + pendingCount.toString() + ' pending chunks')
       if (!this.awaitingRestoreComplete) {
         this.notifyReadyHandler()
@@ -309,6 +317,7 @@ export class TerminalBridge {
       if (this.awaitingRestoreComplete) {
         this.awaitingRestoreComplete = false
         this.pumpSnapshotRequests()
+        this.pumpSearchOpen()
         this.notifyReadyHandler()
       }
       return
@@ -341,6 +350,15 @@ export class TerminalBridge {
       this.send(BridgeProtocol.snapshotRequest(this.pendingSnapshotRequestIds[i]))
     }
     this.pendingSnapshotRequestIds = []
+  }
+
+  private pumpSearchOpen(): void {
+    if (!this.pendingSearchOpen || !this.ready || this.awaitingRestoreComplete) {
+      return
+    }
+    if (this.send(BridgeProtocol.searchOpen())) {
+      this.pendingSearchOpen = false
+    }
   }
 
   private compactPendingData(): void {

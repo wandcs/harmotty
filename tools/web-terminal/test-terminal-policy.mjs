@@ -134,6 +134,14 @@ assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, false), true);
 assert.equal(policy.shouldActivateLink({ ...exactCtrl, button: 1 }, 'none', true, false), false);
 assert.equal(policy.shouldActivateLink(exactCtrl, 'none', false, false), false);
 assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, true), false);
+assert.equal(policy.searchResultLabel('', -1, 0, 1000), '');
+assert.equal(policy.searchResultLabel('missing', -1, 0, 1000), 'No results');
+assert.equal(policy.searchResultLabel('match', 0, 2, 1000), '1/2');
+assert.equal(policy.searchResultLabel('match', 1, 2, 1000), '2/2');
+assert.equal(policy.searchResultLabel('match', -1, 1000, 1000), '1000+ results');
+assert.equal(policy.wrappedControlIndex(0, 4, false), 1);
+assert.equal(policy.wrappedControlIndex(3, 4, false), 0);
+assert.equal(policy.wrappedControlIndex(0, 4, true), 3);
 
 const terminalHtml = readFileSync(new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8');
 assert.match(terminalHtml,
@@ -180,6 +188,26 @@ assert.doesNotMatch(terminalHtml, /replayGate|replayBegin|replayEnd/,
   'the removed raw terminal-history replay protocol must not return');
 assert.match(terminalHtml, /<script src="addon-serialize\.js"><\/script>/,
   'the terminal page must load the pinned xterm serialization addon');
+assert.match(terminalHtml, /<script src="addon-search\.js"><\/script>/,
+  'the terminal page must load the pinned xterm search addon locally');
+assert.match(terminalHtml, /id="search-panel"[\s\S]*id="search-input"[\s\S]*id="search-previous"[\s\S]*id="search-next"[\s\S]*id="search-close"/,
+  'the terminal surface must own one compact keyboard-search control set');
+assert.match(terminalHtml,
+  /new SearchAddon\.SearchAddon\(\{ highlightLimit: SEARCH_HIGHLIGHT_LIMIT \}\)[\s\S]*term\.loadAddon\(searchAddon\)/,
+  'the current xterm instance must own the bounded official search addon');
+assert.match(terminalHtml,
+  /regex:\s*false,[\s\S]*wholeWord:\s*false,[\s\S]*caseSensitive:\s*false,[\s\S]*decorations:/,
+  'search must use the frozen literal case-insensitive decorated matching options');
+assert.match(terminalHtml,
+  /compositionstart[\s\S]*searchComposing = true[\s\S]*compositionend[\s\S]*searchComposing = false[\s\S]*runSearch/,
+  'IME composition must defer search until committed text is available');
+assert.match(terminalHtml,
+  /function closeSearch\(restoreTerminalFocus\)[\s\S]*searchAddon\.clearDecorations\(\)[\s\S]*term\.focus\(\)/,
+  'closing search must clear short-lived decorations and optionally restore terminal focus');
+assert.match(terminalHtml, /term\.buffer\.onBufferChange\(function\(\) \{ closeSearch\(true\); \}\)/,
+  'normal and alternate buffer switches must close the local search state');
+assert.doesNotMatch(terminalHtml, /sendBridgeControl\('search/,
+  'query text and result state must never leave the Terminal Surface');
 assert.match(terminalHtml, /serializeAddon = new SerializeAddon\.SerializeAddon\(\)/,
   'terminal recovery checkpoints must use xterm framebuffer serialization');
 assert.match(terminalHtml,
@@ -348,11 +376,38 @@ assert.match(restoredSnapshot, /\u001b\[31msixth/,
 assert.equal(restoredSnapshot.match(/detached-output/g)?.length, 1,
   'output produced after the checkpoint must follow restored content exactly once');
 
+const addonSearch = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/addon-search.js', import.meta.url), 'utf8');
+vm.runInThisContext(addonSearch);
+const searchTerminal = new globalThis.Terminal({
+  cols: 24,
+  rows: 4,
+  scrollback: 20,
+  allowProposedApi: true
+});
+const searchAddon = new globalThis.SearchAddon.SearchAddon({ highlightLimit: 1000 });
+searchTerminal.loadAddon(searchAddon);
+assert.equal(typeof searchAddon.findNext, 'function');
+assert.equal(typeof searchAddon.findPrevious, 'function');
+assert.equal(typeof searchAddon.clearDecorations, 'function');
+assert.equal(typeof searchAddon.onDidChangeResults, 'function');
+const searchMarker = searchTerminal.registerMarker(0);
+assert.doesNotThrow(() => {
+  searchTerminal.registerDecoration({
+    marker: searchMarker,
+    width: 1,
+    backgroundColor: '#585B70'
+  });
+}, 'the pinned terminal option must unlock the official addon decoration path');
+
 const terminalBridge = readFileSync(
   new URL('../../entry/src/main/ets/model/bridge/TerminalBridge.ets', import.meta.url), 'utf8');
 assert.match(terminalBridge,
   /awaitingRestoreComplete[\s\S]*?KIND_RESTORE_COMPLETE[\s\S]*?notifyReadyHandler/,
   'native focus and ready handling must wait for the web restore acknowledgement');
+assert.match(terminalBridge,
+  /pendingSearchOpen[\s\S]*private pumpSearchOpen[\s\S]*!this\.ready \|\| this\.awaitingRestoreComplete[\s\S]*BridgeProtocol\.searchOpen\(\)/,
+  'search open must wait for the current bridge and framebuffer restore boundary');
 assert.match(terminalBridge,
   /private pumpSnapshotRequests[\s\S]*?pendingDataHead < this\.pendingData\.length \|\| this\.inFlightMessages > 0/,
   'a checkpoint request must wait until all earlier terminal output is acknowledged');
@@ -383,6 +438,9 @@ assert.doesNotMatch(bridgeProtocol, /releaseBuffers|KIND_RELEASE_BUFFERS/,
   'disconnect cleanup must not expose a bridge command that clears a live terminal surface');
 assert.match(bridgeProtocol, /KIND_OPEN_URL:\s*string = 'openUrl'/,
   'browser requests must cross the typed web-to-native control allowlist');
+assert.match(bridgeProtocol,
+  /KIND_SEARCH_OPEN:\s*string = 'searchOpen'[\s\S]*kind === BridgeProtocol\.KIND_SEARCH_OPEN && payload\.length > 0/,
+  'search open must be a typed native-to-web control with an empty payload');
 
 const sessionViewModel = readFileSync(
   new URL('../../entry/src/main/ets/viewmodel/SessionViewModel.ets', import.meta.url), 'utf8');
@@ -403,6 +461,8 @@ assert.match(terminalSurfaceController,
 assert.match(terminalSurfaceController,
   /msg\.kind === BridgeProtocol\.KIND_OPEN_URL[\s\S]*onOpenUrlHandler/,
   'the terminal surface must consume browser requests before generic SSH session routing');
+assert.match(terminalSurfaceController, /openSearch\(\)[\s\S]*this\.bridge\.openSearch\(\)/,
+  'the terminal surface must expose only a local search-open intent');
 assert.doesNotMatch(terminalSurfaceController, /getHistoryChunks|queueReplay|replayedHistory/,
   'the rejected raw byte history replay buffer must not return');
 assert.match(terminalSurfaceController,
@@ -424,6 +484,9 @@ assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
   'normal disconnect and failure must keep the current terminal surface mounted');
 assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
   'each terminal surface must route URL requests through its owning pane');
+assert.match(indexPage,
+  /InteractionPolicy\.isTerminalSearchShortcut\([\s\S]*?activePaneRuntime\(\)[\s\S]*?runtime\.surface\.openSearch\(\)/,
+  'the exact shortcut must target only the active pane runtime');
 assert.match(indexPage,
   /private onMainWindowVisibilityChanged[\s\S]*?captureMountedTerminalSnapshots\(\)/,
   'backgrounding the window must checkpoint every currently mounted terminal');

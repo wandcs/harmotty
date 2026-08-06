@@ -23,6 +23,11 @@ export class InteractionPolicy {
       Math.min(InteractionPolicy.MAX_SPLIT_RATIO, value))
   }
 
+  static isTerminalSearchShortcut(keyCode: number, ctrlKey: boolean,
+    altKey: boolean, shiftKey: boolean): boolean {
+    return keyCode === 2022 && ctrlKey && altKey && !shiftKey
+  }
+
   static warmTabAfterSwitch(currentTabId: string): string {
     return currentTabId
   }

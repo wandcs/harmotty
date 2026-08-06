@@ -432,6 +432,7 @@ Assert-True (
     $acceptanceSource.Contains("import { ACCEPTANCE_TESTS } from 'BuildProfile'") -and
     $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
     $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
+    $acceptanceSource.Contains('Acceptance: Open Search') -and
     $acceptanceSource.Contains('Invoke-WithLeanTTYAcceptanceSource')
 ) 'Acceptance-only ArkTS is not isolated from the production source tree'
 

@@ -454,6 +454,15 @@ export default function interactionFixesTest() {
       expect(BridgeProtocol.parse('H2|W2N|DATA|resize|80,24')).assertEqual(null)
       expect(BridgeProtocol.parse('H2|N2W|DATA|terminal|ok') !== null).assertEqual(true)
       expect(BridgeProtocol.parse('H2|W2N|DATA|terminal|ok') !== null).assertEqual(true)
+      let searchOpen: BridgeMessage | null = BridgeProtocol.parse('H2|N2W|CONTROL|searchOpen|')
+      expect(searchOpen !== null).assertEqual(true)
+      if (searchOpen !== null) {
+        expect(searchOpen.kind).assertEqual(BridgeProtocol.KIND_SEARCH_OPEN)
+        expect(searchOpen.payload).assertEqual('')
+      }
+      expect(BridgeProtocol.parse('H2|N2W|CONTROL|searchOpen|query')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|W2N|CONTROL|searchOpen|')).assertEqual(null)
+      expect(BridgeProtocol.parse('H2|N2W|DATA|searchOpen|')).assertEqual(null)
     })
 
     it('routesPhysicalTabToTerminalCompletion', 0, () => {
@@ -490,6 +499,14 @@ export default function interactionFixesTest() {
         .assertEqual(WorkspaceNavigationAction.NONE)
       expect(InteractionPolicy.workspaceNavigationAction(2014, true, true, true))
         .assertEqual(WorkspaceNavigationAction.NONE)
+    })
+
+    it('matchesOnlyExactCtrlAltFTerminalSearch', 0, () => {
+      expect(InteractionPolicy.isTerminalSearchShortcut(2022, true, true, false)).assertEqual(true)
+      expect(InteractionPolicy.isTerminalSearchShortcut(2022, true, true, true)).assertEqual(false)
+      expect(InteractionPolicy.isTerminalSearchShortcut(2022, true, false, false)).assertEqual(false)
+      expect(InteractionPolicy.isTerminalSearchShortcut(2022, false, true, false)).assertEqual(false)
+      expect(InteractionPolicy.isTerminalSearchShortcut(2019, true, true, false)).assertEqual(false)
     })
 
     it('consumesPaneNavigationOnlyForTheFixedTwoPaneLayout', 0, () => {

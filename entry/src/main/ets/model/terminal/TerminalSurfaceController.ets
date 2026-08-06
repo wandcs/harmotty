@@ -153,6 +153,12 @@ export class TerminalSurfaceController {
     }
   }
 
+  openSearch(): void {
+    if (this.bridge !== null) {
+      this.bridge.openSearch()
+    }
+  }
+
   blur(): void {
     if (this.bridge !== null) {
       this.bridge.blur()
