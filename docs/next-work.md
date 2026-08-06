@@ -76,7 +76,7 @@
 - [x] 扩展 ArkTS/Bridge 测试：精确快捷键、输入捕获与恢复、查询不进入 SSH、当前 Pane
   所有权、双 Pane/跨 Tab 隔离、关闭 Pane、warm Tab 淘汰、renderer 重建、迟到和畸形
   消息拒绝。
-- [ ] 回归 selection、复制粘贴、OSC 52、链接、鼠标上报、滚轮、快照恢复、字体缩放、
+- [x] 回归 selection、复制粘贴、OSC 52、链接、鼠标上报、滚轮、快照恢复、字体缩放、
   resize 和普通远端输入，证明搜索没有修改终端 buffer、选择语义或 Bridge 流控。
 - [ ] 为新增依赖、打包资产和协议更新构建工作流测试，检查锁文件稳定、manifest 哈希、
   许可证、无在线资源、release 包不含验收专用标记，并继续只打包 `arm64-v8a`。

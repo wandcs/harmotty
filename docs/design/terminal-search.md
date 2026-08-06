@@ -302,6 +302,12 @@ ArkTS/Bridge 自动化覆盖唯一 `Ctrl+Alt+F` modifier 组合、活动 Pane �
 Tab 关闭、warm Tab 淘汰、renderer generation 重建、排队打开意图取消，以及未知、错误
 方向/channel、非空 payload 和旧 port 消息拒绝。
 
+既有 Web/ArkTS 回归继续覆盖 selection-aware `Ctrl+C` 与 secondary action、系统剪贴板、
+OSC 52、HTTP(S)/OSC 8 链接 modifier、TUI mouse-reporting bypass、alternate-buffer wheel、
+SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和普通终端输入。搜索用例
+同时断言查询 DOM 不调用 Bridge/terminal 输入 API、快照不含查询或 decorations，并在终端
+指针事件交还前释放搜索拥有的 selection；这些是自动化边界证据，不替代后续物理 PC 回归。
+
 ## 实现中仍须验证
 
 - 在物理 PC 上验证搜索 selection 释放、同一次指针事件继续交给 selection/link/mouse
