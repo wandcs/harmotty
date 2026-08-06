@@ -363,10 +363,11 @@
       var direction = raw.substring(versionEnd + 1, directionEnd);
       var channel = raw.substring(directionEnd + 1, channelEnd);
       var kind = raw.substring(channelEnd + 1, kindEnd);
+      var payload = raw.substring(kindEnd + 1);
       if (direction !== BRIDGE_NATIVE_TO_WEB ||
           (channel !== BRIDGE_DATA && channel !== BRIDGE_CONTROL) || kind.length === 0 ||
-          !isSupportedNativeMessage(channel, kind)) return null;
-      return { channel: channel, kind: kind, payload: raw.substring(kindEnd + 1) };
+          !isSupportedNativeMessage(channel, kind, payload)) return null;
+      return { channel: channel, kind: kind, payload: payload };
     }
 
     function parseTerminalPacket(raw) {
@@ -385,7 +386,7 @@
       };
     }
 
-    function isSupportedNativeMessage(channel, kind) {
+    function isSupportedNativeMessage(channel, kind, payload) {
       if (channel === BRIDGE_DATA) {
         return kind === 'terminal';
       }
@@ -393,7 +394,7 @@
         kind === 'clearSelection' || kind === 'ping' ||
         kind === 'fit' || kind === 'fontSize' || kind === 'copySelection' ||
         kind === 'secondaryAction' || kind === 'snapshotRequest' || kind === 'restoreSnapshot' ||
-        kind === 'searchOpen';
+        (kind === 'searchOpen' && payload.length === 0);
     }
 
     function searchElement(id) {

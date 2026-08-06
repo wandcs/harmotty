@@ -229,6 +229,12 @@ assert.match(terminalHtml,
 assert.match(terminalHtml,
   /function handleSecondaryAction\(\)[\s\S]*?shouldRunTerminalSecondaryAction\(isSearchOpen\(\)\)[\s\S]*?copyTerminalSelection\(\)/,
   'secondary action must not copy or paste terminal content while search owns the Surface');
+assert.match(terminalHtml,
+  /var payload = raw\.substring\(kindEnd \+ 1\);[\s\S]*?!isSupportedNativeMessage\(channel, kind, payload\)/,
+  'the web-side bridge parser must validate each native control payload before dispatch');
+assert.match(terminalHtml,
+  /function isSupportedNativeMessage\(channel, kind, payload\)[\s\S]*?kind === 'searchOpen' && payload\.length === 0/,
+  'searchOpen must be accepted by the web-side allowlist only with an empty payload');
 assert.match(terminalHtml, /term\.buffer\.onBufferChange\(function\(\) \{ closeSearch\(true\); \}\)/,
   'normal and alternate buffer switches must close the local search state');
 assert.doesNotMatch(terminalHtml, /sendBridgeControl\('search/,
@@ -443,6 +449,9 @@ assert.match(terminalBridge,
   /blur\(\): void \{\s*this\.pendingSearchOpen = false\s*this\.send\(BridgeProtocol\.blur\(\)\)/,
   'pane or tab blur must cancel a search-open intent queued behind bridge readiness or restore');
 assert.match(terminalBridge,
+  /destroy\(\): void \{[\s\S]*?this\.msgPort\.close\(\)[\s\S]*?this\.onMessageHandler = null[\s\S]*?this\.pendingSearchOpen = false/,
+  'destroying an old surface bridge must close its port, remove callbacks, and discard a late search intent');
+assert.match(terminalBridge,
   /private pumpSnapshotRequests[\s\S]*?pendingDataHead < this\.pendingData\.length \|\| this\.inFlightMessages > 0/,
   'a checkpoint request must wait until all earlier terminal output is acknowledged');
 assert.match(terminalBridge, /postMessageEvent\(packet\.buffer\)/,
@@ -497,6 +506,9 @@ assert.match(terminalSurfaceController,
   'the terminal surface must consume browser requests before generic SSH session routing');
 assert.match(terminalSurfaceController, /openSearch\(\)[\s\S]*this\.bridge\.openSearch\(\)/,
   'the terminal surface must expose only a local search-open intent');
+assert.match(terminalSurfaceController,
+  /detach\(\): void \{[\s\S]*?this\.bridge\.destroy\(\)[\s\S]*?this\.bridge = null/,
+  'surface detach must make the old bridge unable to dispatch into a replacement generation');
 assert.doesNotMatch(terminalSurfaceController, /getHistoryChunks|queueReplay|replayedHistory/,
   'the rejected raw byte history replay buffer must not return');
 assert.match(terminalSurfaceController,

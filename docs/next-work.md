@@ -65,7 +65,7 @@
 - [ ] 处理搜索高亮与现有 selection、`Ctrl+C`、OSC 52、HTTP(S)/OSC 8 链接、鼠标上报、
   secondary action、主题和滚动的所有权冲突，不改变 buffer 字节、终端快照或远端程序
   输入。
-- [ ] 为所有新增 Bridge control/data kind 更新双向 allowlist、长度/格式校验和失败行为；
+- [x] 为所有新增 Bridge control/data kind 更新双向 allowlist、长度/格式校验和失败行为；
   未知、畸形、迟到或来自旧 Surface generation 的消息必须被拒绝，不能驱动错误 Pane。
 
 ## 3. 自动化与回归

@@ -74,8 +74,10 @@ Index exact shortcut router
   或查询。恢复完成后搜索仍关闭；持续 SSH 输出继续走既有 binary output/ACK 路径。
 
 这一路径没有跨 Pane 可寻址的搜索消息，也没有 W2N 搜索结果，因此迟到搜索消息不能
-选择另一 Pane、修改 Session 或驱动系统效果。实现测试仍须证明 `searchOpen` 只送到
-当前 runtime，并覆盖未知、错误方向/channel、非空 payload 和旧 WebView 销毁后的消息。
+选择另一 Pane、修改 Session 或驱动系统效果。Native 与 Web parser 都在 dispatch 前
+校验 `searchOpen` 的方向、CONTROL channel 和空 payload；协议测试覆盖未知 kind、错误
+方向/channel 和非空 payload。Surface detach 会先关闭旧 port、移除回调并清除排队的
+打开意图，再递增 `PaneRuntime.generation`，旧 WebView 消息不能进入替代 Surface。
 
 ## 已确认交互契约
 

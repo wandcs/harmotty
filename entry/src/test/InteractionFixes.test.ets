@@ -414,6 +414,7 @@ export default function interactionFixesTest() {
       expect(BridgeProtocol.copySelection().serialize()).assertEqual('H2|N2W|CONTROL|copySelection|')
       expect(BridgeProtocol.parse(BridgeProtocol.copySelection().serialize()) !== null).assertEqual(true)
       expect(BridgeProtocol.secondaryAction().serialize()).assertEqual('H2|N2W|CONTROL|secondaryAction|')
+      expect(BridgeProtocol.searchOpen().serialize()).assertEqual('H2|N2W|CONTROL|searchOpen|')
     })
 
     it('preservesDirectionalBridgePayloadsWithoutJsonEncoding', 0, () => {
