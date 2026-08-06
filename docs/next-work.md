@@ -70,7 +70,7 @@
 
 ## 3. 自动化与回归
 
-- [ ] 扩展 Web terminal policy 测试：普通文本、空查询、无结果、多个结果、首尾回绕、
+- [x] 扩展 Web terminal policy 测试：普通文本、空查询、无结果、多个结果、首尾回绕、
   大小写规则、中文/Unicode/宽字符、多行、normal/alternate buffer、大 scrollback、
   持续输出和快速重复查询。
 - [ ] 扩展 ArkTS/Bridge 测试：精确快捷键、输入捕获与恢复、查询不进入 SSH、当前 Pane

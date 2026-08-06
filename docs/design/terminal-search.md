@@ -291,6 +291,12 @@ buffer 切换、快照边界和既有 OSC/link/mouse policy，增量 ARM64 HAP �
 保留 `wandc@192.168.1.4` 标签且无法客观确认 SSH 已断开，本轮没有用重装中断它；以下
 交互继续保留为物理 PC 门禁。
 
+Web 自动化矩阵直接在固定版本 xterm 的真实 normal/alternate buffer 上运行官方
+SearchAddon，不引入浏览器、模拟搜索引擎或新增依赖。用例覆盖普通文本、空查询、无结果、
+多个结果、双向回绕、大小写、中文双宽字符、Unicode 代理对、跨软换行匹配、2,000 行
+scrollback、持续输出后的结果刷新和 80 次快速重复查询；持续输出使用条件等待而非固定
+延时。该矩阵连续 5 次运行均通过。
+
 ## 实现中仍须验证
 
 - 在物理 PC 上验证搜索 selection 释放、同一次指针事件继续交给 selection/link/mouse

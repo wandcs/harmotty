@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import './test-font-cell-width.mjs';
+import { runTerminalSearchTests } from './test-terminal-search.mjs';
 import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 
 const policy = globalThis.LeanTTYTerminalPolicy;
@@ -436,6 +437,7 @@ assert.doesNotThrow(() => {
     backgroundColor: '#585B70'
   });
 }, 'the pinned terminal option must unlock the official addon decoration path');
+await runTerminalSearchTests(globalThis.Terminal, globalThis.SearchAddon.SearchAddon);
 
 const terminalBridge = readFileSync(
   new URL('../../entry/src/main/ets/model/bridge/TerminalBridge.ets', import.meta.url), 'utf8');
