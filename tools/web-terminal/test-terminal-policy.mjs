@@ -409,6 +409,9 @@ assert.match(terminalBridge,
   /pendingSearchOpen[\s\S]*private pumpSearchOpen[\s\S]*!this\.ready \|\| this\.awaitingRestoreComplete[\s\S]*BridgeProtocol\.searchOpen\(\)/,
   'search open must wait for the current bridge and framebuffer restore boundary');
 assert.match(terminalBridge,
+  /blur\(\): void \{\s*this\.pendingSearchOpen = false\s*this\.send\(BridgeProtocol\.blur\(\)\)/,
+  'pane or tab blur must cancel a search-open intent queued behind bridge readiness or restore');
+assert.match(terminalBridge,
   /private pumpSnapshotRequests[\s\S]*?pendingDataHead < this\.pendingData\.length \|\| this\.inFlightMessages > 0/,
   'a checkpoint request must wait until all earlier terminal output is acknowledged');
 assert.match(terminalBridge, /postMessageEvent\(packet\.buffer\)/,
@@ -487,6 +490,21 @@ assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
 assert.match(indexPage,
   /InteractionPolicy\.isTerminalSearchShortcut\([\s\S]*?activePaneRuntime\(\)[\s\S]*?runtime\.surface\.openSearch\(\)/,
   'the exact shortcut must target only the active pane runtime');
+assert.match(indexPage,
+  /private deactivateActiveTab[\s\S]*?runtime\.viewModel\.requestBlur\(\)/,
+  'tab switches must blur every pane in the departing tab before retaining or evicting its surfaces');
+assert.match(indexPage,
+  /private restoreActivePaneFocus[\s\S]*?else \{\s*runtime\.viewModel\.requestBlur\(\)/,
+  'pane switches must blur every non-active pane in the current tab');
+assert.match(indexPage,
+  /private recyclePaneWebView[\s\S]*?runtime\.detachSurface\(\)[\s\S]*?runtime\.generation \+= 1/,
+  'renderer exit must destroy the old pane surface before creating a new generation');
+assert.match(indexPage,
+  /private finishTabCheckpoint[\s\S]*?runtime\.detachSurface\(\)/,
+  'warm-tab eviction must detach every surface after its checkpoint boundary');
+assert.match(indexPage,
+  /private async disposeRuntime[\s\S]*?runtime\.detachSurface\(\)/,
+  'closing a pane or tab must destroy its terminal surface');
 assert.match(indexPage,
   /private onMainWindowVisibilityChanged[\s\S]*?captureMountedTerminalSnapshots\(\)/,
   'backgrounding the window must checkpoint every currently mounted terminal');

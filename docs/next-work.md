@@ -59,7 +59,7 @@
 - [x] 将固定快捷键接入现有精确 modifier 路由。搜索关闭时恢复原活动 Pane 的终端焦点；
   搜索打开时查询按键不得进入远端 PTY，未命中快捷键和关闭后的普通终端输入仍按原路径
   传递。
-- [ ] 保证每个 Pane 的搜索状态完全隔离。切换 Tab/Pane、关闭 Pane、Terminal Surface
+- [x] 保证每个 Pane 的搜索状态完全隔离。切换 Tab/Pane、关闭 Pane、Terminal Surface
   销毁、warm Tab 淘汰、renderer 退出或重建时按已确认契约关闭或恢复搜索，不创建
   Session 状态、跨 Surface 查询或持久化记录。
 - [ ] 处理搜索高亮与现有 selection、`Ctrl+C`、OSC 52、HTTP(S)/OSC 8 链接、鼠标上报、

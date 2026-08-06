@@ -152,6 +152,7 @@ export class TerminalBridge {
   }
 
   blur(): void {
+    this.pendingSearchOpen = false
     this.send(BridgeProtocol.blur())
   }
 
