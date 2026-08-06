@@ -134,6 +134,9 @@ assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, false), true);
 assert.equal(policy.shouldActivateLink({ ...exactCtrl, button: 1 }, 'none', true, false), false);
 assert.equal(policy.shouldActivateLink(exactCtrl, 'none', false, false), false);
 assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, true), false);
+assert.equal(policy.shouldRunTerminalSecondaryAction(false), true);
+assert.equal(policy.shouldRunTerminalSecondaryAction(true), false,
+  'an open search must own secondary clicks until terminal mousedown closes it');
 assert.equal(policy.searchResultLabel('', -1, 0, 1000), '');
 assert.equal(policy.searchResultLabel('missing', -1, 0, 1000), 'No results');
 assert.equal(policy.searchResultLabel('match', 0, 2, 1000), '1/2');
@@ -204,6 +207,28 @@ assert.match(terminalHtml,
 assert.match(terminalHtml,
   /function closeSearch\(restoreTerminalFocus\)[\s\S]*searchAddon\.clearDecorations\(\)[\s\S]*term\.focus\(\)/,
   'closing search must clear short-lived decorations and optionally restore terminal focus');
+assert.match(terminalHtml,
+  /var searchOwnsSelection = false;[\s\S]*function closeSearch\(restoreTerminalFocus\)[\s\S]*if \(searchOwnsSelection && term\) term\.clearSelection\(\);/,
+  'closing a non-empty search must release only the selection owned by its active match');
+assert.doesNotMatch(terminalHtml, /term\.scrollToTop\(\)/,
+  'search must not pre-scroll the viewport before the addon locates the first match');
+assert.match(terminalHtml,
+  /terminalContainer\.addEventListener\('mousedown',[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(false\);[\s\S]*?true\);/,
+  'terminal pointer interaction must release search-owned selection before normal selection, links, or mouse reporting');
+const searchPointerRelease = terminalHtml.indexOf("terminalContainer.addEventListener('mousedown', function() {");
+const existingPointerDispatch = terminalHtml.indexOf(
+  "terminalContainer.addEventListener('mousedown', beginLinkClick, true);");
+assert.ok(searchPointerRelease >= 0 && searchPointerRelease < existingPointerDispatch,
+  'search selection release must run before the existing terminal pointer handlers');
+const searchPointerReleaseBody = terminalHtml.slice(searchPointerRelease, existingPointerDispatch);
+assert.doesNotMatch(searchPointerReleaseBody, /preventDefault|stopPropagation|stopImmediatePropagation/,
+  'search selection release must not consume the pointer event');
+assert.match(terminalHtml,
+  /function applyTerminalTheme\(themeObj\)[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(true\);/,
+  'theme changes must close short-lived search state before replacing decoration colors');
+assert.match(terminalHtml,
+  /function handleSecondaryAction\(\)[\s\S]*?shouldRunTerminalSecondaryAction\(isSearchOpen\(\)\)[\s\S]*?copyTerminalSelection\(\)/,
+  'secondary action must not copy or paste terminal content while search owns the Surface');
 assert.match(terminalHtml, /term\.buffer\.onBufferChange\(function\(\) \{ closeSearch\(true\); \}\)/,
   'normal and alternate buffer switches must close the local search state');
 assert.doesNotMatch(terminalHtml, /sendBridgeControl\('search/,
@@ -379,6 +404,12 @@ assert.equal(restoredSnapshot.match(/detached-output/g)?.length, 1,
 const addonSearch = readFileSync(
   new URL('../../entry/src/main/resources/rawfile/addon-search.js', import.meta.url), 'utf8');
 vm.runInThisContext(addonSearch);
+assert.match(addonSearch,
+  /clearDecorations\(e\)\{[\s\S]*?clearHighlightDecorations\(\)[\s\S]*?clearResults\(\)[\s\S]*?clearCachedTerm\(\)/,
+  'the pinned addon must expose decoration cleanup separately from xterm selection ownership');
+assert.match(addonSearch,
+  /_selectResult\(e,t,s\)[\s\S]*?this\._terminal\.select\(e\.col,e\.row,e\.size\)/,
+  'the pinned addon active match must continue to use xterm selection');
 const searchTerminal = new globalThis.Terminal({
   cols: 24,
   rows: 4,

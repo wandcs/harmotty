@@ -212,6 +212,7 @@
     var searchQuery = '';
     var searchResultIndex = -1;
     var searchResultCount = 0;
+    var searchOwnsSelection = false;
     var SEARCH_HIGHLIGHT_LIMIT = 1000;
     var LINK_DRAG_TOLERANCE_PIXELS = 4;
     var BRIDGE_VERSION = 'H2';
@@ -449,13 +450,15 @@
       if (nextQuery.length === 0) {
         searchQuery = '';
         searchAddon.clearDecorations();
+        if (searchOwnsSelection && term) term.clearSelection();
+        searchOwnsSelection = false;
         resetSearchResults();
         return;
       }
       if (queryChanged || nextQuery !== searchQuery) {
         searchAddon.clearDecorations();
         term.clearSelection();
-        term.scrollToTop();
+        searchOwnsSelection = true;
       }
       searchQuery = nextQuery;
       if (backwards) {
@@ -490,6 +493,8 @@
       searchResultCount = 0;
       if (input) input.value = '';
       if (searchAddon) searchAddon.clearDecorations();
+      if (searchOwnsSelection && term) term.clearSelection();
+      searchOwnsSelection = false;
       updateSearchFeedback();
       if (restoreTerminalFocus && term) term.focus();
     }
@@ -706,6 +711,7 @@
 
     function applyTerminalTheme(themeObj) {
       if (!themeObj || typeof themeObj.background !== 'string' || themeObj.background.length === 0) return;
+      if (isSearchOpen()) closeSearch(true);
       themeObj.overviewRulerBorder = themeObj.background;
       document.documentElement.style.setProperty('--terminal-background', themeObj.background);
       document.documentElement.style.setProperty('--terminal-foreground', themeObj.foreground || '#CDD6F4');
@@ -900,6 +906,9 @@
       });
       term.loadAddon(webLinksAddon);
       terminalContainer.addEventListener('wheel', handleAlternateWheel, true);
+      terminalContainer.addEventListener('mousedown', function() {
+        if (isSearchOpen()) closeSearch(false);
+      }, true);
       terminalContainer.addEventListener('mousedown', beginLinkClick, true);
       terminalContainer.addEventListener('mousemove', trackLinkDrag, true);
       terminalContainer.addEventListener('mouseup', function() {
@@ -1157,6 +1166,7 @@
     }
 
     function handleSecondaryAction() {
+      if (!LeanTTYTerminalPolicy.shouldRunTerminalSecondaryAction(isSearchOpen())) return;
       if (copyTerminalSelection()) return;
       pasteFromSystemClipboard();
     }

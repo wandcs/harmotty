@@ -176,6 +176,10 @@
       isLinkModifierActive(event, mouseTrackingMode);
   }
 
+  function shouldRunTerminalSecondaryAction(searchOpen) {
+    return searchOpen !== true;
+  }
+
   function searchResultLabel(query, resultIndex, resultCount, highlightLimit) {
     if (typeof query !== 'string' || query.length === 0) return '';
     if (resultCount <= 0) return 'No results';
@@ -206,6 +210,7 @@
     centerGridLeadingPadding: centerGridLeadingPadding,
     isLinkModifierActive: isLinkModifierActive,
     shouldActivateLink: shouldActivateLink,
+    shouldRunTerminalSecondaryAction: shouldRunTerminalSecondaryAction,
     searchResultLabel: searchResultLabel,
     wrappedControlIndex: wrappedControlIndex
   };

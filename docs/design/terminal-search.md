@@ -101,6 +101,31 @@ Index exact shortcut router
 Terminal Surface；不重排网格可以避免搜索本身触发 PTY resize。临时遮挡少量右上角
 内容是明确取舍，用户关闭后仍停留在当前匹配处。
 
+### selection、指针与终端副作用所有权
+
+- 空查询不会触碰已有 terminal selection。第一次非空查询由官方 SearchAddon 从 active
+  buffer 顶部查找，并临时把当前匹配写入 xterm selection；这是 addon 导航下一处/上一处
+  的游标，不把原 selection 当成查询，也不经过 Bridge。清空查询、关闭搜索、buffer 或
+  主题切换时，同时清除这一份搜索拥有的 selection，不能把已关闭搜索的匹配留给后续
+  `Ctrl+C` 或 secondary action。
+- 在搜索打开时点击终端内容，会在 capture 阶段先关闭搜索并释放其 selection，但不
+  `preventDefault` 或停止事件；同一次指针事件随后继续进入现有 xterm selection、链接和
+  mouse-reporting 路径。点击搜索条自身不进入 terminal container。
+- 搜索打开期间 secondary action 由搜索浮层拥有，不能复制当前匹配或把系统剪贴板粘贴
+  到远端；终端区域的右键按下会先按上一条关闭搜索，随后才恢复既有“有选区复制、无
+  选区粘贴”语义。查询输入内的 `Ctrl+C` 由 DOM 文本输入处理；终端重新取得焦点后，
+  `Ctrl+C` 仍按既有规则在有选区时复制、无选区时发送中断。
+- OSC 52、HTTP(S)/OSC 8 link provider、mouse tracking 和 alternate-buffer wheel handler
+  不读取搜索状态，也不增加平行分支。搜索 decorations 不处理指针；终端区域的原事件
+  在搜索关闭后继续使用既有 modifier、拖动阈值和 mouse-reporting 规则。
+- 查询变化不预先 `scrollToTop()`。清除 selection 后，SearchAddon 从 buffer 顶部选择
+  第一处并只在匹配不在 viewport 时滚动；后续导航与用户滚轮继续使用 xterm 的同一
+  viewport。关闭保留当前 viewport，不回到底部。
+- 搜索颜色来自当前主题。主题变化时关闭短生命周期搜索、释放 selection 并恢复终端
+  焦点，再应用新主题，避免旧 decorations 保留上一主题的内联颜色。
+- framebuffer snapshot 仍只由 SerializeAddon 生成；查询 DOM、decorations 和 selection
+  都不进入序列化内容，因此搜索不能改变恢复字节或在 renderer 重建后复现系统副作用。
+
 ### 快捷键冲突基线
 
 - LeanTTY 当前精确路由占用 `Ctrl+Shift+T/D/W`、`Ctrl+Tab`、`Ctrl+Shift+Tab`、
@@ -257,9 +282,18 @@ renderer、内存、失败域和重试次数。第 4 节用这些分布与本基
 不能替代物理键盘与中英文输入法、大 scrollback/持续输出、selection/链接/TUI、Tab/warm
 淘汰、renderer 重建和正式候选门禁。
 
+同日的所有权冲突实现复核确认：固定版本 SearchAddon 通过 xterm selection 标识当前匹配，
+而 `clearDecorations()` 不释放该 selection；Terminal Surface 因此显式记录并释放搜索拥有的
+selection。自动化覆盖关闭/清空、终端指针事件顺序、secondary action、主题切换、滚动、
+buffer 切换、快照边界和既有 OSC/link/mouse policy，增量 ARM64 HAP 构建通过。测试机仍
+保留 `wandc@192.168.1.4` 标签且无法客观确认 SSH 已断开，本轮没有用重装中断它；以下
+交互继续保留为物理 PC 门禁。
+
 ## 实现中仍须验证
 
-- 匹配高亮如何与现有选择、链接、鼠标上报和终端主题共存。
+- 在物理 PC 上验证搜索 selection 释放、同一次指针事件继续交给 selection/link/mouse
+  路径、搜索浮层 secondary action 隔离，以及主题和 viewport 切换的可见结果；同时回归
+  `Ctrl+C`、OSC 52、HTTP(S)/OSC 8 链接和 tmux/vim/less 鼠标模式。
 
 ## 初步验证门禁
 
