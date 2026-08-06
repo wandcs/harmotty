@@ -205,6 +205,15 @@ assert.match(terminalHtml,
 assert.match(terminalHtml,
   /compositionstart[\s\S]*searchComposing = true[\s\S]*compositionend[\s\S]*searchComposing = false[\s\S]*runSearch/,
   'IME composition must defer search until committed text is available');
+const searchUiStart = terminalHtml.indexOf('function initializeSearchUi()');
+const searchUiEnd = terminalHtml.indexOf('function serializeTerminalSnapshot', searchUiStart);
+assert.ok(searchUiStart >= 0 && searchUiEnd > searchUiStart,
+  'the local search UI initialization body must remain identifiable');
+const searchUiBody = terminalHtml.slice(searchUiStart, searchUiEnd);
+assert.match(searchUiBody, /input\.addEventListener\('input',[\s\S]*?runSearch\(false, true\)/,
+  'committed query input must stay inside the current web terminal search state');
+assert.doesNotMatch(searchUiBody, /sendBridge(?:Data|Control)|term\.(?:input|paste|write)/,
+  'query text and search navigation must never enter the SSH terminal-input bridge');
 assert.match(terminalHtml,
   /function closeSearch\(restoreTerminalFocus\)[\s\S]*searchAddon\.clearDecorations\(\)[\s\S]*term\.focus\(\)/,
   'closing search must clear short-lived decorations and optionally restore terminal focus');
@@ -535,6 +544,9 @@ assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
 assert.match(indexPage,
   /InteractionPolicy\.isTerminalSearchShortcut\([\s\S]*?activePaneRuntime\(\)[\s\S]*?runtime\.surface\.openSearch\(\)/,
   'the exact shortcut must target only the active pane runtime');
+assert.match(indexPage,
+  /private activePaneRuntime\(\): PaneRuntime \| null \{[\s\S]*?this\.appVm\.getActivePane\(\)[\s\S]*?this\.findPaneRuntime\(pane\.id\)/,
+  'search routing must resolve the stable active pane id instead of an adjacent runtime or index');
 assert.match(indexPage,
   /private deactivateActiveTab[\s\S]*?runtime\.viewModel\.requestBlur\(\)/,
   'tab switches must blur every pane in the departing tab before retaining or evicting its surfaces');

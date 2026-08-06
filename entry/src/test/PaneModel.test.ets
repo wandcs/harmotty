@@ -113,6 +113,21 @@ export default function paneModelTest() {
       expect(second.title).assertEqual('two')
     })
 
+    it('activePaneSelectionNeverCrossesTheActiveTab', 0, () => {
+      let vm: AppViewModel = new AppViewModel()
+      let first: TabInfo = vm.addTab('one')
+      let firstRight: PaneInfo | null = vm.splitPane(first.id)
+      let second: TabInfo = vm.addTab('two')
+
+      expect(vm.getActivePane()?.id).assertEqual(second.activePaneId)
+      vm.setActiveTab(0)
+      if (firstRight !== null) {
+        expect(vm.getActivePane()?.id).assertEqual(firstRight.id)
+      }
+      vm.setActiveTab(1)
+      expect(vm.getActivePane()?.id).assertEqual(second.activePaneId)
+    })
+
     it('bellAttentionClearsOnlyForAnExplicitlyAcknowledgedPane', 0, () => {
       let vm: AppViewModel = new AppViewModel()
       let tab: TabInfo = vm.addTab('one')

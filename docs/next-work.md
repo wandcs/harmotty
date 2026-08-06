@@ -73,7 +73,7 @@
 - [x] 扩展 Web terminal policy 测试：普通文本、空查询、无结果、多个结果、首尾回绕、
   大小写规则、中文/Unicode/宽字符、多行、normal/alternate buffer、大 scrollback、
   持续输出和快速重复查询。
-- [ ] 扩展 ArkTS/Bridge 测试：精确快捷键、输入捕获与恢复、查询不进入 SSH、当前 Pane
+- [x] 扩展 ArkTS/Bridge 测试：精确快捷键、输入捕获与恢复、查询不进入 SSH、当前 Pane
   所有权、双 Pane/跨 Tab 隔离、关闭 Pane、warm Tab 淘汰、renderer 重建、迟到和畸形
   消息拒绝。
 - [ ] 回归 selection、复制粘贴、OSC 52、链接、鼠标上报、滚轮、快照恢复、字体缩放、

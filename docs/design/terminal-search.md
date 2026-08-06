@@ -297,6 +297,11 @@ SearchAddon，不引入浏览器、模拟搜索引擎或新增依赖。用例覆
 scrollback、持续输出后的结果刷新和 80 次快速重复查询；持续输出使用条件等待而非固定
 延时。该矩阵连续 5 次运行均通过。
 
+ArkTS/Bridge 自动化覆盖唯一 `Ctrl+Alt+F` modifier 组合、活动 Pane 稳定 ID、双 Pane 与
+跨 Tab 活动 Pane 隔离、查询 DOM 不调用 terminal/Bridge 输入 API、关闭与焦点恢复、Pane/
+Tab 关闭、warm Tab 淘汰、renderer generation 重建、排队打开意图取消，以及未知、错误
+方向/channel、非空 payload 和旧 port 消息拒绝。
+
 ## 实现中仍须验证
 
 - 在物理 PC 上验证搜索 selection 释放、同一次指针事件继续交给 selection/link/mouse
