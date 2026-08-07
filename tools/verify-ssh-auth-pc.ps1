@@ -514,11 +514,25 @@ function Invoke-LeanTTYAcceptancePaste {
         -Hdc $hdc `
         -Target $Target `
         -LocalPath (Join-Path $EvidenceDirectory 'layout-paste-menu-trigger.json')
-    $menuTrigger = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
-        [string]$_.attributes.text -eq '▼' -and
-        [string]$_.attributes.clickable -eq 'true' -and
-        [string]$_.attributes.visible -eq 'true'
+    $nodes = @(Get-LeanTTYLayoutNodes -Node $layout)
+    $maximizeButton = @($nodes | Where-Object {
+        [string]$_.attributes.id -eq 'EnhanceMaximizeBtn'
     } | Select-Object -First 1)
+    if ($maximizeButton.Count -ne 1) {
+        throw '[environment] HarmonyOS maximize button was not found for menu positioning'
+    }
+    $maximizeCenter = Get-LeanTTYBoundsCenter -Bounds ([string]$maximizeButton[0].attributes.bounds)
+    $menuTrigger = @($nodes | Where-Object {
+        if ([string]$_.attributes.clickable -ne 'true' -or
+            [string]$_.attributes.visible -ne 'true') {
+            return $false
+        }
+        $candidateCenter = Get-LeanTTYBoundsCenter -Bounds ([string]$_.attributes.bounds)
+        return $candidateCenter.x -lt $maximizeCenter.x -and
+            [Math]::Abs($candidateCenter.y - $maximizeCenter.y) -le 20
+    } | Sort-Object {
+        (Get-LeanTTYBoundsCenter -Bounds ([string]$_.attributes.bounds)).x
+    } -Descending | Select-Object -First 1)
     if ($menuTrigger.Count -ne 1) {
         throw '[harness] LeanTTY menu trigger was not found for clipboard paste'
     }
