@@ -137,6 +137,17 @@ Dependabot 告警 [`GHSA-m65r-rprj-r5rg`](https://github.com/Eugeny/russh/securi
   状态关闭和屏幕常亮租约恢复均通过。
 - [ ] 在物理键盘和中英文输入法下验证打开、逐字输入、下一处、上一处、关闭、焦点恢复、
   无结果和首尾回绕；确认快捷键不与 HarmonyOS、输入法或终端常用按键产生不可接受冲突。
+  2026-08-07 在 HAD-W32 USB ARM64 物理 PC 完成可自动注入的 ASCII 子集：harness
+  `d6a96d99862b0419662f6edbc8b2de3d79039501` 使用同一诊断 HAP（SHA-256
+  `5F46D6FA9CC0921C76E1BBB8937ED5FABCC35B7EEB916DF7F213B14C853F86C5`）逐字验证
+  `l`、`lt`、`ltt`、`ltty`，确认 `1/1`、`No results`、Enter 与 Shift+Enter 在两个匹配
+  间前后回绕，并在 Escape 后恢复终端焦点；attempt
+  `c9b75fb4fd0940f29f5e8771ef9f36eb` 与结构化证据位于
+  `C:\tmp\leantty-terminal-search-ascii-20260807-retry2\device-terminal-search.json`，搜索状态
+  和屏幕常亮租约清理通过。首次 attempt `9c2e2428ed1a4fc4b2dcf9a09c7c25f9` 在清空查询后被
+  PowerShell 空字符串参数绑定拒绝，定位为 harness 失败并补充回归门禁，未作为产品失败。
+  本项仍保持未完成：HDC 系统按键注入不能替代真实物理键盘，以及中英文输入法组合、
+  候选提交和快捷键冲突验收。
 - [ ] 验证单 Pane、双 Pane 和多 Tab 的当前 Pane 归属，切换、关闭、warm Tab 淘汰、应用
   最小化/恢复和 ArkWeb renderer 重建后不串查询、高亮、滚动位置或焦点。
 - [ ] 验证普通输出、中文/宽字符、多行、大 scrollback 和持续输出；回归 tmux、vim、less
