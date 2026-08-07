@@ -441,6 +441,7 @@ foreach ($scriptName in @(
             $content.Contains('wrappedForward = $true') -and
             $content.Contains('wrappedBackward = $true') -and
             $content.Contains("'TerminalBridge: PERF bridge reason=destroy'") -and
+            $content.Contains("'TerminalBridge: Bridge initialized'") -and
             $content.Contains("'Acceptance: Rebuild Renderer'") -and
             $content.Contains("'EnhanceMinimizeBtn'") -and
             $content.Contains('singleTabSinglePaneRestored = $workspaceRestored') -and

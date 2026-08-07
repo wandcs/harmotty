@@ -790,10 +790,10 @@ try {
             -ActionText 'Acceptance: Rebuild Renderer' `
             -LayoutPrefix 'layout-lifecycle-renderer'
         $rendererLogs = Wait-SearchAppLog `
-            -Pattern 'Acceptance renderer rebuild requested=true' `
+            -Pattern 'TerminalBridge: PERF bridge reason=destroy' `
             -TimeoutSeconds 20
         $rendererLogs = Wait-SearchAppLog `
-            -Pattern 'ArkWeb renderer exited.*rebuilding WebView' `
+            -Pattern 'TerminalBridge: Bridge initialized' `
             -TimeoutSeconds 20
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 1 -SearchCount 0 `
@@ -810,7 +810,8 @@ try {
             durationMs = $timer.ElapsedMilliseconds
             processPreservedAcrossMinimizeRestore = $true
             queryClearedOnMinimize = $true
-            rendererTerminationObserved = $rendererLogs -match 'ArkWeb renderer exited.*rebuilding WebView'
+            rendererBridgeDestroyed = $rendererLogs -match 'TerminalBridge: PERF bridge reason=destroy'
+            rendererBridgeReinitialized = $rendererLogs -match 'TerminalBridge: Bridge initialized'
             queryAbsentAfterRendererRebuild = $true
             terminalFocusRestored = $true
         })
