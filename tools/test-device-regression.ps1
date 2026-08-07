@@ -409,6 +409,16 @@ foreach ($scriptName in @(
             $content.Contains('LeanTTY process changed while activating its window') -and
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
+        Assert-True (
+            $content.Contains("'transport-main-path'") -and
+            $content.Contains("'ltty-input-check russhmain'") -and
+            $content.Contains("'ltty-paste-prepare russhmain 524288'") -and
+            $content.Contains("'Clipboard paste ok,524288'") -and
+            $content.Contains("'ltty-perf-prepare russhmain 12000 80'") -and
+            $content.Contains('"completenessPercent":100') -and
+            $content.Contains("'resize cols=\d+ rows=\d+'") -and
+            $content.Contains('Wait-AuthPaneCount -Count 1')
+        ) 'SSH transport main-path coverage is incomplete'
     }
 }
 

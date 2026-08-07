@@ -32,6 +32,9 @@ const PERF_MAX_LINES: usize = 12_000;
 const PERF_MIN_LINE_WIDTH: usize = 48;
 const PERF_MAX_LINE_WIDTH: usize = 160;
 const PERF_OUTPUT_CHUNK_BYTES: usize = 16 * 1024;
+const PASTE_PREPARE_COMMAND: &str = "ltty-paste-prepare";
+const INPUT_CHECK_COMMAND: &str = "ltty-input-check";
+const PASTE_MAX_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
 struct Credentials {
@@ -137,6 +140,7 @@ struct FixtureServer {
     session_scenario: Option<Scenario>,
     shell_input: Vec<u8>,
     pending_perf_request: Option<PerfStreamRequest>,
+    pending_paste: Option<PasteTransfer>,
 }
 
 impl FixtureServer {
@@ -149,15 +153,16 @@ impl FixtureServer {
             session_scenario: None,
             shell_input: Vec::new(),
             pending_perf_request: None,
+            pending_paste: None,
         }
     }
 
-    fn take_perf_command(&mut self, data: &[u8]) -> Option<PerfCommand> {
+    fn take_fixture_command(&mut self, data: &[u8]) -> Option<FixtureCommand> {
         let mut command = None;
         for byte in data {
             if matches!(*byte, b'\r' | b'\n') {
                 if command.is_none() {
-                    command = parse_perf_command(&self.shell_input);
+                    command = parse_fixture_command(&self.shell_input);
                 }
                 self.shell_input.clear();
             } else if byte.is_ascii() && !byte.is_ascii_control() {
@@ -475,6 +480,33 @@ impl Handler for FixtureServer {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if let Some(transfer) = self.pending_paste.as_mut() {
+            let remaining = transfer.payload.len() - transfer.received;
+            let accepted = remaining.min(data.len());
+            let expected = &transfer.payload[transfer.received..transfer.received + accepted];
+            if data.len() > remaining || &data[..accepted] != expected {
+                eprintln!("paste case={} result=mismatch", transfer.case_id);
+                session.data(channel, b"\r\nLTTY_PASTE_FAIL\r\nfixture> ".as_slice())?;
+                self.pending_paste = None;
+                return Ok(());
+            }
+            transfer.received += accepted;
+            if transfer.received == transfer.payload.len() {
+                let marker = format!(
+                    "\r\nLTTY_PASTE_OK:{}:{}\r\nfixture> ",
+                    transfer.case_id,
+                    transfer.payload.len()
+                );
+                eprintln!(
+                    "paste case={} bytes={} result=matched",
+                    transfer.case_id,
+                    transfer.payload.len()
+                );
+                session.data(channel, marker.into_bytes())?;
+                self.pending_paste = None;
+            }
+            return Ok(());
+        }
         if data.contains(&0x04) {
             session.data(channel, b"logout\r\n".as_slice())?;
             session.exit_status_request(channel, 0)?;
@@ -491,8 +523,8 @@ impl Handler for FixtureServer {
             return Ok(());
         }
         session.data(channel, data.to_vec())?;
-        match self.take_perf_command(data) {
-            Some(PerfCommand::Prepare(request)) => {
+        match self.take_fixture_command(data) {
+            Some(FixtureCommand::Perf(PerfCommand::Prepare(request))) => {
                 let expected_bytes = perf_stream_expected_bytes(&request);
                 let begin = format!(
                     "\x1b]0;LTTY_PERF_BEGIN__:{}:{}\x07\r\nfixture> ",
@@ -501,7 +533,7 @@ impl Handler for FixtureServer {
                 self.pending_perf_request = Some(request);
                 session.data(channel, begin.into_bytes())?;
             }
-            Some(PerfCommand::Run(case_id)) => {
+            Some(FixtureCommand::Perf(PerfCommand::Run(case_id))) => {
                 let Some(request) = self.pending_perf_request.take() else {
                     return Ok(());
                 };
@@ -525,8 +557,42 @@ impl Handler for FixtureServer {
                     let _ = handle.data(channel, end.into_bytes()).await;
                 });
             }
+            Some(FixtureCommand::Paste(request)) => {
+                let payload = build_paste_payload(&request);
+                let encoded = encode_base64(&payload);
+                let response = format!(
+                    "\x1b]52;c;{}\x07\r\nLTTY_PASTE_READY:{}:{}\r\nfixture> ",
+                    encoded,
+                    request.case_id,
+                    payload.len()
+                );
+                self.pending_paste = Some(PasteTransfer {
+                    case_id: request.case_id,
+                    payload,
+                    received: 0,
+                });
+                session.data(channel, response.into_bytes())?;
+            }
+            Some(FixtureCommand::InputCheck(case_id)) => {
+                eprintln!("input case={case_id} result=matched");
+                let response = format!("\r\nLTTY_INPUT_OK:{case_id}\r\nfixture> ");
+                session.data(channel, response.into_bytes())?;
+            }
             None => {}
         }
+        Ok(())
+    }
+
+    async fn window_change_request(
+        &mut self,
+        _channel: ChannelId,
+        col_width: u32,
+        row_height: u32,
+        _pix_width: u32,
+        _pix_height: u32,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        eprintln!("resize cols={col_width} rows={row_height}");
         Ok(())
     }
 }
@@ -542,6 +608,86 @@ struct PerfStreamRequest {
 enum PerfCommand {
     Prepare(PerfStreamRequest),
     Run(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PasteRequest {
+    case_id: String,
+    bytes: usize,
+}
+
+#[derive(Clone, Debug)]
+struct PasteTransfer {
+    case_id: String,
+    payload: Vec<u8>,
+    received: usize,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum FixtureCommand {
+    Perf(PerfCommand),
+    Paste(PasteRequest),
+    InputCheck(String),
+}
+
+fn parse_fixture_command(input: &[u8]) -> Option<FixtureCommand> {
+    if let Some(command) = parse_perf_command(input) {
+        return Some(FixtureCommand::Perf(command));
+    }
+    let command = std::str::from_utf8(input).ok()?;
+    let mut parts = command.split_ascii_whitespace();
+    let kind = parts.next()?;
+    let case_id = parts.next()?;
+    if kind == INPUT_CHECK_COMMAND {
+        return (parts.next().is_none() && is_valid_perf_case_id(case_id))
+            .then(|| FixtureCommand::InputCheck(case_id.to_string()));
+    }
+    if kind != PASTE_PREPARE_COMMAND {
+        return None;
+    }
+    let bytes = parts.next()?.parse::<usize>().ok()?;
+    if parts.next().is_some()
+        || !is_valid_perf_case_id(case_id)
+        || !(1..=PASTE_MAX_BYTES).contains(&bytes)
+    {
+        return None;
+    }
+    Some(FixtureCommand::Paste(PasteRequest {
+        case_id: case_id.to_string(),
+        bytes,
+    }))
+}
+
+fn build_paste_payload(request: &PasteRequest) -> Vec<u8> {
+    let pattern = format!("LTTY_PASTE_{}|", request.case_id);
+    pattern
+        .bytes()
+        .cycle()
+        .take(request.bytes)
+        .collect::<Vec<_>>()
+}
+
+fn encode_base64(input: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let first = chunk[0];
+        let second = *chunk.get(1).unwrap_or(&0);
+        let third = *chunk.get(2).unwrap_or(&0);
+        output.push(TABLE[(first >> 2) as usize] as char);
+        output.push(TABLE[(((first & 0x03) << 4) | (second >> 4)) as usize] as char);
+        output.push(if chunk.len() > 1 {
+            TABLE[(((second & 0x0f) << 2) | (third >> 6)) as usize] as char
+        } else {
+            '='
+        });
+        output.push(if chunk.len() > 2 {
+            TABLE[(third & 0x3f) as usize] as char
+        } else {
+            '='
+        });
+    }
+    output
 }
 
 fn is_valid_perf_case_id(case_id: &str) -> bool {
@@ -790,6 +936,43 @@ mod tests {
             assert_eq!(&line[64..], b"\r\n");
             assert!(line.starts_with(format!("LTTY_PERF_sample01_{index:05} ").as_bytes()));
         }
+    }
+
+    #[test]
+    fn parses_and_builds_bounded_paste_payloads() {
+        let request = PasteRequest {
+            case_id: "paste01".to_string(),
+            bytes: PASTE_MAX_BYTES,
+        };
+        assert_eq!(
+            parse_fixture_command(b"ltty-paste-prepare paste01 524288"),
+            Some(FixtureCommand::Paste(request.clone()))
+        );
+        assert_eq!(
+            parse_fixture_command(b"ltty-paste-prepare paste01 524289"),
+            None
+        );
+        assert_eq!(
+            parse_fixture_command(b"ltty-paste-prepare paste:01 10"),
+            None
+        );
+        let payload = build_paste_payload(&request);
+        assert_eq!(payload.len(), PASTE_MAX_BYTES);
+        assert!(payload.starts_with(b"LTTY_PASTE_paste01|"));
+        assert_eq!(
+            parse_fixture_command(b"ltty-input-check input01"),
+            Some(FixtureCommand::InputCheck("input01".to_string()))
+        );
+        assert_eq!(parse_fixture_command(b"ltty-input-check bad:id"), None);
+    }
+
+    #[test]
+    fn encodes_standard_base64_with_padding() {
+        assert_eq!(encode_base64(b""), "");
+        assert_eq!(encode_base64(b"f"), "Zg==");
+        assert_eq!(encode_base64(b"fo"), "Zm8=");
+        assert_eq!(encode_base64(b"foo"), "Zm9v");
+        assert_eq!(encode_base64(b"foobar"), "Zm9vYmFy");
     }
 
     #[test]

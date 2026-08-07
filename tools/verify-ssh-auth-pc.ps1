@@ -26,6 +26,7 @@ param(
     [string]$Distribution = $env:LEANTTY_WSL_DISTRO,
     [ValidateSet(
         'password-success',
+        'transport-main-path',
         'password-kbdint-mixed-echo',
         'multiround-wrong-answer-recovery',
         'publickey-unencrypted',
@@ -177,6 +178,7 @@ $attemptId = [Guid]::NewGuid().ToString('N')
 $runMode = if ($Only.Count -eq 0 -and -not $DiagnosticHap) { 'acceptance' } else { 'diagnostic' }
 $availableStages = @(
     'password-success',
+    'transport-main-path',
     'password-kbdint-mixed-echo',
     'multiround-wrong-answer-recovery',
     'generated-disposable-auth-key',
@@ -226,6 +228,7 @@ function Get-LeanTTYFixtureStageBudgetSeconds {
     param([Parameter(Mandatory = $true)][string]$StageName)
     $budgets = @{
         'password-success' = 75
+        'transport-main-path' = 240
         'password-kbdint-mixed-echo' = 120
         'multiround-wrong-answer-recovery' = 180
         'generated-disposable-auth-key' = 60
@@ -362,6 +365,43 @@ function Wait-AuthLog {
         -TimeoutSeconds $TimeoutSeconds | Out-Null
 }
 
+function Wait-FixtureLog {
+    param(
+        [Parameter(Mandatory = $true)][string]$Pattern,
+        [int]$TimeoutSeconds = 30
+    )
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        if (Test-Path -LiteralPath $fixtureStderr -PathType Leaf) {
+            $text = [IO.File]::ReadAllText($fixtureStderr)
+            if ($text -match $Pattern) { return $text }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    throw "Timed out waiting for SSH fixture state: $Pattern"
+}
+
+function Get-FixtureLogMatchCount {
+    param([Parameter(Mandatory = $true)][string]$Pattern)
+    if (-not (Test-Path -LiteralPath $fixtureStderr -PathType Leaf)) { return 0 }
+    return [regex]::Matches([IO.File]::ReadAllText($fixtureStderr), $Pattern).Count
+}
+
+function Wait-FixtureLogMatchCount {
+    param(
+        [Parameter(Mandatory = $true)][string]$Pattern,
+        [Parameter(Mandatory = $true)][int]$GreaterThan,
+        [int]$TimeoutSeconds = 30
+    )
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        $count = Get-FixtureLogMatchCount -Pattern $Pattern
+        if ($count -gt $GreaterThan) { return $count }
+        Start-Sleep -Milliseconds 200
+    }
+    throw "Timed out waiting for a new SSH fixture event: $Pattern"
+}
+
 function Submit-AuthValue {
     param(
         [Parameter(Mandatory = $true)][string]$Value,
@@ -446,6 +486,18 @@ function Close-FixtureShell {
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Invoke-LeanTTYDeviceCtrlD -Hdc $hdc -Target $Target
     Wait-AuthLog -Pattern 'SSH closed, exitCode=0'
+}
+
+function Submit-ConnectedInput {
+    param([Parameter(Mandatory = $true)][string]$Text)
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Text
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+}
+
+function Invoke-LeanTTYPasteShortcut {
+    & $hdc -t $Target shell 'uinput -K -d 2072 -d 2047 -d 2038 -u 2038 -u 2047 -u 2072' |
+        Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY paste shortcut' }
 }
 
 function Save-SafeDiagnosticText {
@@ -778,6 +830,7 @@ function Write-AuthEvidence {
             ForEach-Object { $_.name })
         declaredCoverage = @(
             'password-success',
+            'transport-main-path-input-large-paste-continuous-output-resize-disconnect-reconnect',
             'password-then-keyboard-interactive-mixed-echo',
             'keyboard-interactive-multi-round-wrong-answer-recovery',
             'publickey-unencrypted',
@@ -927,6 +980,51 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'password-success'
+    }
+
+    if (Test-AuthStageSelected -Name 'transport-main-path') {
+    Start-AuthStage -Name 'transport-main-path'
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-transport-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+
+    Submit-ConnectedInput -Text 'ltty-input-check russhmain'
+    Wait-FixtureLog -Pattern 'input case=russhmain result=matched'
+
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-ConnectedInput -Text 'ltty-paste-prepare russhmain 524288'
+    Wait-AuthLog -Pattern 'OSC 52 clipboard write success=true,length=524288' -TimeoutSeconds 30
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYPasteShortcut
+    Wait-AuthLog -Pattern 'Clipboard paste ok,524288' -TimeoutSeconds 30
+    Wait-FixtureLog -Pattern 'paste case=russhmain bytes=524288 result=matched' -TimeoutSeconds 30
+
+    Submit-ConnectedInput -Text 'ltty-perf-prepare russhmain 12000 80'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-ConnectedInput -Text 'ltty-perf-run russhmain'
+    Wait-AuthLog `
+        -Pattern 'PERF render .*"caseId":"russhmain".*"completenessPercent":100' `
+        -TimeoutSeconds 30
+
+    $resizeCount = Get-FixtureLogMatchCount -Pattern 'resize cols=\d+ rows=\d+'
+    Split-AuthPane
+    Wait-FixtureLogMatchCount `
+        -Pattern 'resize cols=\d+ rows=\d+' `
+        -GreaterThan $resizeCount `
+        -TimeoutSeconds 30 | Out-Null
+    Focus-AuthPane -Side 'left' -LayoutName 'layout-transport-left-connected.json'
+    Close-FixtureShell
+    Focus-AuthPane -Side 'right' -LayoutName 'layout-transport-right-idle.json'
+    Invoke-ActivePaneCloseButton -LayoutName 'layout-transport-close-right.json'
+    Wait-AuthPaneCount -Count 1 -LayoutName 'layout-transport-single-pane.json' | Out-Null
+
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-transport-reconnect-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'transport-main-path'
     }
 
     if (Test-AuthStageSelected -Name 'password-kbdint-mixed-echo') {
