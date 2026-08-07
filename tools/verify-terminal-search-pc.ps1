@@ -123,6 +123,9 @@ function Wait-TerminalWorkspaceState {
     do {
         $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
         $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        $activePaneBounds = @($terminalInputs | ForEach-Object {
+            [string]$_.attributes.bounds
+        } | Sort-Object -Unique)
         $focusedTerminalInputs = @($terminalInputs | Where-Object {
             [string]$_.attributes.focused -eq 'true'
         })
@@ -130,7 +133,10 @@ function Wait-TerminalWorkspaceState {
         $searchInputs = @(Get-TerminalSearchInputNodes -Layout $layout)
         $tabs = @(Get-LeanTTYTabNodes -Layout $layout)
         $focusedIndex = if ($focusedTerminalInputs.Count -eq 1) {
-            [Array]::IndexOf($terminalInputs, $focusedTerminalInputs[0])
+            [Array]::IndexOf(
+                $activePaneBounds,
+                [string]$focusedTerminalInputs[0].attributes.bounds
+            )
         } else {
             -1
         }
@@ -144,14 +150,14 @@ function Wait-TerminalWorkspaceState {
                     ($FocusedPane -eq 'left' -and $focusedIndex -eq 0) -or
                     ($FocusedPane -eq 'right' -and $focusedIndex -eq 1))
         }
-        if ($terminalInputs.Count -eq $PaneCount -and
+        if ($activePaneBounds.Count -eq $PaneCount -and
             $tabs.Count -eq $TabCount -and
             $searchContainers.Count -eq $SearchCount -and
             $searchInputs.Count -eq $SearchCount -and
             $focusMatches) {
             return [pscustomobject]@{
                 layout = $layout
-                paneCount = $terminalInputs.Count
+                paneCount = $activePaneBounds.Count
                 tabCount = $tabs.Count
                 searchCount = $searchInputs.Count
                 focusedPaneIndex = $focusedIndex
@@ -396,8 +402,11 @@ function Restore-TerminalWorkspace {
             continue
         }
         $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        $activePaneBounds = @($terminalInputs | ForEach-Object {
+            [string]$_.attributes.bounds
+        } | Sort-Object -Unique)
         $tabs = @(Get-LeanTTYTabNodes -Layout $layout)
-        if ($terminalInputs.Count -gt 1) {
+        if ($activePaneBounds.Count -gt 1) {
             Invoke-TerminalWorkspaceChord -Action 'focus-right'
             Invoke-TerminalWorkspaceChord -Action 'close-active'
             Start-Sleep -Milliseconds 500

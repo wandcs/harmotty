@@ -442,6 +442,8 @@ foreach ($scriptName in @(
             $content.Contains("'Acceptance: Rebuild Renderer'") -and
             $content.Contains("'EnhanceMinimizeBtn'") -and
             $content.Contains('singleTabSinglePaneRestored = $workspaceRestored') -and
+            $content.Contains('$activePaneBounds') -and
+            $content.Contains('Sort-Object -Unique') -and
             $content.Contains('does not ') -and
             $content.Contains('satisfy physical-keyboard or Chinese/English IME acceptance') -and
             $content.Contains("'layout-search-open.json'") -and
