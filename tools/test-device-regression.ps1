@@ -426,8 +426,16 @@ foreach ($scriptName in @(
         Assert-True (
             $content.Contains('Terminal-search device harness requires a clean committed tree') -and
             $content.Contains("'open-close-focus'") -and
+            $content.Contains("'ascii-query-navigation'") -and
             $content.Contains("'uitest uiInput keyEvent 2072 2045 2022'") -and
+            $content.Contains("'uitest uiInput keyEvent 2047 2054'") -and
+            $content.Contains("'uitest uiInput keyEvent 2072 2017'") -and
             $content.Contains("'^Search text'") -and
+            $content.Contains("'^No results$'") -and
+            $content.Contains('wrappedForward = $true') -and
+            $content.Contains('wrappedBackward = $true') -and
+            $content.Contains('does not ') -and
+            $content.Contains('satisfy physical-keyboard or Chinese/English IME acceptance') -and
             $content.Contains("'layout-search-open.json'") -and
             $content.Contains("'layout-search-closed.json'") -and
             $content.Contains("'explicit-unretained-diagnostic-hap'") -and
