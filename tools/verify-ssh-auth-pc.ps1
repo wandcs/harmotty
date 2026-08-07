@@ -556,19 +556,8 @@ function Invoke-LeanTTYAcceptancePaste {
         throw '[harness] Acceptance clipboard paste menu item was not found'
     }
 
-    $pasteItemHierarchy = [string]$pasteItem[0].attributes.hierarchy
-    $pasteRowHierarchy = $pasteItemHierarchy -replace ',\d+$', ''
-    $pasteRow = @($menuNodes | Where-Object {
-        [string]$_.attributes.hierarchy -eq $pasteRowHierarchy -and
-        [string]$_.attributes.clickable -eq 'true' -and
-        [string]$_.attributes.visible -eq 'true'
-    } | Select-Object -First 1)
-    if ($pasteRow.Count -ne 1) {
-        throw '[harness] Acceptance clipboard paste menu row was not found'
-    }
-    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$pasteRow[0].attributes.bounds)
-    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke acceptance clipboard paste' }
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2012
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
     Wait-AuthLog -Pattern 'Acceptance clipboard paste pane=' -TimeoutSeconds 10 | Out-Null
 }
 
