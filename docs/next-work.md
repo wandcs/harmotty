@@ -105,9 +105,21 @@ Dependabot 告警 [`GHSA-m65r-rprj-r5rg`](https://github.com/Eugeny/russh/securi
   512 KiB 输入保持背压，恢复后字节与顺序完整且 `173x47` resize 未丢；经本地 TCP 转发
   强制断开后，会话在 5 秒边界内结束并中止仍等待窗口的独立 writer。ARM64 目标依赖图
   仍为 150 个 registry 包、无许可证元数据缺口，生产 feature 仍仅为 `ring`、`rsa`。
-- [ ] 用升级后的同一产品树完成干净 ARM64 原生/HAP 构建和物理 HarmonyOS PC SSH
+- [x] 用升级后的同一产品树完成干净 ARM64 原生/HAP 构建和物理 HarmonyOS PC SSH
   主路径，覆盖认证、交互输入、大段粘贴、持续输出、resize、断开与重连；记录依赖版本、
   commit、构建和设备证据。构建通过或 Dependabot 告警自动关闭都不能单独完成本节。
+  2026-08-07 在产品提交 `04c44eec1f04476e297bc10c33add39296710a49` 完成干净 ARM64
+  native/debug HAP 构建，`libleantty_ssh.so` SHA-256 为
+  `3A6B25C767FFC85AD7A19380D35E91200D03F71345B2AF24C28FF5BBDB7AFCF2`；后续只修改仓库
+  fixture/验收代码，产品输入保持不变。最终以 harness 提交
+  `5d7fa0c11a5a88790150727a41e633c57bf29eed` 构建并安装诊断 HAP（SHA-256
+  `5F46D6FA9CC0921C76E1BBB8937ED5FABCC35B7EEB916DF7F213B14C853F86C5`），在 HAD-W32
+  物理 PC（USB、`arm64-v8a`）通过 password 认证、普通交互输入、512 KiB
+  精确粘贴、12,000×80 持续输出 100% 完整、PTY resize、断开和重连。结构化证据为
+  `C:\tmp\leantty-russh-transport-evidence-20260807-retry10\device-ssh-auth.json`，attempt
+  `0df13cbd29534c61825f4e1b7aabf029`；临时 key、HDC reverse 和 fixture 进程的独立清理
+  审计均通过。前置失败均定位为 harness 日志读取、标签覆盖或输入注入问题，且每次清理
+  通过，不作为产品失败结论。
 
 ## 5. ARM64 HarmonyOS PC 验收
 
