@@ -9,8 +9,48 @@ import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 const policy = globalThis.LeanTTYTerminalPolicy;
 const encode = text => `c;${Buffer.from(text, 'utf8').toString('base64')}`;
 
+const packageJson = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+);
+const packageLock = JSON.parse(
+  readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8')
+);
+assert.equal(packageLock.lockfileVersion, 3,
+  'web terminal dependencies must keep the committed npm lockfile format');
+assert.deepEqual(packageLock.packages[''].dependencies, packageJson.dependencies,
+  'package.json dependencies must exactly match the lockfile root');
+for (const [packageName, version] of Object.entries(packageJson.dependencies)) {
+  assert.match(version, /^\d+\.\d+\.\d+$/,
+    `${packageName} must use an exact dependency version`);
+  const lockedPackage = packageLock.packages[`node_modules/${packageName}`];
+  assert.ok(lockedPackage, `${packageName} must exist in package-lock.json`);
+  assert.equal(lockedPackage.version, version,
+    `${packageName} must resolve to its package.json version`);
+  assert.equal(lockedPackage.license, 'MIT',
+    `${packageName} must retain its audited MIT license metadata`);
+  assert.match(lockedPackage.integrity, /^sha512-/,
+    `${packageName} must retain an npm integrity hash`);
+}
+
 const assetManifest = JSON.parse(
   readFileSync(new URL('./assets-manifest.json', import.meta.url), 'utf8')
+);
+const assetPackages = {
+  'xterm.js': '@xterm/xterm',
+  'xterm.css': '@xterm/xterm',
+  'addon-fit.js': '@xterm/addon-fit',
+  'addon-search.js': '@xterm/addon-search',
+  'addon-serialize.js': '@xterm/addon-serialize',
+  'addon-web-links.js': '@xterm/addon-web-links',
+  'addon-webgl.js': '@xterm/addon-webgl'
+};
+assert.deepEqual(
+  assetManifest.map(asset => asset.file).sort(),
+  Object.keys(assetPackages).sort(),
+  'the asset manifest must contain exactly the locally packaged xterm resources'
+);
+const thirdPartyNotices = readFileSync(
+  new URL('../../docs/THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8'
 );
 for (const asset of assetManifest) {
   const checkedOutBytes = readFileSync(
@@ -24,7 +64,24 @@ for (const asset of assetManifest) {
     asset.sha256,
     `${asset.file} hash must match the asset manifest`
   );
+  const packageName = assetPackages[asset.file];
+  assert.ok(thirdPartyNotices.includes(`\`${asset.file}\``),
+    `${asset.file} must be listed in the third-party notices`);
+  assert.ok(thirdPartyNotices.includes(`\`${packageName} ${packageJson.dependencies[packageName]}\``),
+    `${asset.file} must cite its locked package version`);
+  assert.ok(thirdPartyNotices.includes(`\`${asset.sha256.toUpperCase()}\``),
+    `${asset.file} must cite its packaged SHA-256`);
 }
+
+const packagedTerminalHtml = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8'
+);
+assert.doesNotMatch(packagedTerminalHtml,
+  /(?:src|href)\s*=\s*["']https?:\/\//iu,
+  'the terminal page must not load scripts or styles from online resources');
+assert.doesNotMatch(packagedTerminalHtml,
+  /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|importScripts)\s*\(/u,
+  'the terminal page must not fetch runtime resources from the network');
 
 for (const text of ['', 'plain text', '中文 🚀\nsecond line']) {
   const decoded = policy.decodeOsc52(encode(text));
@@ -616,6 +673,8 @@ const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');
 assert.match(terminalPane, /renderMode:\s*RenderMode\.ASYNC_RENDER/,
   'terminal panes must use the normal asynchronous ArkWeb render mode');
+assert.match(terminalPane, /\.onlineImageAccess\(false\)/,
+  'terminal panes must prevent packaged HTML from loading online images');
 assert.match(terminalPane, /sharedRenderProcessToken:\s*'leantty-terminal'/,
   'terminal panes keep the measured shared renderer-process configuration');
 assert.doesNotMatch(terminalPane, /\.onRenderProcess(?:NotResponding|Responding)\(/,
