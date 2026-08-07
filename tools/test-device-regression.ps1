@@ -427,6 +427,9 @@ foreach ($scriptName in @(
             $content.Contains('Terminal-search device harness requires a clean committed tree') -and
             $content.Contains("'open-close-focus'") -and
             $content.Contains("'ascii-query-navigation'") -and
+            $content.Contains("'pane-tab-ownership'") -and
+            $content.Contains("'warm-tab-eviction'") -and
+            $content.Contains("'window-renderer-lifecycle'") -and
             $content.Contains("'uitest uiInput keyEvent 2072 2045 2022'") -and
             $content.Contains("'uitest uiInput keyEvent 2047 2054'") -and
             $content.Contains("'uitest uiInput keyEvent 2072 2017'") -and
@@ -435,6 +438,10 @@ foreach ($scriptName in @(
             $content.Contains("'^No results$'") -and
             $content.Contains('wrappedForward = $true') -and
             $content.Contains('wrappedBackward = $true') -and
+            $content.Contains('ACCEPTANCE_WARM_TAB_EVICTED tab=') -and
+            $content.Contains("'Acceptance: Rebuild Renderer'") -and
+            $content.Contains("'EnhanceMinimizeBtn'") -and
+            $content.Contains('singleTabSinglePaneRestored = $workspaceRestored') -and
             $content.Contains('does not ') -and
             $content.Contains('satisfy physical-keyboard or Chinese/English IME acceptance') -and
             $content.Contains("'layout-search-open.json'") -and
@@ -467,6 +474,7 @@ Assert-True (
     -not $sessionViewModel.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
     $acceptanceSource.Contains("import { ACCEPTANCE_TESTS } from 'BuildProfile'") -and
     $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
+    $acceptanceSource.Contains('ACCEPTANCE_WARM_TAB_EVICTED') -and
     $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
     $acceptanceSource.Contains('Acceptance: Open Search') -and
     $acceptanceSource.Contains('pasteClipboardForAcceptance') -and
@@ -482,7 +490,10 @@ foreach ($productionSource in @(
 )) {
     $productionText = Get-Content -LiteralPath (Join-Path $repoRoot $productionSource) -Raw
     Assert-True (
-        $productionText -notmatch 'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|ACCEPTANCE_INPUT_SUBMIT'
+        $productionText -notmatch (
+            'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|' +
+            'ACCEPTANCE_INPUT_SUBMIT|ACCEPTANCE_WARM_TAB_EVICTED'
+        )
     ) "Production ArkTS contains acceptance-only source: $productionSource"
 }
 

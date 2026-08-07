@@ -12,7 +12,13 @@ param(
     [Parameter(Mandatory = $true)][string]$HapPath,
     [string]$EvidenceDirectory = '',
     [string]$UnlockPasswordPath = '',
-    [ValidateSet('open-close-focus', 'ascii-query-navigation')]
+    [ValidateSet(
+        'open-close-focus',
+        'ascii-query-navigation',
+        'pane-tab-ownership',
+        'warm-tab-eviction',
+        'window-renderer-lifecycle'
+    )]
     [string[]]$Only = @('open-close-focus')
 )
 
@@ -62,6 +68,7 @@ $failureDomain = 'none'
 $cleanupFailure = ''
 $awakeLeaseAcquired = $false
 $searchClosed = $false
+$workspaceRestored = $false
 $appPid = ''
 $deviceUnlockResult = ''
 $deviceModel = ''
@@ -77,6 +84,85 @@ function Get-TerminalSearchInputNodes {
         [string]$_.attributes.hint -match '^Search text' -and
         [string]$_.attributes.visible -eq 'true'
     })
+}
+
+function Get-TerminalSearchContainerNodes {
+    param([Parameter(Mandatory = $true)]$Layout)
+    return @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
+        [string]$_.attributes.type -eq 'search' -and
+        [string]$_.attributes.text -eq 'Find in terminal' -and
+        [string]$_.attributes.visible -eq 'true'
+    })
+}
+
+function Get-LeanTTYTabNodes {
+    param([Parameter(Mandatory = $true)]$Layout)
+    return @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
+        if ([string]$_.attributes.type -ne 'Stack' -or
+            [string]$_.attributes.clickable -ne 'true' -or
+            [string]::IsNullOrWhiteSpace([string]$_.attributes.description)) {
+            return $false
+        }
+        $bounds = [string]$_.attributes.bounds
+        if ($bounds -notmatch '^\[\d+,(?<top>\d+)\]\[\d+,(?<bottom>\d+)\]$') { return $false }
+        return [int]$Matches.top -lt 120 -and [int]$Matches.bottom -le 120
+    })
+}
+
+function Wait-TerminalWorkspaceState {
+    param(
+        [Parameter(Mandatory = $true)][int]$PaneCount,
+        [Parameter(Mandatory = $true)][int]$TabCount,
+        [Parameter(Mandatory = $true)][int]$SearchCount,
+        [Parameter(Mandatory = $true)][string]$LayoutName,
+        [ValidateSet('any', 'left', 'right')][string]$FocusedPane = 'any',
+        [ValidateRange(1, 40)][int]$TimeoutSeconds = 20
+    )
+    $path = Join-Path $EvidenceDirectory $LayoutName
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
+        $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        $focusedTerminalInputs = @($terminalInputs | Where-Object {
+            [string]$_.attributes.focused -eq 'true'
+        })
+        $searchContainers = @(Get-TerminalSearchContainerNodes -Layout $layout)
+        $searchInputs = @(Get-TerminalSearchInputNodes -Layout $layout)
+        $tabs = @(Get-LeanTTYTabNodes -Layout $layout)
+        $focusedIndex = if ($focusedTerminalInputs.Count -eq 1) {
+            [Array]::IndexOf($terminalInputs, $focusedTerminalInputs[0])
+        } else {
+            -1
+        }
+        $focusMatches = if ($SearchCount -eq 1) {
+            $searchInputs.Count -eq 1 -and
+                [string]$searchInputs[0].attributes.focused -eq 'true' -and
+                $focusedTerminalInputs.Count -eq 0
+        } else {
+            $focusedTerminalInputs.Count -eq 1 -and
+                ($FocusedPane -eq 'any' -or
+                    ($FocusedPane -eq 'left' -and $focusedIndex -eq 0) -or
+                    ($FocusedPane -eq 'right' -and $focusedIndex -eq 1))
+        }
+        if ($terminalInputs.Count -eq $PaneCount -and
+            $tabs.Count -eq $TabCount -and
+            $searchContainers.Count -eq $SearchCount -and
+            $searchInputs.Count -eq $SearchCount -and
+            $focusMatches) {
+            return [pscustomobject]@{
+                layout = $layout
+                paneCount = $terminalInputs.Count
+                tabCount = $tabs.Count
+                searchCount = $searchInputs.Count
+                focusedPaneIndex = $focusedIndex
+            }
+        }
+        Start-Sleep -Milliseconds 200
+    } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds)
+    throw (
+        '[product] Timed out waiting for terminal workspace state: ' +
+        "panes=$PaneCount,tabs=$TabCount,search=$SearchCount,focus=$FocusedPane"
+    )
 }
 
 function Get-TerminalSearchResultNodes {
@@ -186,6 +272,151 @@ function Clear-TerminalSearchQuery {
 function Invoke-TerminalSearchPrevious {
     & $hdc -t $Target shell 'uitest uiInput keyEvent 2047 2054' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke Shift+Enter in terminal search' }
+}
+
+function Invoke-TerminalWorkspaceChord {
+    param([Parameter(Mandatory = $true)][ValidateSet(
+        'split', 'new-tab', 'close-active', 'next-tab', 'focus-left', 'focus-right'
+    )][string]$Action)
+    $command = switch ($Action) {
+        'split' { 'uinput -K -d 2072 -d 2047 -d 2020 -u 2020 -u 2047 -u 2072' }
+        'new-tab' { 'uinput -K -d 2072 -d 2047 -d 2036 -u 2036 -u 2047 -u 2072' }
+        'close-active' { 'uinput -K -d 2072 -d 2047 -d 2039 -u 2039 -u 2047 -u 2072' }
+        'next-tab' { 'uinput -K -d 2072 -d 2049 -u 2049 -u 2072' }
+        'focus-left' { 'uinput -K -d 2072 -d 2045 -d 2014 -u 2014 -u 2045 -u 2072' }
+        'focus-right' { 'uinput -K -d 2072 -d 2045 -d 2015 -u 2015 -u 2045 -u 2072' }
+    }
+    & $hdc -t $Target shell $command | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to invoke LeanTTY workspace action: $Action" }
+}
+
+function Invoke-LeanTTYLayoutNodeClick {
+    param([Parameter(Mandatory = $true)]$Node)
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$Node.attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw '[environment] HarmonyOS layout node click failed' }
+}
+
+function Invoke-TerminalMenuAction {
+    param(
+        [Parameter(Mandatory = $true)][string]$ActionText,
+        [Parameter(Mandatory = $true)][string]$LayoutPrefix
+    )
+    $layout = Get-LeanTTYDeviceLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory "$LayoutPrefix-before-menu.json")
+    $candidates = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        if ([string]$_.attributes.type -ne 'Stack' -or
+            [string]$_.attributes.clickable -ne 'true' -or
+            -not [string]::IsNullOrWhiteSpace([string]$_.attributes.text) -or
+            -not [string]::IsNullOrWhiteSpace([string]$_.attributes.description) -or
+            -not [string]::IsNullOrWhiteSpace([string]$_.attributes.id)) {
+            return $false
+        }
+        $bounds = [string]$_.attributes.bounds
+        if ($bounds -notmatch '^\[(?<left>\d+),(?<top>\d+)\]\[(?<right>\d+),(?<bottom>\d+)\]$') {
+            return $false
+        }
+        $width = [int]$Matches.right - [int]$Matches.left
+        $height = [int]$Matches.bottom - [int]$Matches.top
+        return [int]$Matches.left -gt 1000 -and [int]$Matches.bottom -le 120 -and
+            $width -ge 40 -and $width -le 90 -and $height -ge 40 -and $height -le 90
+    })
+    if ($candidates.Count -ne 1) {
+        throw '[harness] LeanTTY terminal menu button was not uniquely identified'
+    }
+    Invoke-LeanTTYLayoutNodeClick -Node $candidates[0]
+
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        try {
+            Invoke-LeanTTYDialogButton `
+                -Hdc $hdc `
+                -Target $Target `
+                -ButtonText $ActionText `
+                -LayoutPath (Join-Path $EvidenceDirectory "$LayoutPrefix-menu.json")
+            return
+        } catch {
+            Start-Sleep -Milliseconds 200
+        }
+    } while ($stopwatch.Elapsed.TotalSeconds -lt 10)
+    throw "[environment] Diagnostic HAP menu action was unavailable: $ActionText"
+}
+
+function Wait-SearchAppLog {
+    param(
+        [Parameter(Mandatory = $true)][string]$Pattern,
+        [ValidateRange(1, 40)][int]$TimeoutSeconds = 20
+    )
+    return Wait-LeanTTYAppLog `
+        -Hdc $hdc `
+        -Target $Target `
+        -ProcessId $appPid `
+        -Pattern $Pattern `
+        -TimeoutSeconds $TimeoutSeconds
+}
+
+function Invoke-RegressionWindowMinimize {
+    $layout = Get-LeanTTYDeviceLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory 'layout-before-search-minimize.json')
+    $buttons = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        [string]$_.attributes.id -eq 'EnhanceMinimizeBtn' -and
+        [string]$_.attributes.clickable -eq 'true'
+    })
+    if ($buttons.Count -ne 1) { throw '[environment] HarmonyOS minimize button was not found' }
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-LeanTTYLayoutNodeClick -Node $buttons[0]
+    Wait-SearchAppLog -Pattern 'Window visibility changed: visible=false' | Out-Null
+}
+
+function Restore-RegressionWindow {
+    & $hdc -t $Target shell 'aa start -a EntryAbility -b com.leantty.app' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw '[environment] Unable to restore minimized LeanTTY window' }
+    Wait-SearchAppLog -Pattern 'Window visibility changed: visible=true' | Out-Null
+    $restoredPid = (@(& $hdc -t $Target shell 'pidof com.leantty.app' 2>&1) -join "`n").Trim()
+    if ($restoredPid -ne $appPid) { throw '[product] LeanTTY process changed during minimize/restore' }
+}
+
+function Restore-TerminalWorkspace {
+    if ($appPid -notmatch '^\d+$') { return }
+    & $hdc -t $Target shell 'aa start -a EntryAbility -b com.leantty.app' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to reactivate LeanTTY during cleanup' }
+    for ($step = 0; $step -lt 8; $step++) {
+        $layout = Get-LeanTTYDeviceLayout `
+            -Hdc $hdc `
+            -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory "layout-cleanup-workspace-$step.json")
+        $searchInputs = @(Get-TerminalSearchInputNodes -Layout $layout)
+        if ($searchInputs.Count -gt 0) {
+            Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2070
+            Start-Sleep -Milliseconds 300
+            continue
+        }
+        $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        $tabs = @(Get-LeanTTYTabNodes -Layout $layout)
+        if ($terminalInputs.Count -gt 1) {
+            Invoke-TerminalWorkspaceChord -Action 'focus-right'
+            Invoke-TerminalWorkspaceChord -Action 'close-active'
+            Start-Sleep -Milliseconds 500
+            continue
+        }
+        if ($tabs.Count -gt 1) {
+            Invoke-TerminalWorkspaceChord -Action 'close-active'
+            Start-Sleep -Milliseconds 500
+            continue
+        }
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 `
+            -TabCount 1 `
+            -SearchCount 0 `
+            -LayoutName 'layout-cleanup-workspace-final.json' `
+            -TimeoutSeconds 10 | Out-Null
+        return
+    }
+    throw 'Unable to restore one-tab, one-pane LeanTTY workspace during cleanup'
 }
 
 function Save-SearchAppLogs {
@@ -367,6 +598,207 @@ try {
             terminalFocusRestored = $true
         })
     }
+
+    if ($Only -contains 'pane-tab-ownership') {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-ownership-single-pane.json' | Out-Null
+
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalSearchState `
+            -Open $true -LayoutName 'layout-ownership-single-search.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'ltty'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'ltty' `
+            -ExpectedResultPattern '^[1-9][0-9]*/[1-9][0-9]*$' `
+            -LayoutName 'layout-ownership-single-query.json' | Out-Null
+
+        Invoke-TerminalWorkspaceChord -Action 'split'
+        $split = Wait-TerminalWorkspaceState `
+            -PaneCount 2 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-ownership-split.json'
+        $searchClosed = $true
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 2 -TabCount 1 -SearchCount 1 `
+            -LayoutName 'layout-ownership-active-pane-search.json' | Out-Null
+
+        Invoke-TerminalWorkspaceChord -Action 'focus-left'
+        $left = Wait-TerminalWorkspaceState `
+            -PaneCount 2 -TabCount 1 -SearchCount 0 -FocusedPane 'left' `
+            -LayoutName 'layout-ownership-focus-left.json'
+        $searchClosed = $true
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 2 -TabCount 1 -SearchCount 1 `
+            -LayoutName 'layout-ownership-left-search.json' | Out-Null
+
+        Invoke-TerminalWorkspaceChord -Action 'focus-right'
+        $right = Wait-TerminalWorkspaceState `
+            -PaneCount 2 -TabCount 1 -SearchCount 0 -FocusedPane 'right' `
+            -LayoutName 'layout-ownership-focus-right.json'
+        $searchClosed = $true
+        Invoke-TerminalWorkspaceChord -Action 'close-active'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-ownership-pane-closed.json' | Out-Null
+
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 1 `
+            -LayoutName 'layout-ownership-before-new-tab.json' | Out-Null
+        Invoke-TerminalWorkspaceChord -Action 'new-tab'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 0 `
+            -LayoutName 'layout-ownership-new-tab.json' | Out-Null
+        $searchClosed = $true
+
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 1 `
+            -LayoutName 'layout-ownership-second-tab-search.json' | Out-Null
+        Invoke-TerminalWorkspaceChord -Action 'next-tab'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 0 `
+            -LayoutName 'layout-ownership-first-tab-return.json' | Out-Null
+        $searchClosed = $true
+        Invoke-TerminalWorkspaceChord -Action 'next-tab'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 0 `
+            -LayoutName 'layout-ownership-second-tab-return.json' | Out-Null
+        Invoke-TerminalWorkspaceChord -Action 'close-active'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-ownership-tab-closed.json' | Out-Null
+
+        Save-LeanTTYDeviceScreenshot `
+            -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'pane-tab-ownership.png')
+        $checks.Add([pscustomobject]@{
+            name = 'pane-tab-ownership'
+            result = 'passed'
+            durationMs = $timer.ElapsedMilliseconds
+            singlePaneQueryClearedOnSplit = $true
+            splitPaneFocusedAfterCreation = $split.focusedPaneIndex
+            leftPaneFocusIndex = $left.focusedPaneIndex
+            rightPaneFocusIndex = $right.focusedPaneIndex
+            activePaneQueryClearedOnSwitch = $true
+            queryClearedOnNewTab = $true
+            queryAbsentAfterRoundTrip = $true
+            paneAndTabCloseRestoredSingleWorkspace = $true
+        })
+    }
+
+    if ($Only -contains 'warm-tab-eviction') {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-warm-initial.json' | Out-Null
+        Invoke-TerminalWorkspaceChord -Action 'new-tab'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 0 `
+            -LayoutName 'layout-warm-second-tab.json' | Out-Null
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 1 `
+            -LayoutName 'layout-warm-search-open.json' | Out-Null
+
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Invoke-TerminalWorkspaceChord -Action 'next-tab'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 0 `
+            -LayoutName 'layout-warm-tab-inactive.json' | Out-Null
+        $searchClosed = $true
+        $evictionLogs = Wait-SearchAppLog `
+            -Pattern 'ACCEPTANCE_WARM_TAB_EVICTED tab=' `
+            -TimeoutSeconds 40
+        Invoke-TerminalWorkspaceChord -Action 'next-tab'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 0 `
+            -LayoutName 'layout-warm-tab-remounted.json' `
+            -TimeoutSeconds 30 | Out-Null
+        Invoke-TerminalWorkspaceChord -Action 'close-active'
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-warm-cleaned.json' | Out-Null
+        Save-SearchAppLogs -FileName 'warm-tab-eviction-app-logs.txt'
+        $checks.Add([pscustomobject]@{
+            name = 'warm-tab-eviction'
+            result = 'passed'
+            durationMs = $timer.ElapsedMilliseconds
+            retentionMilliseconds = 30000
+            productionEvictionObserved = $evictionLogs -match 'ACCEPTANCE_WARM_TAB_EVICTED tab='
+            queryAbsentAfterRemount = $true
+            terminalFocusRestored = $true
+        })
+    }
+
+    if ($Only -contains 'window-renderer-lifecycle') {
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-lifecycle-initial.json' | Out-Null
+
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 1 `
+            -LayoutName 'layout-lifecycle-before-minimize.json' | Out-Null
+        Invoke-RegressionWindowMinimize
+        Restore-RegressionWindow
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-lifecycle-after-restore.json' `
+            -TimeoutSeconds 30 | Out-Null
+        $searchClosed = $true
+
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 1 `
+            -LayoutName 'layout-lifecycle-before-renderer.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'ltty'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'ltty' `
+            -ExpectedResultPattern '^[1-9][0-9]*/[1-9][0-9]*$' `
+            -LayoutName 'layout-lifecycle-renderer-query.json' | Out-Null
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Invoke-TerminalMenuAction `
+            -ActionText 'Acceptance: Rebuild Renderer' `
+            -LayoutPrefix 'layout-lifecycle-renderer'
+        $rendererLogs = Wait-SearchAppLog `
+            -Pattern 'Acceptance renderer rebuild requested=true' `
+            -TimeoutSeconds 20
+        $rendererLogs = Wait-SearchAppLog `
+            -Pattern 'ArkWeb renderer exited.*rebuilding WebView' `
+            -TimeoutSeconds 20
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 1 -SearchCount 0 `
+            -LayoutName 'layout-lifecycle-renderer-rebuilt.json' `
+            -TimeoutSeconds 30 | Out-Null
+        $searchClosed = $true
+        Save-LeanTTYDeviceScreenshot `
+            -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'window-renderer-lifecycle.png')
+        Save-SearchAppLogs -FileName 'window-renderer-lifecycle-app-logs.txt'
+        $checks.Add([pscustomobject]@{
+            name = 'window-renderer-lifecycle'
+            result = 'passed'
+            durationMs = $timer.ElapsedMilliseconds
+            processPreservedAcrossMinimizeRestore = $true
+            queryClearedOnMinimize = $true
+            rendererTerminationObserved = $rendererLogs -match 'ArkWeb renderer exited.*rebuilding WebView'
+            queryAbsentAfterRendererRebuild = $true
+            terminalFocusRestored = $true
+        })
+    }
 } catch {
     $failure = $_.Exception.Message
     $failureDomain = if ($failure -match '^\[environment\]') {
@@ -384,14 +816,11 @@ try {
     } catch {}
     try { Save-SearchAppLogs -FileName 'failure-app-logs.txt' } catch {}
 } finally {
-    if ($appPid -match '^\d+$' -and -not $searchClosed) {
+    if ($appPid -match '^\d+$') {
         try {
-            Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2070
-            Wait-TerminalSearchState `
-                -Open $false `
-                -LayoutName 'layout-cleanup-search-closed.json' `
-                -TimeoutSeconds 10 | Out-Null
+            Restore-TerminalWorkspace
             $searchClosed = $true
+            $workspaceRestored = $true
         } catch {
             $cleanupFailure = $_.Exception.Message
         }
@@ -443,6 +872,7 @@ try {
         cleanup = [ordered]@{
             result = $(if ($cleanupFailure) { 'failed' } else { 'passed' })
             transientSearchClosed = $searchClosed
+            singleTabSinglePaneRestored = $workspaceRestored
             awakeLeaseRestored = $awakeLeaseAcquired -and -not $cleanupFailure
             failure = $cleanupFailure
         }

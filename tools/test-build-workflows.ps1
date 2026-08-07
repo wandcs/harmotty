@@ -104,6 +104,9 @@ try {
         Assert-True (($injectedText -join "`n").Contains('ACCEPTANCE_INPUT_SUBMIT')) (
             'Debug acceptance source injection omitted input telemetry'
         )
+        Assert-True (($injectedText -join "`n").Contains('ACCEPTANCE_WARM_TAB_EVICTED')) (
+            'Debug acceptance source injection omitted warm-tab eviction telemetry'
+        )
         Assert-True (($injectedText -join "`n").Contains('Acceptance: Rebuild Renderer')) (
             'Debug acceptance source injection omitted renderer trigger'
         )

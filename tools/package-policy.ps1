@@ -3,6 +3,7 @@ function Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers {
         [Parameter(Mandatory = $true)][string]$PackagePath,
         [string[]]$Markers = @(
             'ACCEPTANCE_INPUT_SUBMIT',
+            'ACCEPTANCE_WARM_TAB_EVICTED',
             'Acceptance: Rebuild Renderer',
             'Acceptance renderer',
             'terminateRendererForAcceptance',
