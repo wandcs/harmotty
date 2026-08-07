@@ -324,6 +324,7 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 | `2c90fd9` | 自动化覆盖说明 | 文档链接/状态核对与 `git diff --check` |
 | `a380b6a` | npm 锁、资产重建、manifest/许可证/在线资源、release marker 与 ARM64-only | 锁定安装、资产零差异、Web policy、build-workflow/public-source policy |
 | `16b7486`、`7b41ca0` | 固定 addon 的 Gitleaks 误报与 8.24 配置兼容 | Gitleaks 8.24.3 同版本红绿复现及 Public Checks |
+| `93a924c` | 搜索面板与终端指针事件边界 | Web policy 红绿回归、增量 ARM64 开发包与 HAD-W32 实机点击路径 |
 
 本地汇总复核结果：
 
@@ -349,6 +350,17 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
   `7B23AED6036EBF72DA0008C49B96132703CCB0EB667E4FB429F461E34B7847D9`，保存在
   `C:\tmp\leantty-1.2-search-ui-20260806`；29 个 screenshot/layout 文件覆盖已明确列出的
   最小主路径。它不因后续自动化通过而晋升为未执行场景的物理验收。
+- 继续验证所有权冲突时，第一版实现暴露了一个实机缺陷：搜索面板是
+  `terminal-container` 的子节点，容器 capture 监听器把点击查询输入也当作终端点击，先
+  关闭搜索再把后续按键交给远端。`93a924c` 在关闭搜索前排除 `search-panel` 后代事件，
+  并增加先失败、修复后通过的 Web policy 回归。修复树经 `dev-pc.ps1` 生成 9,906,460-byte
+  ARM64 调试 HAP，SHA-256
+  `E5BFE505A0D3978132582EA1BD067474572B2FE65DB34C11CFF0568860A2F52F`。
+- 修复后的 HAD-W32 通过真实 SSH fixture 验证：点击查询输入后搜索保持打开，`FIXTURE_OK`
+  显示 `1/1` 且 Terminal input 仍失焦；随后同一 Surface 的终端点击关闭搜索、释放匹配
+  selection 并恢复 Terminal input 焦点。证据保存在
+  `C:\tmp\leantty-1.2-search-ownership-20260807`；测试后已退出 SSH、删除临时
+  `known_hosts` 记录、移除 HDC 反向端口、停止 fixture、删除随机凭据目录并恢复屏幕超时。
 
 本轮没有运行 `tools/test-regression.ps1`、`tools/verify-pc.ps1` 或完整命名物理矩阵；它们
 仍只用于正式候选。selection/link/TUI、输入法、大 scrollback、持续输出和 renderer 重建
@@ -356,9 +368,10 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 
 ## 实现中仍须验证
 
-- 在物理 PC 上验证搜索 selection 释放、同一次指针事件继续交给 selection/link/mouse
-  路径、搜索浮层 secondary action 隔离，以及主题和 viewport 切换的可见结果；同时回归
-  `Ctrl+C`、OSC 52、HTTP(S)/OSC 8 链接和 tmux/vim/less 鼠标模式。
+- 在物理 PC 上继续验证终端指针事件关闭搜索后进入实际 selection/link/mouse 路径、搜索
+  浮层 secondary action 隔离，以及主题和 viewport 切换的可见结果；同时回归 `Ctrl+C`、
+  OSC 52、HTTP(S)/OSC 8 链接和 tmux/vim/less 鼠标模式。搜索面板自身点击不误关搜索、
+  终端点击释放搜索 selection 并恢复焦点已由上述 `93a924c` 实机证据闭合。
 
 ## 初步验证门禁
 

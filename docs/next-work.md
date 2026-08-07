@@ -62,7 +62,7 @@
 - [x] 保证每个 Pane 的搜索状态完全隔离。切换 Tab/Pane、关闭 Pane、Terminal Surface
   销毁、warm Tab 淘汰、renderer 退出或重建时按已确认契约关闭或恢复搜索，不创建
   Session 状态、跨 Surface 查询或持久化记录。
-- [ ] 处理搜索高亮与现有 selection、`Ctrl+C`、OSC 52、HTTP(S)/OSC 8 链接、鼠标上报、
+- [x] 处理搜索高亮与现有 selection、`Ctrl+C`、OSC 52、HTTP(S)/OSC 8 链接、鼠标上报、
   secondary action、主题和滚动的所有权冲突，不改变 buffer 字节、终端快照或远端程序
   输入。
 - [x] 为所有新增 Bridge control/data kind 更新双向 allowlist、长度/格式校验和失败行为；
