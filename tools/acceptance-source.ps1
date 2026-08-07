@@ -49,6 +49,19 @@ function Add-LeanTTYAcceptanceSource {
         "    if (selected === 8 && ACCEPTANCE_TESTS) { this.pasteClipboardForAcceptance(); return }"
     $text.index = Set-LeanTTYAcceptanceSourceText `
         $text.index $selectionAnchor $selectionReplacement
+    $keyEventAnchor = @'
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+'@
+    $keyEventReplacement = @'
+    if (ACCEPTANCE_TESTS && ctrlKey && altKey && !shiftKey && event.keyCode === 2038) {
+      this.pasteClipboardForAcceptance()
+      return true
+    }
+
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+'@
+    $text.index = Set-LeanTTYAcceptanceSourceText `
+        $text.index $keyEventAnchor $keyEventReplacement
     $rendererMethod = @'
   private rebuildRendererForAcceptance(): void {
     if (!ACCEPTANCE_TESTS) {

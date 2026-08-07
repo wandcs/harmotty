@@ -644,6 +644,8 @@ assert.match(acceptanceSource, /Acceptance: Rebuild Renderer/,
   'debug build transformation must own the renderer acceptance menu');
 assert.match(acceptanceSource, /Acceptance: Paste Clipboard/,
   'debug build transformation must own the clipboard paste acceptance menu');
+assert.match(acceptanceSource, /ctrlKey && altKey && !shiftKey && event\.keyCode === 2038/,
+  'debug build transformation must own the clipboard paste acceptance chord');
 assert.match(acceptanceSource, /terminateRendererForAcceptance/,
   'debug build transformation must own the renderer termination trigger');
 assert.match(acceptanceSource, /finally[\s\S]*WriteAllBytes/,

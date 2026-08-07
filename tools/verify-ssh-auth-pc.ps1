@@ -510,54 +510,8 @@ function Submit-ConnectedInput {
 }
 
 function Invoke-LeanTTYAcceptancePaste {
-    $layout = Get-LeanTTYDeviceLayout `
-        -Hdc $hdc `
-        -Target $Target `
-        -LocalPath (Join-Path $EvidenceDirectory 'layout-paste-menu-trigger.json')
-    $nodes = @(Get-LeanTTYLayoutNodes -Node $layout)
-    $maximizeButton = @($nodes | Where-Object {
-        [string]$_.attributes.id -eq 'EnhanceMaximizeBtn'
-    } | Select-Object -First 1)
-    if ($maximizeButton.Count -ne 1) {
-        throw '[environment] HarmonyOS maximize button was not found for menu positioning'
-    }
-    $maximizeCenter = Get-LeanTTYBoundsCenter -Bounds ([string]$maximizeButton[0].attributes.bounds)
-    $menuTrigger = @($nodes | Where-Object {
-        if ([string]$_.attributes.clickable -ne 'true' -or
-            [string]$_.attributes.visible -ne 'true') {
-            return $false
-        }
-        $candidateCenter = Get-LeanTTYBoundsCenter -Bounds ([string]$_.attributes.bounds)
-        return $candidateCenter.x -lt $maximizeCenter.x -and
-            [Math]::Abs($candidateCenter.y - $maximizeCenter.y) -le 20
-    } | Sort-Object {
-        (Get-LeanTTYBoundsCenter -Bounds ([string]$_.attributes.bounds)).x
-    } -Descending | Select-Object -First 1)
-    if ($menuTrigger.Count -ne 1) {
-        throw '[harness] LeanTTY menu trigger was not found for clipboard paste'
-    }
-    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$menuTrigger[0].attributes.bounds)
-    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to open the LeanTTY acceptance menu' }
-
-    $menuLayoutPath = Join-Path $EvidenceDirectory 'layout-paste-menu-open.json'
-    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-    do {
-        $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $menuLayoutPath
-        $menuNodes = @(Get-LeanTTYLayoutNodes -Node $layout)
-        $pasteItem = @($menuNodes | Where-Object {
-            [string]$_.attributes.text -eq 'Acceptance: Paste Clipboard' -and
-            [string]$_.attributes.visible -eq 'true'
-        } | Select-Object -First 1)
-        if ($pasteItem.Count -eq 1) { break }
-        Start-Sleep -Milliseconds 200
-    } while ($stopwatch.Elapsed.TotalSeconds -lt 10)
-    if ($pasteItem.Count -ne 1) {
-        throw '[harness] Acceptance clipboard paste menu item was not found'
-    }
-
-    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2012
-    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+    & $hdc -t $Target shell 'uitest uiInput keyEvent 2072 2045 2038' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke acceptance clipboard paste chord' }
     Wait-AuthLog -Pattern 'Acceptance clipboard paste pane=' -TimeoutSeconds 10 | Out-Null
 }
 
