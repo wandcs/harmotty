@@ -1005,7 +1005,7 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
 
     Submit-ConnectedInput -Text 'ltty-input-check russhmain'
-    Wait-FixtureLog -Pattern 'input case=russhmain result=matched'
+    Wait-FixtureLog -Pattern 'input case=russhmain result=matched' | Out-Null
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-paste-prepare russhmain 524288'
@@ -1013,7 +1013,9 @@ try {
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Invoke-LeanTTYPasteShortcut
     Wait-AuthLog -Pattern 'Clipboard paste ok,524288' -TimeoutSeconds 30
-    Wait-FixtureLog -Pattern 'paste case=russhmain bytes=524288 result=matched' -TimeoutSeconds 30
+    Wait-FixtureLog `
+        -Pattern 'paste case=russhmain bytes=524288 result=matched' `
+        -TimeoutSeconds 30 | Out-Null
 
     Submit-ConnectedInput -Text 'ltty-perf-prepare russhmain 12000 80'
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
