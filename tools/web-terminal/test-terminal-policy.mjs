@@ -644,6 +644,8 @@ assert.match(acceptanceSource, /Acceptance: Rebuild Renderer/,
   'debug build transformation must own the renderer acceptance menu');
 assert.match(acceptanceSource, /terminateRendererForAcceptance/,
   'debug build transformation must own the renderer termination trigger');
+assert.match(acceptanceSource, /pasteClipboardForAcceptance/,
+  'debug build transformation must own the clipboard paste trigger');
 assert.match(acceptanceSource, /finally[\s\S]*WriteAllBytes/,
   'debug build transformation must restore production ArkTS source in finally');
 assert.match(indexPage, /for \(let i = 0; i < MENU_ACTION_COUNT; i\+\+\)/,

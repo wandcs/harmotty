@@ -48,6 +48,19 @@ function Add-LeanTTYAcceptanceSource {
         "    if (selected === 7 && ACCEPTANCE_TESTS) { this.openSearchForAcceptance(); return }"
     $text.index = Set-LeanTTYAcceptanceSourceText `
         $text.index $selectionAnchor $selectionReplacement
+    $keyEventAnchor = @'
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+'@
+    $keyEventReplacement = @'
+    if (ACCEPTANCE_TESTS && ctrlKey && altKey && !shiftKey && event.keyCode === 2038) {
+      this.pasteClipboardForAcceptance()
+      return true
+    }
+
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+'@
+    $text.index = Set-LeanTTYAcceptanceSourceText `
+        $text.index $keyEventAnchor $keyEventReplacement
     $rendererMethod = @'
   private rebuildRendererForAcceptance(): void {
     if (!ACCEPTANCE_TESTS) {
@@ -80,6 +93,16 @@ function Add-LeanTTYAcceptanceSource {
       return
     }
     runtime.surface.openSearch()
+  }
+
+  private pasteClipboardForAcceptance(): void {
+    if (!ACCEPTANCE_TESTS) {
+      return
+    }
+    let runtime: PaneRuntime | null = this.activePaneRuntime()
+    if (runtime !== null) {
+      runtime.surface.handleSecondaryAction()
+    }
   }
 
 '@
