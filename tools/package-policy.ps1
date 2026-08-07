@@ -4,8 +4,12 @@ function Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers {
         [string[]]$Markers = @(
             'ACCEPTANCE_INPUT_SUBMIT',
             'Acceptance: Rebuild Renderer',
+            'Acceptance: Open Search',
+            'Acceptance: Paste Clipboard',
             'Acceptance renderer',
+            'Acceptance clipboard paste',
             'terminateRendererForAcceptance',
+            'pasteClipboardForAcceptance',
             'logAcceptanceInputSubmit',
             'acceptanceInputSequence'
         )

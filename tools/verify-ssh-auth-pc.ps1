@@ -509,10 +509,42 @@ function Submit-ConnectedInput {
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
 }
 
-function Invoke-LeanTTYPasteShortcut {
-    & $hdc -t $Target shell 'uinput -K -d 2072 -d 2047 -d 2038 -u 2038 -u 2047 -u 2072' |
-        Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY paste shortcut' }
+function Invoke-LeanTTYAcceptancePaste {
+    $layout = Get-LeanTTYDeviceLayout `
+        -Hdc $hdc `
+        -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory 'layout-paste-menu-trigger.json')
+    $menuTrigger = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        [string]$_.attributes.text -eq '▼' -and
+        [string]$_.attributes.clickable -eq 'true' -and
+        [string]$_.attributes.visible -eq 'true'
+    } | Select-Object -First 1)
+    if ($menuTrigger.Count -ne 1) {
+        throw '[harness] LeanTTY menu trigger was not found for clipboard paste'
+    }
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$menuTrigger[0].attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to open the LeanTTY acceptance menu' }
+
+    $menuLayoutPath = Join-Path $EvidenceDirectory 'layout-paste-menu-open.json'
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $menuLayoutPath
+        $pasteItem = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+            [string]$_.attributes.text -eq 'Acceptance: Paste Clipboard' -and
+            [string]$_.attributes.visible -eq 'true'
+        } | Select-Object -First 1)
+        if ($pasteItem.Count -eq 1) { break }
+        Start-Sleep -Milliseconds 200
+    } while ($stopwatch.Elapsed.TotalSeconds -lt 10)
+    if ($pasteItem.Count -ne 1) {
+        throw '[harness] Acceptance clipboard paste menu item was not found'
+    }
+
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$pasteItem[0].attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke acceptance clipboard paste' }
+    Wait-AuthLog -Pattern 'Acceptance clipboard paste pane=' -TimeoutSeconds 10 | Out-Null
 }
 
 function Save-SafeDiagnosticText {
@@ -1011,7 +1043,7 @@ try {
     Submit-ConnectedInput -Text 'ltty-paste-prepare russhmain 524288'
     Wait-AuthLog -Pattern 'OSC 52 clipboard write success=true,length=524288' -TimeoutSeconds 30
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Invoke-LeanTTYPasteShortcut
+    Invoke-LeanTTYAcceptancePaste
     Wait-AuthLog -Pattern 'Clipboard paste ok,524288' -TimeoutSeconds 30
     Wait-FixtureLog `
         -Pattern 'paste case=russhmain bytes=524288 result=matched' `
