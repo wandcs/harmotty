@@ -289,7 +289,8 @@ Assert-True (
 foreach ($scriptName in @(
     'device-regression.ps1',
     'verify-key-passphrase-pc.ps1',
-    'verify-ssh-auth-pc.ps1'
+    'verify-ssh-auth-pc.ps1',
+    'verify-terminal-search-pc.ps1'
 )) {
     $scriptPath = Join-Path $PSScriptRoot $scriptName
     if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
@@ -420,6 +421,21 @@ foreach ($scriptName in @(
             $content.Contains("'resize cols=\d+ rows=\d+'") -and
             $content.Contains('Wait-AuthPaneCount -Count 1')
         ) 'SSH transport main-path coverage is incomplete'
+    }
+    if ($scriptName -eq 'verify-terminal-search-pc.ps1') {
+        Assert-True (
+            $content.Contains('Terminal-search device harness requires a clean committed tree') -and
+            $content.Contains("'open-close-focus'") -and
+            $content.Contains("'uitest uiInput keyEvent 2072 2045 2022'") -and
+            $content.Contains("'^Search text'") -and
+            $content.Contains("'layout-search-open.json'") -and
+            $content.Contains("'layout-search-closed.json'") -and
+            $content.Contains("'explicit-unretained-diagnostic-hap'") -and
+            $content.Contains('harness = [ordered]@{') -and
+            $content.Contains('failureDomain = $failureDomain') -and
+            $content.Contains('transientSearchClosed = $searchClosed') -and
+            $content.Contains('Stop-LeanTTYDeviceAwakeLease')
+        ) 'Terminal-search physical scenario lacks identity, product routing, evidence, or cleanup'
     }
 }
 
