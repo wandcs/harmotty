@@ -308,6 +308,52 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 同时断言查询 DOM 不调用 Bridge/terminal 输入 API、快照不含查询或 decorations，并在终端
 指针事件交还前释放搜索拥有的 selection；这些是自动化边界证据，不替代后续物理 PC 回归。
 
+## 2026-08-07 开发切片验证记录
+
+本节是本功能技术方案中的一次开发证据记录，不是第二份 TODO 或发布门禁。各短提交按
+受影响事件链选择聚焦门禁；后续汇总复核绑定精确提交，不能倒推为尚未执行的物理场景：
+
+| 提交切片 | 受影响事件链 | 聚焦门禁 |
+| --- | --- | --- |
+| `9a058a8` | addon/asset、快捷键、Bridge、Surface 搜索 UI 与最小真机路径 | Web policy、ArkTS unit、增量 ARM64 开发包与下述 HAD-W32 场景 |
+| `645af8c` | Surface blur 时排队打开意图取消 | Web lifecycle policy、ArkTS Bridge/Surface unit |
+| `34d65d0` | selection、secondary action、主题、指针与 viewport 所有权 | Web terminal policy、增量 ArkTS/资源构建 |
+| `2e16ccc` | `searchOpen` 双向 parser、allowlist 与畸形消息拒绝 | Web parser policy、ArkTS protocol unit |
+| `bd352de` | 真实 SearchAddon 查询矩阵 | `npm test`，含连续 5 次稳定运行 |
+| `ce7fb55` | Pane/Tab、warm 淘汰与 renderer generation 所有权 | Web policy、ArkTS Pane/interaction unit |
+| `2c90fd9` | 自动化覆盖说明 | 文档链接/状态核对与 `git diff --check` |
+| `a380b6a` | npm 锁、资产重建、manifest/许可证/在线资源、release marker 与 ARM64-only | 锁定安装、资产零差异、Web policy、build-workflow/public-source policy |
+| `16b7486`、`7b41ca0` | 固定 addon 的 Gitleaks 误报与 8.24 配置兼容 | Gitleaks 8.24.3 同版本红绿复现及 Public Checks |
+
+本地汇总复核结果：
+
+- 在 `a380b6a` 上运行 `npm ci --ignore-scripts`、`npm run build`、指定资产路径的
+  `git diff --exit-code` 和 `npm test`：锁定安装为 6 个包、0 个漏洞，重建后的 lockfile、
+  manifest 与 rawfile 零差异，font/search/terminal policy 全部通过。
+- 同一产品树运行 DevEco `hvigorw --mode module -p module=entry@default test`：
+  `Tests run: 74, Failure: 0, Error: 0, Pass: 74, Ignore: 0`；结果位于忽略目录
+  `entry/.test/default/intermediates/test/coverage_data/test_result.txt`。随后运行
+  `tools/dev-build.ps1`，增量 ArkTS/资源主路径通过。后续两个 Gitleaks 提交没有修改产品
+  输入，因此没有重复构建或安装 HAP。
+- `tools/test-build-workflows.ps1` 通过 release 验收标记拒绝、许可证接线和唯一
+  `arm64-v8a` 约束；`tools/check-public-source.ps1` 通过 193 个源码文件；
+  `git diff --check` 退出 0。这些命令只输出控制台结果，没有伪造保留候选证据。
+- Gitleaks 8.24.3 对同一 9 提交范围的红绿复现先得到 1 个
+  `addon-search.js:generic-api-key` finding 和退出码 2；把全局表从该版本忽略的
+  `[[allowlists]]` 改为兼容的 `[allowlist]` 后，同版本、同范围报告 `no leaks found`、
+  退出码 0。GitHub Public Checks run
+  [`31140251704`](https://github.com/wandcs/leantty/actions/runs/31140251704) 随后在
+  `7b41ca0` 上通过 Secret scan、public-source/build-workflow、Web 锁定重建/policy 以及
+  Rust fmt/clippy/core tests。
+- 设备开发证据仍只对应上文 HAP SHA-256
+  `7B23AED6036EBF72DA0008C49B96132703CCB0EB667E4FB429F461E34B7847D9`，保存在
+  `C:\tmp\leantty-1.2-search-ui-20260806`；29 个 screenshot/layout 文件覆盖已明确列出的
+  最小主路径。它不因后续自动化通过而晋升为未执行场景的物理验收。
+
+本轮没有运行 `tools/test-regression.ps1`、`tools/verify-pc.ps1` 或完整命名物理矩阵；它们
+仍只用于正式候选。selection/link/TUI、输入法、大 scrollback、持续输出和 renderer 重建
+等剩余设备行为继续保留在 `next-work.md` 第 5 节，不能由这里的开发期记录代替。
+
 ## 实现中仍须验证
 
 - 在物理 PC 上验证搜索 selection 释放、同一次指针事件继续交给 selection/link/mouse
