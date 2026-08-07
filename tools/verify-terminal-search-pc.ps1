@@ -123,9 +123,11 @@ function Wait-TerminalWorkspaceState {
     do {
         $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
         $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
-        $activePaneBounds = @($terminalInputs | ForEach-Object {
-            [string]$_.attributes.bounds
-        } | Sort-Object -Unique)
+        $activePaneBounds = [Collections.Generic.List[string]]::new()
+        foreach ($terminalInput in $terminalInputs) {
+            $bounds = [string]$terminalInput.attributes.bounds
+            if (-not $activePaneBounds.Contains($bounds)) { $activePaneBounds.Add($bounds) }
+        }
         $focusedTerminalInputs = @($terminalInputs | Where-Object {
             [string]$_.attributes.focused -eq 'true'
         })
@@ -402,9 +404,11 @@ function Restore-TerminalWorkspace {
             continue
         }
         $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
-        $activePaneBounds = @($terminalInputs | ForEach-Object {
-            [string]$_.attributes.bounds
-        } | Sort-Object -Unique)
+        $activePaneBounds = [Collections.Generic.List[string]]::new()
+        foreach ($terminalInput in $terminalInputs) {
+            $bounds = [string]$terminalInput.attributes.bounds
+            if (-not $activePaneBounds.Contains($bounds)) { $activePaneBounds.Add($bounds) }
+        }
         $tabs = @(Get-LeanTTYTabNodes -Layout $layout)
         if ($activePaneBounds.Count -gt 1) {
             Invoke-TerminalWorkspaceChord -Action 'focus-right'
