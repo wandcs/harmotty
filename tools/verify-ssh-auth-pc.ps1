@@ -373,7 +373,7 @@ function Wait-FixtureLog {
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         if (Test-Path -LiteralPath $fixtureStderr -PathType Leaf) {
-            $text = [IO.File]::ReadAllText($fixtureStderr)
+            $text = Read-FixtureLogText
             if ($text -match $Pattern) { return $text }
         }
         Start-Sleep -Milliseconds 200
@@ -381,10 +381,25 @@ function Wait-FixtureLog {
     throw "Timed out waiting for SSH fixture state: $Pattern"
 }
 
+function Read-FixtureLogText {
+    $stream = [IO.File]::Open(
+        $fixtureStderr,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::Read,
+        [IO.FileShare]::ReadWrite
+    )
+    try {
+        $reader = [IO.StreamReader]::new($stream, [Text.UTF8Encoding]::new($false), $true)
+        try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Get-FixtureLogMatchCount {
     param([Parameter(Mandatory = $true)][string]$Pattern)
     if (-not (Test-Path -LiteralPath $fixtureStderr -PathType Leaf)) { return 0 }
-    return [regex]::Matches([IO.File]::ReadAllText($fixtureStderr), $Pattern).Count
+    return [regex]::Matches((Read-FixtureLogText), $Pattern).Count
 }
 
 function Wait-FixtureLogMatchCount {
