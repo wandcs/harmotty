@@ -41,27 +41,13 @@ function Add-LeanTTYAcceptanceSource {
         "import { BrowserLauncher } from '../model/browser/BrowserLauncher'`nimport { ACCEPTANCE_TESTS } from 'BuildProfile'"
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index `
         'const MENU_ACTION_COUNT: number = 6' `
-        'const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 9 : 6'
+        'const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 8 : 6'
     $selectionAnchor = "    if (selected === 5) { this.handleFontDecrease(); return }"
     $selectionReplacement = $selectionAnchor + "`n" +
         "    if (selected === 6 && ACCEPTANCE_TESTS) { this.rebuildRendererForAcceptance(); return }`n" +
-        "    if (selected === 7 && ACCEPTANCE_TESTS) { this.openSearchForAcceptance(); return }`n" +
-        "    if (selected === 8 && ACCEPTANCE_TESTS) { this.pasteClipboardForAcceptance(); return }"
+        "    if (selected === 7 && ACCEPTANCE_TESTS) { this.openSearchForAcceptance(); return }"
     $text.index = Set-LeanTTYAcceptanceSourceText `
         $text.index $selectionAnchor $selectionReplacement
-    $keyEventAnchor = @'
-    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
-'@
-    $keyEventReplacement = @'
-    if (ACCEPTANCE_TESTS && ctrlKey && altKey && !shiftKey && event.keyCode === 2038) {
-      this.pasteClipboardForAcceptance()
-      return true
-    }
-
-    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
-'@
-    $text.index = Set-LeanTTYAcceptanceSourceText `
-        $text.index $keyEventAnchor $keyEventReplacement
     $rendererMethod = @'
   private rebuildRendererForAcceptance(): void {
     if (!ACCEPTANCE_TESTS) {
@@ -96,19 +82,6 @@ function Add-LeanTTYAcceptanceSource {
     runtime.surface.openSearch()
   }
 
-  private pasteClipboardForAcceptance(): void {
-    if (!ACCEPTANCE_TESTS) {
-      return
-    }
-    let runtime: PaneRuntime | null = this.activePaneRuntime()
-    if (runtime === null) {
-      logger.error('Acceptance clipboard paste has no active pane')
-      return
-    }
-    logger.info('Acceptance clipboard paste pane=' + runtime.id)
-    runtime.surface.handleSecondaryAction()
-  }
-
 '@
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index `
         "  @Builder`n  menuPanel() {" `
@@ -124,8 +97,6 @@ function Add-LeanTTYAcceptanceSource {
           () => { this.rebuildRendererForAcceptance() })
         this.menuRow(7, '⌕', 'Acceptance: Open Search', '', true,
           () => { this.openSearchForAcceptance() })
-        this.menuRow(8, '⎘', 'Acceptance: Paste Clipboard', '', true,
-          () => { this.pasteClipboardForAcceptance() })
       }
 '@
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index $menuAnchor $menuAddition

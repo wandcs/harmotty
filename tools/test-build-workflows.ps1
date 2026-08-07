@@ -107,12 +107,6 @@ try {
         Assert-True (($injectedText -join "`n").Contains('Acceptance: Rebuild Renderer')) (
             'Debug acceptance source injection omitted renderer trigger'
         )
-        Assert-True (($injectedText -join "`n").Contains('Acceptance: Paste Clipboard')) (
-            'Debug acceptance source injection omitted clipboard paste trigger'
-        )
-        Assert-True (($injectedText -join "`n").Contains(
-                'ctrlKey && altKey && !shiftKey && event.keyCode === 2038'
-            )) 'Debug acceptance source injection omitted clipboard paste chord'
     }
     foreach ($path in $acceptanceArkTsPaths) {
         Assert-True (

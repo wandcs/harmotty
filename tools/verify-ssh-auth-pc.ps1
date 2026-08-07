@@ -509,10 +509,9 @@ function Submit-ConnectedInput {
     Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
 }
 
-function Invoke-LeanTTYAcceptancePaste {
-    & $hdc -t $Target shell 'uitest uiInput keyEvent 2072 2045 2038' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke acceptance clipboard paste chord' }
-    Wait-AuthLog -Pattern 'Acceptance clipboard paste pane=' -TimeoutSeconds 10 | Out-Null
+function Invoke-LeanTTYPasteShortcut {
+    & $hdc -t $Target shell 'uitest uiInput keyEvent 2072 2038' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY paste shortcut' }
 }
 
 function Save-SafeDiagnosticText {
@@ -1011,7 +1010,7 @@ try {
     Submit-ConnectedInput -Text 'ltty-paste-prepare russhmain 524288'
     Wait-AuthLog -Pattern 'OSC 52 clipboard write success=true,length=524288' -TimeoutSeconds 30
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Invoke-LeanTTYAcceptancePaste
+    Invoke-LeanTTYPasteShortcut
     Wait-AuthLog -Pattern 'Clipboard paste ok,524288' -TimeoutSeconds 30
     Wait-FixtureLog `
         -Pattern 'paste case=russhmain bytes=524288 result=matched' `

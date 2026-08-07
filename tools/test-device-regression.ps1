@@ -443,8 +443,6 @@ Assert-True (
     $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
     $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
     $acceptanceSource.Contains('Acceptance: Open Search') -and
-    $acceptanceSource.Contains('Acceptance: Paste Clipboard') -and
-    $acceptanceSource.Contains('ctrlKey && altKey && !shiftKey && event.keyCode === 2038') -and
     $acceptanceSource.Contains('Invoke-WithLeanTTYAcceptanceSource')
 ) 'Acceptance-only ArkTS is not isolated from the production source tree'
 
