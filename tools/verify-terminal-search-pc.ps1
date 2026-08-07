@@ -298,6 +298,13 @@ function Invoke-TerminalWorkspaceChord {
     if ($LASTEXITCODE -ne 0) { throw "Unable to invoke LeanTTY workspace action: $Action" }
 }
 
+function Invoke-LocalTerminalCommand {
+    param([Parameter(Mandatory = $true)][string]$Command)
+    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
+    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+    Start-Sleep -Milliseconds 500
+}
+
 function Invoke-LeanTTYLayoutNodeClick {
     param([Parameter(Mandatory = $true)]$Node)
     $center = Get-LeanTTYBoundsCenter -Bounds ([string]$Node.attributes.bounds)
@@ -618,13 +625,16 @@ try {
             -PaneCount 1 -TabCount 1 -SearchCount 0 `
             -LayoutName 'layout-ownership-single-pane.json' | Out-Null
 
+        Invoke-LocalTerminalCommand -Command 'help'
+        Invoke-LocalTerminalCommand -Command 'help'
+
         Invoke-TerminalSearchShortcut
         $searchClosed = $false
         Wait-TerminalSearchState `
             -Open $true -LayoutName 'layout-ownership-single-search.json' | Out-Null
-        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'ltty'
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'Syntax'
         Wait-TerminalSearchQueryState `
-            -ExpectedQuery 'ltty' `
+            -ExpectedQuery 'Syntax' `
             -ExpectedResultPattern '^[1-9][0-9]*/[1-9][0-9]*$' `
             -LayoutName 'layout-ownership-single-query.json' | Out-Null
 
@@ -633,11 +643,19 @@ try {
             -PaneCount 2 -TabCount 1 -SearchCount 0 `
             -LayoutName 'layout-ownership-split.json'
         $searchClosed = $true
+        Save-LeanTTYDeviceScreenshot `
+            -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'pane-scroll-after-split.png')
         Invoke-TerminalSearchShortcut
         $searchClosed = $false
         Wait-TerminalWorkspaceState `
             -PaneCount 2 -TabCount 1 -SearchCount 1 `
             -LayoutName 'layout-ownership-active-pane-search.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'Syntax'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'Syntax' `
+            -ExpectedResultPattern '^No results$' `
+            -LayoutName 'layout-ownership-right-no-result.json' | Out-Null
 
         Invoke-TerminalWorkspaceChord -Action 'focus-left'
         $left = Wait-TerminalWorkspaceState `
@@ -649,12 +667,23 @@ try {
         Wait-TerminalWorkspaceState `
             -PaneCount 2 -TabCount 1 -SearchCount 1 `
             -LayoutName 'layout-ownership-left-search.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'Syntax'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'Syntax' `
+            -ExpectedResultPattern '^[1-9][0-9]*/[1-9][0-9]*$' `
+            -LayoutName 'layout-ownership-left-match.json' | Out-Null
+        Save-LeanTTYDeviceScreenshot `
+            -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'pane-scroll-left-match.png')
 
         Invoke-TerminalWorkspaceChord -Action 'focus-right'
         $right = Wait-TerminalWorkspaceState `
             -PaneCount 2 -TabCount 1 -SearchCount 0 -FocusedPane 'right' `
             -LayoutName 'layout-ownership-focus-right.json'
         $searchClosed = $true
+        Save-LeanTTYDeviceScreenshot `
+            -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'pane-scroll-after-focus-switch.png')
         Invoke-TerminalWorkspaceChord -Action 'close-active'
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 1 -SearchCount 0 `
@@ -665,6 +694,11 @@ try {
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 1 -SearchCount 1 `
             -LayoutName 'layout-ownership-before-new-tab.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'Syntax'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'Syntax' `
+            -ExpectedResultPattern '^[1-9][0-9]*/[1-9][0-9]*$' `
+            -LayoutName 'layout-ownership-first-tab-match.json' | Out-Null
         Invoke-TerminalWorkspaceChord -Action 'new-tab'
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 2 -SearchCount 0 `
@@ -676,11 +710,29 @@ try {
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 2 -SearchCount 1 `
             -LayoutName 'layout-ownership-second-tab-search.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'Syntax'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'Syntax' `
+            -ExpectedResultPattern '^No results$' `
+            -LayoutName 'layout-ownership-second-tab-no-result.json' | Out-Null
         Invoke-TerminalWorkspaceChord -Action 'next-tab'
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 2 -SearchCount 0 `
             -LayoutName 'layout-ownership-first-tab-return.json' | Out-Null
         $searchClosed = $true
+        Save-LeanTTYDeviceScreenshot `
+            -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory 'tab-scroll-first-return.png')
+        Invoke-TerminalSearchShortcut
+        $searchClosed = $false
+        Wait-TerminalWorkspaceState `
+            -PaneCount 1 -TabCount 2 -SearchCount 1 `
+            -LayoutName 'layout-ownership-first-tab-reopened.json' | Out-Null
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text 'Syntax'
+        Wait-TerminalSearchQueryState `
+            -ExpectedQuery 'Syntax' `
+            -ExpectedResultPattern '^[1-9][0-9]*/[1-9][0-9]*$' `
+            -LayoutName 'layout-ownership-first-tab-rematch.json' | Out-Null
         Invoke-TerminalWorkspaceChord -Action 'next-tab'
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 2 -SearchCount 0 `
@@ -702,8 +754,16 @@ try {
             leftPaneFocusIndex = $left.focusedPaneIndex
             rightPaneFocusIndex = $right.focusedPaneIndex
             activePaneQueryClearedOnSwitch = $true
+            rightPaneRejectedLeftScrollbackQuery = $true
             queryClearedOnNewTab = $true
+            secondTabRejectedFirstTabScrollbackQuery = $true
             queryAbsentAfterRoundTrip = $true
+            scrollViewportScreenshots = @(
+                'pane-scroll-after-split.png',
+                'pane-scroll-left-match.png',
+                'pane-scroll-after-focus-switch.png',
+                'tab-scroll-first-return.png'
+            )
             paneAndTabCloseRestoredSingleWorkspace = $true
         })
     }

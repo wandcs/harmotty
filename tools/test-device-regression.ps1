@@ -444,6 +444,11 @@ foreach ($scriptName in @(
             $content.Contains("'TerminalBridge: Bridge initialized'") -and
             $content.Contains("'Acceptance: Rebuild Renderer'") -and
             $content.Contains("'EnhanceMinimizeBtn'") -and
+            $content.Contains("Invoke-LocalTerminalCommand -Command 'help'") -and
+            $content.Contains('rightPaneRejectedLeftScrollbackQuery = $true') -and
+            $content.Contains('secondTabRejectedFirstTabScrollbackQuery = $true') -and
+            $content.Contains("'pane-scroll-after-focus-switch.png'") -and
+            $content.Contains("'tab-scroll-first-return.png'") -and
             $content.Contains('singleTabSinglePaneRestored = $workspaceRestored') -and
             $content.Contains('$activePaneBounds') -and
             $content.Contains('[Collections.Generic.List[string]]::new()') -and
