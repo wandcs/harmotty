@@ -137,9 +137,11 @@ Assert-Throws -Action {
 
 $appLogParameters = (Get-Command Get-LeanTTYAppLogs).Parameters.Keys
 $waitLogParameters = (Get-Command Wait-LeanTTYAppLog).Parameters.Keys
+$waitLogSource = (Get-Command Wait-LeanTTYAppLog).Definition
 Assert-True (
     $appLogParameters -notcontains 'Pid' -and
-    $waitLogParameters -notcontains 'Pid'
+    $waitLogParameters -notcontains 'Pid' -and
+    $waitLogSource.Contains('[ValidateRange(1, 60)]')
 ) 'Device log helpers conflict with the read-only PowerShell PID automatic variable'
 
 $deviceRegressionText = Get-Content -LiteralPath (

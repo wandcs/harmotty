@@ -524,7 +524,7 @@ function Wait-LeanTTYAppLog {
         [Parameter(Mandatory = $true)][string]$Target,
         [Parameter(Mandatory = $true)][string]$ProcessId,
         [Parameter(Mandatory = $true)][string]$Pattern,
-        [ValidateRange(1, 30)][int]$TimeoutSeconds = 10
+        [ValidateRange(1, 60)][int]$TimeoutSeconds = 10
     )
 
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
