@@ -440,7 +440,7 @@ foreach ($scriptName in @(
             $content.Contains("'^No results$'") -and
             $content.Contains('wrappedForward = $true') -and
             $content.Contains('wrappedBackward = $true') -and
-            $content.Contains('ACCEPTANCE_WARM_TAB_EVICTED tab=') -and
+            $content.Contains("'TerminalBridge: PERF bridge reason=destroy'") -and
             $content.Contains("'Acceptance: Rebuild Renderer'") -and
             $content.Contains("'EnhanceMinimizeBtn'") -and
             $content.Contains('singleTabSinglePaneRestored = $workspaceRestored') -and
@@ -479,7 +479,6 @@ Assert-True (
     -not $sessionViewModel.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
     $acceptanceSource.Contains("import { ACCEPTANCE_TESTS } from 'BuildProfile'") -and
     $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
-    $acceptanceSource.Contains('ACCEPTANCE_WARM_TAB_EVICTED') -and
     $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
     $acceptanceSource.Contains('Acceptance: Open Search') -and
     $acceptanceSource.Contains('pasteClipboardForAcceptance') -and
@@ -496,8 +495,7 @@ foreach ($productionSource in @(
     $productionText = Get-Content -LiteralPath (Join-Path $repoRoot $productionSource) -Raw
     Assert-True (
         $productionText -notmatch (
-            'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|' +
-            'ACCEPTANCE_INPUT_SUBMIT|ACCEPTANCE_WARM_TAB_EVICTED'
+            'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|ACCEPTANCE_INPUT_SUBMIT'
         )
     ) "Production ArkTS contains acceptance-only source: $productionSource"
 }

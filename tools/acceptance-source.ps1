@@ -48,21 +48,6 @@ function Add-LeanTTYAcceptanceSource {
         "    if (selected === 7 && ACCEPTANCE_TESTS) { this.openSearchForAcceptance(); return }"
     $text.index = Set-LeanTTYAcceptanceSourceText `
         $text.index $selectionAnchor $selectionReplacement
-    $warmEvictionAnchor = @'
-    for (let i = 0; i < tab.panes.length; i++) {
-      let runtime: PaneRuntime | null = this.findPaneRuntime(tab.panes[i].id)
-      if (runtime !== null) {
-        runtime.detachSurface()
-      }
-    }
-'@
-    $warmEvictionReplacement = $warmEvictionAnchor + @'
-    if (ACCEPTANCE_TESTS) {
-      logger.info('ACCEPTANCE_WARM_TAB_EVICTED tab=' + tabId)
-    }
-'@
-    $text.index = Set-LeanTTYAcceptanceSourceText `
-        $text.index $warmEvictionAnchor $warmEvictionReplacement
     $keyEventAnchor = @'
     let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
 '@

@@ -730,8 +730,11 @@ try {
             -LayoutName 'layout-warm-tab-inactive.json' | Out-Null
         $searchClosed = $true
         $evictionLogs = Wait-SearchAppLog `
-            -Pattern 'ACCEPTANCE_WARM_TAB_EVICTED tab=' `
+            -Pattern 'TerminalBridge: PERF bridge reason=destroy' `
             -TimeoutSeconds 40
+        if ($evictionLogs -match 'ArkWeb renderer exited') {
+            throw '[environment] Renderer exit invalidated the warm-tab eviction observation'
+        }
         Invoke-TerminalWorkspaceChord -Action 'next-tab'
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 2 -SearchCount 0 `
@@ -747,7 +750,7 @@ try {
             result = 'passed'
             durationMs = $timer.ElapsedMilliseconds
             retentionMilliseconds = 30000
-            productionEvictionObserved = $evictionLogs -match 'ACCEPTANCE_WARM_TAB_EVICTED tab='
+            productionEvictionObserved = $evictionLogs -match 'TerminalBridge: PERF bridge reason=destroy'
             queryAbsentAfterRemount = $true
             terminalFocusRestored = $true
         })
