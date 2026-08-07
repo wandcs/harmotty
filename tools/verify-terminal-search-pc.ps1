@@ -99,7 +99,7 @@ function Get-TerminalSearchResultLabel {
 
 function Wait-TerminalSearchQueryState {
     param(
-        [Parameter(Mandatory = $true)][string]$ExpectedQuery,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$ExpectedQuery,
         [Parameter(Mandatory = $true)][string]$LayoutName,
         [string]$ExpectedResultPattern = '',
         [ValidateRange(1, 30)][int]$TimeoutSeconds = 15
