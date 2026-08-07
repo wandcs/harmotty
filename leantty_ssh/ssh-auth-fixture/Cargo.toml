@@ -8,5 +8,5 @@ publish = false
 [dependencies]
 rand = { version = "0.10", features = ["sys_rng"] }
 russh = { version = "0.62", default-features = false, features = ["ring", "rsa"] }
-tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["io-util", "net", "rt-multi-thread", "macros", "sync", "time"] }
 zeroize = "1"

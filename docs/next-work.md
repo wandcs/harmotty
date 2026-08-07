@@ -96,9 +96,15 @@ Dependabot 告警 [`GHSA-m65r-rprj-r5rg`](https://github.com/Eugeny/russh/securi
   `ring`、`rsa` 和 `default-features = false` 边界；核对锁文件只包含预期依赖变化，
   同步 `RUST_DEPENDENCIES.md`、开发环境、第三方声明和 `CHANGELOG.md` 中受影响的版本及
   安全记录。不修改或 vendoring russh 源码，不为此次补丁升级新增传输抽象。
-- [ ] 在 WSL 中完成 Rust 格式、Clippy、workspace 测试和依赖树/许可证检查；回归仓库
+- [x] 在 WSL 中完成 Rust 格式、Clippy、workspace 测试和依赖树/许可证检查；回归仓库
   fixture 的认证、允许/拒绝 channel、取消和断开路径，并验证大段粘贴、远端暂不读取、
   resize 与断开期间的客户端背压不会造成无界排队、输入丢失或 Session 卡死。
+  2026-08-07 使用默认 WSL 完成 `cargo fmt --all -- --check`、workspace 全 target Clippy
+  (`-D warnings`) 和 workspace 测试；fixture E2E 覆盖 8 条认证链、session channel 允许/
+  拒绝、已认证 shell 取消及取消后恢复。受控 russh 回归以 16 KiB 窗口暂停远端读取，确认
+  512 KiB 输入保持背压，恢复后字节与顺序完整且 `173x47` resize 未丢；经本地 TCP 转发
+  强制断开后，会话在 5 秒边界内结束并中止仍等待窗口的独立 writer。ARM64 目标依赖图
+  仍为 150 个 registry 包、无许可证元数据缺口，生产 feature 仍仅为 `ring`、`rsa`。
 - [ ] 用升级后的同一产品树完成干净 ARM64 原生/HAP 构建和物理 HarmonyOS PC SSH
   主路径，覆盖认证、交互输入、大段粘贴、持续输出、resize、断开与重连；记录依赖版本、
   commit、构建和设备证据。构建通过或 Dependabot 告警自动关闭都不能单独完成本节。

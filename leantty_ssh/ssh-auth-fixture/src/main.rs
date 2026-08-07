@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use russh::keys::{Algorithm, PrivateKey, PublicKey};
 use russh::server::{Auth, Handler, Msg, Response, Server, Session};
-use russh::{Channel, ChannelId, MethodKind, MethodSet};
+use russh::{Channel, ChannelId, ChannelOpenFailure, MethodKind, MethodSet};
 use tokio::net::TcpListener;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -21,6 +21,7 @@ const USER_PUBLICKEY_KBDINT: &str = "publickey-kbdint";
 const USER_KBDINT_MULTIROUND: &str = "kbdint-multiround";
 const USER_KBDINT_ZERO: &str = "kbdint-zero";
 const USER_UNSUPPORTED: &str = "unsupported";
+const USER_CHANNEL_DENIED: &str = "channel-denied";
 const USER_NAVIGATION: &str = "navigation";
 const USER_NAVIGATION_TWO: &str = "navigation-two";
 const USER_NAVIGATION_THREE: &str = "navigation-three";
@@ -99,6 +100,7 @@ enum Scenario {
     KeyboardInteractiveMultiRound,
     KeyboardInteractiveZeroPrompt,
     UnsupportedMethod,
+    ChannelDenied,
     Navigation,
 }
 
@@ -113,6 +115,7 @@ impl Scenario {
             USER_KBDINT_MULTIROUND => Some(Self::KeyboardInteractiveMultiRound),
             USER_KBDINT_ZERO => Some(Self::KeyboardInteractiveZeroPrompt),
             USER_UNSUPPORTED => Some(Self::UnsupportedMethod),
+            USER_CHANNEL_DENIED => Some(Self::ChannelDenied),
             USER_NAVIGATION | USER_NAVIGATION_TWO | USER_NAVIGATION_THREE => Some(Self::Navigation),
             _ => None,
         }
@@ -195,7 +198,7 @@ impl FixtureServer {
 
         eprintln!("auth method=password scenario={scenario:?} result=matched");
         match scenario {
-            Scenario::Password | Scenario::Navigation => {
+            Scenario::Password | Scenario::ChannelDenied | Scenario::Navigation => {
                 self.session_scenario = Some(scenario);
                 Auth::Accept
             }
@@ -323,7 +326,10 @@ impl FixtureServer {
 impl Scenario {
     fn initial_methods(self) -> Vec<MethodKind> {
         match self {
-            Self::Password | Self::PasswordKeyboardInteractive | Self::Navigation => {
+            Self::Password
+            | Self::PasswordKeyboardInteractive
+            | Self::ChannelDenied
+            | Self::Navigation => {
                 vec![MethodKind::Password]
             }
             Self::PublicKey | Self::PublicKeyPassword | Self::PublicKeyKeyboardInteractive => {
@@ -408,6 +414,17 @@ impl Handler for FixtureServer {
         reply: russh::server::ChannelOpenHandle,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if self.session_scenario == Some(Scenario::ChannelDenied) {
+            eprintln!("channel open scenario=ChannelDenied result=deny");
+            reply
+                .reject(ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        }
+        eprintln!(
+            "channel open scenario={:?} result=accept",
+            self.session_scenario
+        );
         reply.accept().await;
         Ok(())
     }
@@ -443,6 +460,7 @@ impl Handler for FixtureServer {
         _data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        eprintln!("channel callback=exec scenario={:?}", self.session_scenario);
         session.channel_success(channel)?;
         session.data(channel, b"LEANTTY_AUTH_FIXTURE_OK\n".as_slice())?;
         session.exit_status_request(channel, 0)?;
@@ -661,7 +679,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::id()
     );
     println!(
-        "users={USER_PASSWORD},{USER_PUBLICKEY},{USER_PASSWORD_KBDINT},{USER_PUBLICKEY_PASSWORD},{USER_PUBLICKEY_KBDINT},{USER_KBDINT_MULTIROUND},{USER_KBDINT_ZERO},{USER_UNSUPPORTED},{USER_NAVIGATION},{USER_NAVIGATION_TWO},{USER_NAVIGATION_THREE}"
+        "users={USER_PASSWORD},{USER_PUBLICKEY},{USER_PASSWORD_KBDINT},{USER_PUBLICKEY_PASSWORD},{USER_PUBLICKEY_KBDINT},{USER_KBDINT_MULTIROUND},{USER_KBDINT_ZERO},{USER_UNSUPPORTED},{USER_CHANNEL_DENIED},{USER_NAVIGATION},{USER_NAVIGATION_TWO},{USER_NAVIGATION_THREE}"
     );
     running.await?;
     Ok(())
@@ -713,6 +731,10 @@ mod tests {
         assert_accept(fixture.password(USER_NAVIGATION_TWO, "password-value"));
         let mut fixture = FixtureServer::new(credentials());
         assert_accept(fixture.password(USER_NAVIGATION_THREE, "password-value"));
+
+        let mut fixture = FixtureServer::new(credentials());
+        assert_accept(fixture.password(USER_CHANNEL_DENIED, "password-value"));
+        assert_eq!(fixture.session_scenario, Some(Scenario::ChannelDenied));
     }
 
     #[test]
