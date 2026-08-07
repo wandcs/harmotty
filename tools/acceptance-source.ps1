@@ -41,12 +41,26 @@ function Add-LeanTTYAcceptanceSource {
         "import { BrowserLauncher } from '../model/browser/BrowserLauncher'`nimport { ACCEPTANCE_TESTS } from 'BuildProfile'"
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index `
         'const MENU_ACTION_COUNT: number = 6' `
-        'const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 7 : 6'
+        'const MENU_ACTION_COUNT: number = ACCEPTANCE_TESTS ? 8 : 6'
     $selectionAnchor = "    if (selected === 5) { this.handleFontDecrease(); return }"
     $selectionReplacement = $selectionAnchor + "`n" +
-        "    if (selected === 6 && ACCEPTANCE_TESTS) { this.rebuildRendererForAcceptance(); return }"
+        "    if (selected === 6 && ACCEPTANCE_TESTS) { this.rebuildRendererForAcceptance(); return }`n" +
+        "    if (selected === 7 && ACCEPTANCE_TESTS) { this.openSearchForAcceptance(); return }"
     $text.index = Set-LeanTTYAcceptanceSourceText `
         $text.index $selectionAnchor $selectionReplacement
+    $keyEventAnchor = @'
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+'@
+    $keyEventReplacement = @'
+    if (ACCEPTANCE_TESTS && ctrlKey && altKey && !shiftKey && event.keyCode === 2038) {
+      this.pasteClipboardForAcceptance()
+      return true
+    }
+
+    let navigationAction: WorkspaceNavigationAction = InteractionPolicy.workspaceNavigationAction(
+'@
+    $text.index = Set-LeanTTYAcceptanceSourceText `
+        $text.index $keyEventAnchor $keyEventReplacement
     $rendererMethod = @'
   private rebuildRendererForAcceptance(): void {
     if (!ACCEPTANCE_TESTS) {
@@ -69,6 +83,28 @@ function Add-LeanTTYAcceptanceSource {
     })
   }
 
+  private openSearchForAcceptance(): void {
+    if (!ACCEPTANCE_TESTS) {
+      return
+    }
+    let runtime: PaneRuntime | null = this.activePaneRuntime()
+    if (runtime === null) {
+      logger.error('Acceptance search open has no active pane')
+      return
+    }
+    runtime.surface.openSearch()
+  }
+
+  private pasteClipboardForAcceptance(): void {
+    if (!ACCEPTANCE_TESTS) {
+      return
+    }
+    let runtime: PaneRuntime | null = this.activePaneRuntime()
+    if (runtime !== null) {
+      runtime.surface.handleSecondaryAction()
+    }
+  }
+
 '@
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index `
         "  @Builder`n  menuPanel() {" `
@@ -82,6 +118,8 @@ function Add-LeanTTYAcceptanceSource {
         this.menuDivider()
         this.menuRow(6, '↻', 'Acceptance: Rebuild Renderer', '', true,
           () => { this.rebuildRendererForAcceptance() })
+        this.menuRow(7, '⌕', 'Acceptance: Open Search', '', true,
+          () => { this.openSearchForAcceptance() })
       }
 '@
     $text.index = Set-LeanTTYAcceptanceSourceText $text.index $menuAnchor $menuAddition

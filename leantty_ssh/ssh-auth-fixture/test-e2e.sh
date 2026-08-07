@@ -110,6 +110,54 @@ run_case() {
   echo "SSH fixture case passed: $name"
 }
 
+run_denied_channel_case() {
+  if setsid -w ssh -F /dev/null \
+    -o BatchMode=no \
+    -o ConnectTimeout=5 \
+    -o StrictHostKeyChecking=accept-new \
+    -o UserKnownHostsFile="$fixture_root/known_hosts" \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    -p "$port" channel-denied@127.0.0.1 true \
+    >"$fixture_root/denied.out" 2>"$fixture_root/denied.err"; then
+    echo 'SSH fixture unexpectedly opened a denied session channel' >&2
+    exit 1
+  fi
+  if ! grep -q 'channel open scenario=ChannelDenied result=deny' "$fixture_root/server.err"; then
+    echo 'SSH fixture did not record the expected channel denial' >&2
+    exit 1
+  fi
+  if grep -q 'channel callback=exec scenario=Some(ChannelDenied)' "$fixture_root/server.err"; then
+    echo 'SSH fixture dispatched exec after denying the session channel' >&2
+    exit 1
+  fi
+  echo 'SSH fixture case passed: denied-session-channel'
+}
+
+run_cancelled_shell_case() {
+  local status=0
+  timeout 2s setsid -w ssh -F /dev/null \
+    -o BatchMode=no \
+    -o ConnectTimeout=5 \
+    -o StrictHostKeyChecking=accept-new \
+    -o UserKnownHostsFile="$fixture_root/known_hosts" \
+    -o PreferredAuthentications=publickey \
+    -o IdentitiesOnly=yes \
+    -i "$fixture_root/id_ed25519" \
+    -T -p "$port" publickey@127.0.0.1 \
+    </dev/null >"$fixture_root/cancelled.out" 2>"$fixture_root/cancelled.err" || status=$?
+  if [[ "$status" -ne 124 ]]; then
+    echo "SSH fixture cancellation returned unexpected status: $status" >&2
+    sed -n '1,80p' "$fixture_root/cancelled.err" >&2
+    exit 1
+  fi
+  if ! grep -q 'LEANTTY_AUTH_FIXTURE_OK' "$fixture_root/cancelled.out"; then
+    echo 'SSH fixture cancellation did not reach the authenticated shell' >&2
+    exit 1
+  fi
+  echo 'SSH fixture case passed: authenticated-shell-cancellation'
+}
+
 run_case password password \
   -o PreferredAuthentications=password -o PubkeyAuthentication=no
 run_case publickey-unencrypted publickey \
@@ -126,5 +174,9 @@ run_case keyboard-interactive-multiround kbdint-multiround \
   -o PreferredAuthentications=keyboard-interactive -o PubkeyAuthentication=no
 run_case keyboard-interactive-zero-prompt kbdint-zero \
   -o PreferredAuthentications=keyboard-interactive -o PubkeyAuthentication=no
+run_denied_channel_case
+run_cancelled_shell_case
+run_case post-cancellation-recovery password \
+  -o PreferredAuthentications=password -o PubkeyAuthentication=no
 
 echo 'SSH AUTH FIXTURE E2E SUCCESS'

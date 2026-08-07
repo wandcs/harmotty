@@ -6,6 +6,7 @@ function Assert-LeanTTYReleasePackageExcludesAcceptanceMarkers {
             'Acceptance: Rebuild Renderer',
             'Acceptance renderer',
             'terminateRendererForAcceptance',
+            'pasteClipboardForAcceptance',
             'logAcceptanceInputSubmit',
             'acceptanceInputSequence'
         )

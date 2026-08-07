@@ -11,6 +11,7 @@ const assets = [
   ['node_modules/@xterm/xterm/lib/xterm.js', 'xterm.js'],
   ['node_modules/@xterm/xterm/css/xterm.css', 'xterm.css'],
   ['node_modules/@xterm/addon-fit/lib/addon-fit.js', 'addon-fit.js'],
+  ['node_modules/@xterm/addon-search/lib/addon-search.js', 'addon-search.js'],
   ['node_modules/@xterm/addon-web-links/lib/addon-web-links.js', 'addon-web-links.js'],
   ['node_modules/@xterm/addon-serialize/lib/addon-serialize.js', 'addon-serialize.js'],
   ['node_modules/@xterm/addon-webgl/lib/addon-webgl.js', 'addon-webgl.js']

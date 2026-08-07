@@ -107,6 +107,9 @@ try {
         Assert-True (($injectedText -join "`n").Contains('Acceptance: Rebuild Renderer')) (
             'Debug acceptance source injection omitted renderer trigger'
         )
+        Assert-True (($injectedText -join "`n").Contains('pasteClipboardForAcceptance')) (
+            'Debug acceptance source injection omitted clipboard paste trigger'
+        )
     }
     foreach ($path in $acceptanceArkTsPaths) {
         Assert-True (
@@ -285,6 +288,27 @@ try {
         $buildAllText.Contains('& $ohpm install --all --lockfile_stable_order') -and
         $buildAllText.Contains("entry\oh_modules\libleantty_ssh.so")
     ) 'Clean release build does not restore required OHPM dependencies'
+    $projectBuildProfileText = Get-Content -LiteralPath (
+        Join-Path $repoRoot 'build-profile.json5'
+    ) -Raw
+    Assert-True (
+        $projectBuildProfileText.Contains('"x86_64/**"') -and
+        -not (Test-Path -LiteralPath (Join-Path $repoRoot 'entry\libs\x86_64'))
+    ) 'Project packaging no longer excludes the unsupported x86_64 native ABI'
+    $arm64AbiGuard = '$nativeAbis.Count -ne 1 -or $nativeAbis[0] -ne ''arm64-v8a'''
+    Assert-True (
+        ([regex]::Matches(
+            $buildAllText,
+            [regex]::Escape($arm64AbiGuard)
+        )).Count -ge 2 -and
+        $buildAllText.Contains("entry\libs\arm64-v8a\libleantty_ssh.so") -and
+        $buildAllText.Contains("abi = 'arm64-v8a'") -and
+        $buildAllText.Contains('--filter-platform aarch64-unknown-linux-ohos')
+    ) 'Release packaging no longer enforces one ARM64 ABI across HAP, APP and metadata'
+    Assert-True (
+        $buildAllText.Contains("'THIRD_PARTY_NOTICES.md' =") -and
+        $buildAllText.Contains('Unable to resolve locked ARM64 Rust dependencies for release notices')
+    ) 'Release artifacts no longer require locked dependency license notices'
     Assert-True (
         Test-Path -LiteralPath (Join-Path $PSScriptRoot 'test-acceptance-harness.ps1') -PathType Leaf
     ) 'Focused acceptance-harness regression command is missing'

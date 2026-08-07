@@ -273,6 +273,7 @@ struct Index {
   private onMainWindowVisibilityChanged(): void {
     logger.info('Main window visibility applied: visible=' + this.mainWindowVisible.toString())
     if (this.mainWindowVisible) {
+      this.restoreActivePaneFocus()
       return
     }
     this.captureMountedTerminalSnapshots()
@@ -643,6 +644,14 @@ struct Index {
       navigationAction, activeTab === null ? 0 : activeTab.panes.length)
     if (activeTab !== null && paneIndex >= 0) {
       this.focusPane(activeTab.panes[paneIndex].id, true)
+      return true
+    }
+
+    if (InteractionPolicy.isTerminalSearchShortcut(event.keyCode, ctrlKey, altKey, shiftKey)) {
+      let runtime: PaneRuntime | null = this.activePaneRuntime()
+      if (runtime !== null) {
+        runtime.surface.openSearch()
+      }
       return true
     }
 

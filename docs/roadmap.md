@@ -2,7 +2,7 @@
 
 > 状态：当前版本路线；采用滚动规划
 >
-> 更新日期：2026-08-03
+> 更新日期：2026-08-06
 >
 > 上位规则：[`project-principles.md`](project-principles.md)
 >
@@ -99,7 +99,7 @@ OpenSSH 的全部工具与 option。端口转发、X11、agent、CA/KRL、批处
 - 1.0.1 于 2026-07-28 成为首个公开版本；完成事实以 `CHANGELOG.md`、Git 标签和
   GitHub Release 为准。
 
-## 当前 milestone：1.1 — 可信认证与工作连续性
+## 已发布、AppGallery 审核中 milestone：1.1 — 可信认证与工作连续性
 
 ### 版本目标
 
@@ -141,15 +141,15 @@ OpenSSH 的全部工具与 option。端口转发、X11、agent、CA/KRL、批处
 - [`design/command-system.md`](design/command-system.md)
 - 活动顺序和勾选状态只在 [`next-work.md`](next-work.md) 维护。
 
-## 拟议 milestone：1.2 — 终端检索与日常效率
+## 当前 milestone：1.2 — 终端检索与日常效率
 
-### 为什么排在下一步
+### 为什么现在做
 
 滚动缓冲区搜索属于终端工作本身，是产品原则明确要求长期做好的高频能力。它不引入
 新的执行环境、主机模型或后台生命周期，能够在保持现有 `Tab → Pane → Session` 和
 Terminal Surface 边界的前提下，补齐桌面终端的基础效率。
 
-### 拟议范围
+### 范围
 
 - 在当前 Pane 的当前内存缓冲区中搜索可见文字与 scrollback。
 - 稳定的打开、下一处、上一处、关闭键盘路径；搜索状态只属于当前 Terminal Surface。
@@ -163,14 +163,14 @@ Terminal Surface 边界的前提下，补齐桌面终端的基础效率。
 - 不搜索远端文件、命令历史、日志或已销毁 Session。
 - 不借此增加命令面板、自定义快捷键或新的通用 UI 框架。
 
-### 进入条件
+### 已满足的进入条件
 
 - 1.1 已发布或已冻结为一个通过全部核心门禁的确切候选。
 - WIP 方案中的交互、xterm 集成、输入/选择冲突和真机验收点已经共同确认。
 - 明确证明现有 Terminal Surface 可以局部实现，无需增加跨 Session 状态或长期索引。
 
-技术草案：[`design/terminal-search.md`](design/terminal-search.md)。在上述条件满足且工作
-写入 `next-work.md` 前，1.2 仍是拟议 milestone。
+技术方案：[`design/terminal-search.md`](design/terminal-search.md)。上述条件已于
+2026-08-06 闭合，活动顺序与完成状态只在 [`next-work.md`](next-work.md) 维护。
 
 ## 条件 milestone：1.3 — 受约束的单文件交付
 

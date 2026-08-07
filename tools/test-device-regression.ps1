@@ -137,9 +137,11 @@ Assert-Throws -Action {
 
 $appLogParameters = (Get-Command Get-LeanTTYAppLogs).Parameters.Keys
 $waitLogParameters = (Get-Command Wait-LeanTTYAppLog).Parameters.Keys
+$waitLogSource = (Get-Command Wait-LeanTTYAppLog).Definition
 Assert-True (
     $appLogParameters -notcontains 'Pid' -and
-    $waitLogParameters -notcontains 'Pid'
+    $waitLogParameters -notcontains 'Pid' -and
+    $waitLogSource.Contains('[ValidateRange(1, 60)]')
 ) 'Device log helpers conflict with the read-only PowerShell PID automatic variable'
 
 $deviceRegressionText = Get-Content -LiteralPath (
@@ -289,7 +291,8 @@ Assert-True (
 foreach ($scriptName in @(
     'device-regression.ps1',
     'verify-key-passphrase-pc.ps1',
-    'verify-ssh-auth-pc.ps1'
+    'verify-ssh-auth-pc.ps1',
+    'verify-terminal-search-pc.ps1'
 )) {
     $scriptPath = Join-Path $PSScriptRoot $scriptName
     if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
@@ -409,6 +412,60 @@ foreach ($scriptName in @(
             $content.Contains('LeanTTY process changed while activating its window') -and
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'")
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
+        Assert-True (
+            $content.Contains("'transport-main-path'") -and
+            $content.Contains("'ltty-input-check russhmain'") -and
+            $content.Contains("'ltty-paste-prepare russhmain 524288'") -and
+            $content.Contains("'Clipboard paste ok,524288'") -and
+            $content.Contains("'uitest uiInput keyEvent 2072 2045 2038'") -and
+            $content.Contains("'ltty-perf-prepare russhmain 12000 80'") -and
+            $content.Contains('"completenessPercent":100') -and
+            $content.Contains("'resize cols=\d+ rows=\d+'") -and
+            $content.Contains('Wait-AuthPaneCount -Count 1')
+        ) 'SSH transport main-path coverage is incomplete'
+    }
+    if ($scriptName -eq 'verify-terminal-search-pc.ps1') {
+        Assert-True (
+            $content.Contains('Terminal-search device harness requires a clean committed tree') -and
+            $content.Contains("'open-close-focus'") -and
+            $content.Contains("'ascii-query-navigation'") -and
+            $content.Contains("'pane-tab-ownership'") -and
+            $content.Contains("'warm-tab-eviction'") -and
+            $content.Contains("'window-renderer-lifecycle'") -and
+            $content.Contains("'uitest uiInput keyEvent 2072 2045 2022'") -and
+            $content.Contains("'uitest uiInput keyEvent 2047 2054'") -and
+            $content.Contains("'uitest uiInput keyEvent 2072 2017'") -and
+            $content.Contains("'^Search text'") -and
+            $content.Contains('[AllowEmptyString()]') -and
+            $content.Contains("'^No results$'") -and
+            $content.Contains('wrappedForward = $true') -and
+            $content.Contains('wrappedBackward = $true') -and
+            $content.Contains("'TerminalBridge: PERF bridge reason=destroy'") -and
+            $content.Contains("'TerminalBridge: Bridge initialized'") -and
+            $content.Contains("'Acceptance: Rebuild Renderer'") -and
+            $content.Contains("'EnhanceMinimizeBtn'") -and
+            $content.Contains("Invoke-LocalTerminalCommand -Command 'help'") -and
+            $content.Contains('rightPaneRejectedLeftScrollbackQuery = $true') -and
+            $content.Contains('secondTabRejectedFirstTabScrollbackQuery = $true') -and
+            $content.Contains("'pane-scroll-after-focus-switch.png'") -and
+            $content.Contains("'tab-scroll-first-return.png'") -and
+            $content.Contains('singleTabSinglePaneRestored = $workspaceRestored') -and
+            $content.Contains('$activePaneBounds') -and
+            $content.Contains('[Collections.Generic.List[string]]::new()') -and
+            $content.Contains('$activePaneBounds.Contains($bounds)') -and
+            $content.Contains('Get-LeanTTYActiveTerminalInputNodes') -and
+            $content.Contains("attributes.opacity -eq '1.000000'") -and
+            $content.Contains("attributes.zIndex -eq '1'") -and
+            $content.Contains('does not ') -and
+            $content.Contains('satisfy physical-keyboard or Chinese/English IME acceptance') -and
+            $content.Contains("'layout-search-open.json'") -and
+            $content.Contains("'layout-search-closed.json'") -and
+            $content.Contains("'explicit-unretained-diagnostic-hap'") -and
+            $content.Contains('harness = [ordered]@{') -and
+            $content.Contains('failureDomain = $failureDomain') -and
+            $content.Contains('transientSearchClosed = $searchClosed') -and
+            $content.Contains('Stop-LeanTTYDeviceAwakeLease')
+        ) 'Terminal-search physical scenario lacks identity, product routing, evidence, or cleanup'
     }
 }
 
@@ -432,6 +489,9 @@ Assert-True (
     $acceptanceSource.Contains("import { ACCEPTANCE_TESTS } from 'BuildProfile'") -and
     $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
     $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
+    $acceptanceSource.Contains('Acceptance: Open Search') -and
+    $acceptanceSource.Contains('pasteClipboardForAcceptance') -and
+    $acceptanceSource.Contains('ctrlKey && altKey && !shiftKey && event.keyCode === 2038') -and
     $acceptanceSource.Contains('Invoke-WithLeanTTYAcceptanceSource')
 ) 'Acceptance-only ArkTS is not isolated from the production source tree'
 
@@ -443,7 +503,9 @@ foreach ($productionSource in @(
 )) {
     $productionText = Get-Content -LiteralPath (Join-Path $repoRoot $productionSource) -Raw
     Assert-True (
-        $productionText -notmatch 'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|ACCEPTANCE_INPUT_SUBMIT'
+        $productionText -notmatch (
+            'ACCEPTANCE_TESTS|Acceptance:|ForAcceptance|ACCEPTANCE_INPUT_SUBMIT'
+        )
     ) "Production ArkTS contains acceptance-only source: $productionSource"
 }
 

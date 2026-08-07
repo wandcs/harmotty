@@ -3,13 +3,54 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import './test-font-cell-width.mjs';
+import { runTerminalSearchTests } from './test-terminal-search.mjs';
 import '../../entry/src/main/resources/rawfile/terminal-policy.js';
 
 const policy = globalThis.LeanTTYTerminalPolicy;
 const encode = text => `c;${Buffer.from(text, 'utf8').toString('base64')}`;
 
+const packageJson = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+);
+const packageLock = JSON.parse(
+  readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8')
+);
+assert.equal(packageLock.lockfileVersion, 3,
+  'web terminal dependencies must keep the committed npm lockfile format');
+assert.deepEqual(packageLock.packages[''].dependencies, packageJson.dependencies,
+  'package.json dependencies must exactly match the lockfile root');
+for (const [packageName, version] of Object.entries(packageJson.dependencies)) {
+  assert.match(version, /^\d+\.\d+\.\d+$/,
+    `${packageName} must use an exact dependency version`);
+  const lockedPackage = packageLock.packages[`node_modules/${packageName}`];
+  assert.ok(lockedPackage, `${packageName} must exist in package-lock.json`);
+  assert.equal(lockedPackage.version, version,
+    `${packageName} must resolve to its package.json version`);
+  assert.equal(lockedPackage.license, 'MIT',
+    `${packageName} must retain its audited MIT license metadata`);
+  assert.match(lockedPackage.integrity, /^sha512-/,
+    `${packageName} must retain an npm integrity hash`);
+}
+
 const assetManifest = JSON.parse(
   readFileSync(new URL('./assets-manifest.json', import.meta.url), 'utf8')
+);
+const assetPackages = {
+  'xterm.js': '@xterm/xterm',
+  'xterm.css': '@xterm/xterm',
+  'addon-fit.js': '@xterm/addon-fit',
+  'addon-search.js': '@xterm/addon-search',
+  'addon-serialize.js': '@xterm/addon-serialize',
+  'addon-web-links.js': '@xterm/addon-web-links',
+  'addon-webgl.js': '@xterm/addon-webgl'
+};
+assert.deepEqual(
+  assetManifest.map(asset => asset.file).sort(),
+  Object.keys(assetPackages).sort(),
+  'the asset manifest must contain exactly the locally packaged xterm resources'
+);
+const thirdPartyNotices = readFileSync(
+  new URL('../../docs/THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8'
 );
 for (const asset of assetManifest) {
   const checkedOutBytes = readFileSync(
@@ -23,7 +64,24 @@ for (const asset of assetManifest) {
     asset.sha256,
     `${asset.file} hash must match the asset manifest`
   );
+  const packageName = assetPackages[asset.file];
+  assert.ok(thirdPartyNotices.includes(`\`${asset.file}\``),
+    `${asset.file} must be listed in the third-party notices`);
+  assert.ok(thirdPartyNotices.includes(`\`${packageName} ${packageJson.dependencies[packageName]}\``),
+    `${asset.file} must cite its locked package version`);
+  assert.ok(thirdPartyNotices.includes(`\`${asset.sha256.toUpperCase()}\``),
+    `${asset.file} must cite its packaged SHA-256`);
 }
+
+const packagedTerminalHtml = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8'
+);
+assert.doesNotMatch(packagedTerminalHtml,
+  /(?:src|href)\s*=\s*["']https?:\/\//iu,
+  'the terminal page must not load scripts or styles from online resources');
+assert.doesNotMatch(packagedTerminalHtml,
+  /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|importScripts)\s*\(/u,
+  'the terminal page must not fetch runtime resources from the network');
 
 for (const text of ['', 'plain text', '中文 🚀\nsecond line']) {
   const decoded = policy.decodeOsc52(encode(text));
@@ -134,6 +192,17 @@ assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, false), true);
 assert.equal(policy.shouldActivateLink({ ...exactCtrl, button: 1 }, 'none', true, false), false);
 assert.equal(policy.shouldActivateLink(exactCtrl, 'none', false, false), false);
 assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, true), false);
+assert.equal(policy.shouldRunTerminalSecondaryAction(false), true);
+assert.equal(policy.shouldRunTerminalSecondaryAction(true), false,
+  'an open search must own secondary clicks until terminal mousedown closes it');
+assert.equal(policy.searchResultLabel('', -1, 0, 1000), '');
+assert.equal(policy.searchResultLabel('missing', -1, 0, 1000), 'No results');
+assert.equal(policy.searchResultLabel('match', 0, 2, 1000), '1/2');
+assert.equal(policy.searchResultLabel('match', 1, 2, 1000), '2/2');
+assert.equal(policy.searchResultLabel('match', -1, 1000, 1000), '1000+ results');
+assert.equal(policy.wrappedControlIndex(0, 4, false), 1);
+assert.equal(policy.wrappedControlIndex(3, 4, false), 0);
+assert.equal(policy.wrappedControlIndex(0, 4, true), 3);
 
 const terminalHtml = readFileSync(new URL('../../entry/src/main/resources/rawfile/terminal.html', import.meta.url), 'utf8');
 assert.match(terminalHtml,
@@ -180,6 +249,66 @@ assert.doesNotMatch(terminalHtml, /replayGate|replayBegin|replayEnd/,
   'the removed raw terminal-history replay protocol must not return');
 assert.match(terminalHtml, /<script src="addon-serialize\.js"><\/script>/,
   'the terminal page must load the pinned xterm serialization addon');
+assert.match(terminalHtml, /<script src="addon-search\.js"><\/script>/,
+  'the terminal page must load the pinned xterm search addon locally');
+assert.match(terminalHtml, /id="search-panel"[\s\S]*id="search-input"[\s\S]*id="search-previous"[\s\S]*id="search-next"[\s\S]*id="search-close"/,
+  'the terminal surface must own one compact keyboard-search control set');
+assert.match(terminalHtml,
+  /new SearchAddon\.SearchAddon\(\{ highlightLimit: SEARCH_HIGHLIGHT_LIMIT \}\)[\s\S]*term\.loadAddon\(searchAddon\)/,
+  'the current xterm instance must own the bounded official search addon');
+assert.match(terminalHtml,
+  /regex:\s*false,[\s\S]*wholeWord:\s*false,[\s\S]*caseSensitive:\s*false,[\s\S]*decorations:/,
+  'search must use the frozen literal case-insensitive decorated matching options');
+assert.match(terminalHtml,
+  /compositionstart[\s\S]*searchComposing = true[\s\S]*compositionend[\s\S]*searchComposing = false[\s\S]*runSearch/,
+  'IME composition must defer search until committed text is available');
+const searchUiStart = terminalHtml.indexOf('function initializeSearchUi()');
+const searchUiEnd = terminalHtml.indexOf('function serializeTerminalSnapshot', searchUiStart);
+assert.ok(searchUiStart >= 0 && searchUiEnd > searchUiStart,
+  'the local search UI initialization body must remain identifiable');
+const searchUiBody = terminalHtml.slice(searchUiStart, searchUiEnd);
+assert.match(searchUiBody, /input\.addEventListener\('input',[\s\S]*?runSearch\(false, true\)/,
+  'committed query input must stay inside the current web terminal search state');
+assert.doesNotMatch(searchUiBody, /sendBridge(?:Data|Control)|term\.(?:input|paste|write)/,
+  'query text and search navigation must never enter the SSH terminal-input bridge');
+assert.match(terminalHtml,
+  /function closeSearch\(restoreTerminalFocus\)[\s\S]*searchAddon\.clearDecorations\(\)[\s\S]*term\.focus\(\)/,
+  'closing search must clear short-lived decorations and optionally restore terminal focus');
+assert.match(terminalHtml,
+  /var searchOwnsSelection = false;[\s\S]*function closeSearch\(restoreTerminalFocus\)[\s\S]*if \(searchOwnsSelection && term\) term\.clearSelection\(\);/,
+  'closing a non-empty search must release only the selection owned by its active match');
+assert.doesNotMatch(terminalHtml, /term\.scrollToTop\(\)/,
+  'search must not pre-scroll the viewport before the addon locates the first match');
+assert.match(terminalHtml,
+  /terminalContainer\.addEventListener\('mousedown', function\(event\) \{[\s\S]*?panel\.contains\(event\.target\)[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(false\);[\s\S]*?true\);/,
+  'terminal pointer interaction must release search-owned selection before normal selection, links, or mouse reporting');
+const searchPointerRelease = terminalHtml.indexOf("terminalContainer.addEventListener('mousedown', function(event) {");
+const existingPointerDispatch = terminalHtml.indexOf(
+  "terminalContainer.addEventListener('mousedown', beginLinkClick, true);");
+assert.ok(searchPointerRelease >= 0 && searchPointerRelease < existingPointerDispatch,
+  'search selection release must run before the existing terminal pointer handlers');
+const searchPointerReleaseBody = terminalHtml.slice(searchPointerRelease, existingPointerDispatch);
+assert.doesNotMatch(searchPointerReleaseBody, /preventDefault|stopPropagation|stopImmediatePropagation/,
+  'search selection release must not consume the pointer event');
+assert.match(searchPointerReleaseBody,
+  /var panel = searchElement\('search-panel'\);[\s\S]*?panel\.contains\(event\.target\)[\s\S]*?return;/,
+  'search controls must remain interactive instead of being treated as terminal pointer input');
+assert.match(terminalHtml,
+  /function applyTerminalTheme\(themeObj\)[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(true\);/,
+  'theme changes must close short-lived search state before replacing decoration colors');
+assert.match(terminalHtml,
+  /function handleSecondaryAction\(\)[\s\S]*?shouldRunTerminalSecondaryAction\(isSearchOpen\(\)\)[\s\S]*?copyTerminalSelection\(\)/,
+  'secondary action must not copy or paste terminal content while search owns the Surface');
+assert.match(terminalHtml,
+  /var payload = raw\.substring\(kindEnd \+ 1\);[\s\S]*?!isSupportedNativeMessage\(channel, kind, payload\)/,
+  'the web-side bridge parser must validate each native control payload before dispatch');
+assert.match(terminalHtml,
+  /function isSupportedNativeMessage\(channel, kind, payload\)[\s\S]*?kind === 'searchOpen' && payload\.length === 0/,
+  'searchOpen must be accepted by the web-side allowlist only with an empty payload');
+assert.match(terminalHtml, /term\.buffer\.onBufferChange\(function\(\) \{ closeSearch\(true\); \}\)/,
+  'normal and alternate buffer switches must close the local search state');
+assert.doesNotMatch(terminalHtml, /sendBridgeControl\('search/,
+  'query text and result state must never leave the Terminal Surface');
 assert.match(terminalHtml, /serializeAddon = new SerializeAddon\.SerializeAddon\(\)/,
   'terminal recovery checkpoints must use xterm framebuffer serialization');
 assert.match(terminalHtml,
@@ -348,11 +477,51 @@ assert.match(restoredSnapshot, /\u001b\[31msixth/,
 assert.equal(restoredSnapshot.match(/detached-output/g)?.length, 1,
   'output produced after the checkpoint must follow restored content exactly once');
 
+const addonSearch = readFileSync(
+  new URL('../../entry/src/main/resources/rawfile/addon-search.js', import.meta.url), 'utf8');
+vm.runInThisContext(addonSearch);
+assert.match(addonSearch,
+  /clearDecorations\(e\)\{[\s\S]*?clearHighlightDecorations\(\)[\s\S]*?clearResults\(\)[\s\S]*?clearCachedTerm\(\)/,
+  'the pinned addon must expose decoration cleanup separately from xterm selection ownership');
+assert.match(addonSearch,
+  /_selectResult\(e,t,s\)[\s\S]*?this\._terminal\.select\(e\.col,e\.row,e\.size\)/,
+  'the pinned addon active match must continue to use xterm selection');
+const searchTerminal = new globalThis.Terminal({
+  cols: 24,
+  rows: 4,
+  scrollback: 20,
+  allowProposedApi: true
+});
+const searchAddon = new globalThis.SearchAddon.SearchAddon({ highlightLimit: 1000 });
+searchTerminal.loadAddon(searchAddon);
+assert.equal(typeof searchAddon.findNext, 'function');
+assert.equal(typeof searchAddon.findPrevious, 'function');
+assert.equal(typeof searchAddon.clearDecorations, 'function');
+assert.equal(typeof searchAddon.onDidChangeResults, 'function');
+const searchMarker = searchTerminal.registerMarker(0);
+assert.doesNotThrow(() => {
+  searchTerminal.registerDecoration({
+    marker: searchMarker,
+    width: 1,
+    backgroundColor: '#585B70'
+  });
+}, 'the pinned terminal option must unlock the official addon decoration path');
+await runTerminalSearchTests(globalThis.Terminal, globalThis.SearchAddon.SearchAddon);
+
 const terminalBridge = readFileSync(
   new URL('../../entry/src/main/ets/model/bridge/TerminalBridge.ets', import.meta.url), 'utf8');
 assert.match(terminalBridge,
   /awaitingRestoreComplete[\s\S]*?KIND_RESTORE_COMPLETE[\s\S]*?notifyReadyHandler/,
   'native focus and ready handling must wait for the web restore acknowledgement');
+assert.match(terminalBridge,
+  /pendingSearchOpen[\s\S]*private pumpSearchOpen[\s\S]*!this\.ready \|\| this\.awaitingRestoreComplete[\s\S]*BridgeProtocol\.searchOpen\(\)/,
+  'search open must wait for the current bridge and framebuffer restore boundary');
+assert.match(terminalBridge,
+  /blur\(\): void \{\s*this\.pendingSearchOpen = false\s*this\.send\(BridgeProtocol\.blur\(\)\)/,
+  'pane or tab blur must cancel a search-open intent queued behind bridge readiness or restore');
+assert.match(terminalBridge,
+  /destroy\(\): void \{[\s\S]*?this\.msgPort\.close\(\)[\s\S]*?this\.onMessageHandler = null[\s\S]*?this\.pendingSearchOpen = false/,
+  'destroying an old surface bridge must close its port, remove callbacks, and discard a late search intent');
 assert.match(terminalBridge,
   /private pumpSnapshotRequests[\s\S]*?pendingDataHead < this\.pendingData\.length \|\| this\.inFlightMessages > 0/,
   'a checkpoint request must wait until all earlier terminal output is acknowledged');
@@ -383,6 +552,9 @@ assert.doesNotMatch(bridgeProtocol, /releaseBuffers|KIND_RELEASE_BUFFERS/,
   'disconnect cleanup must not expose a bridge command that clears a live terminal surface');
 assert.match(bridgeProtocol, /KIND_OPEN_URL:\s*string = 'openUrl'/,
   'browser requests must cross the typed web-to-native control allowlist');
+assert.match(bridgeProtocol,
+  /KIND_SEARCH_OPEN:\s*string = 'searchOpen'[\s\S]*kind === BridgeProtocol\.KIND_SEARCH_OPEN && payload\.length > 0/,
+  'search open must be a typed native-to-web control with an empty payload');
 
 const sessionViewModel = readFileSync(
   new URL('../../entry/src/main/ets/viewmodel/SessionViewModel.ets', import.meta.url), 'utf8');
@@ -403,6 +575,11 @@ assert.match(terminalSurfaceController,
 assert.match(terminalSurfaceController,
   /msg\.kind === BridgeProtocol\.KIND_OPEN_URL[\s\S]*onOpenUrlHandler/,
   'the terminal surface must consume browser requests before generic SSH session routing');
+assert.match(terminalSurfaceController, /openSearch\(\)[\s\S]*this\.bridge\.openSearch\(\)/,
+  'the terminal surface must expose only a local search-open intent');
+assert.match(terminalSurfaceController,
+  /detach\(\): void \{[\s\S]*?this\.bridge\.destroy\(\)[\s\S]*?this\.bridge = null/,
+  'surface detach must make the old bridge unable to dispatch into a replacement generation');
 assert.doesNotMatch(terminalSurfaceController, /getHistoryChunks|queueReplay|replayedHistory/,
   'the rejected raw byte history replay buffer must not return');
 assert.match(terminalSurfaceController,
@@ -425,8 +602,32 @@ assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
 assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
   'each terminal surface must route URL requests through its owning pane');
 assert.match(indexPage,
+  /InteractionPolicy\.isTerminalSearchShortcut\([\s\S]*?activePaneRuntime\(\)[\s\S]*?runtime\.surface\.openSearch\(\)/,
+  'the exact shortcut must target only the active pane runtime');
+assert.match(indexPage,
+  /private activePaneRuntime\(\): PaneRuntime \| null \{[\s\S]*?this\.appVm\.getActivePane\(\)[\s\S]*?this\.findPaneRuntime\(pane\.id\)/,
+  'search routing must resolve the stable active pane id instead of an adjacent runtime or index');
+assert.match(indexPage,
+  /private deactivateActiveTab[\s\S]*?runtime\.viewModel\.requestBlur\(\)/,
+  'tab switches must blur every pane in the departing tab before retaining or evicting its surfaces');
+assert.match(indexPage,
+  /private restoreActivePaneFocus[\s\S]*?else \{\s*runtime\.viewModel\.requestBlur\(\)/,
+  'pane switches must blur every non-active pane in the current tab');
+assert.match(indexPage,
+  /private recyclePaneWebView[\s\S]*?runtime\.detachSurface\(\)[\s\S]*?runtime\.generation \+= 1/,
+  'renderer exit must destroy the old pane surface before creating a new generation');
+assert.match(indexPage,
+  /private finishTabCheckpoint[\s\S]*?runtime\.detachSurface\(\)/,
+  'warm-tab eviction must detach every surface after its checkpoint boundary');
+assert.match(indexPage,
+  /private async disposeRuntime[\s\S]*?runtime\.detachSurface\(\)/,
+  'closing a pane or tab must destroy its terminal surface');
+assert.match(indexPage,
   /private onMainWindowVisibilityChanged[\s\S]*?captureMountedTerminalSnapshots\(\)/,
   'backgrounding the window must checkpoint every currently mounted terminal');
+assert.match(indexPage,
+  /private onMainWindowVisibilityChanged[\s\S]*?if \(this\.mainWindowVisible\) \{[\s\S]*?this\.restoreActivePaneFocus\(\)/,
+  'restoring the window must restore focus to the active pane');
 assert.match(indexPage,
   /private checkpointAndDestroyTabBridge[\s\S]*?checkpointingTabIds[\s\S]*?runtime\.surface\.captureSnapshot\(\(\) =>[\s\S]*?finishTabCheckpoint/,
   'an idle tab must remain mounted until its asynchronous eviction checkpoint completes');
@@ -446,6 +647,8 @@ assert.match(acceptanceSource, /Acceptance: Rebuild Renderer/,
   'debug build transformation must own the renderer acceptance menu');
 assert.match(acceptanceSource, /terminateRendererForAcceptance/,
   'debug build transformation must own the renderer termination trigger');
+assert.match(acceptanceSource, /pasteClipboardForAcceptance/,
+  'debug build transformation must own the clipboard paste trigger');
 assert.match(acceptanceSource, /finally[\s\S]*WriteAllBytes/,
   'debug build transformation must restore production ArkTS source in finally');
 assert.match(indexPage, /for \(let i = 0; i < MENU_ACTION_COUNT; i\+\+\)/,
@@ -478,6 +681,8 @@ const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');
 assert.match(terminalPane, /renderMode:\s*RenderMode\.ASYNC_RENDER/,
   'terminal panes must use the normal asynchronous ArkWeb render mode');
+assert.match(terminalPane, /\.onlineImageAccess\(false\)/,
+  'terminal panes must prevent packaged HTML from loading online images');
 assert.match(terminalPane, /sharedRenderProcessToken:\s*'leantty-terminal'/,
   'terminal panes keep the measured shared renderer-process configuration');
 assert.doesNotMatch(terminalPane, /\.onRenderProcess(?:NotResponding|Responding)\(/,

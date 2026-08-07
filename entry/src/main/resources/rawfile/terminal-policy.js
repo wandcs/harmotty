@@ -176,6 +176,26 @@
       isLinkModifierActive(event, mouseTrackingMode);
   }
 
+  function shouldRunTerminalSecondaryAction(searchOpen) {
+    return searchOpen !== true;
+  }
+
+  function searchResultLabel(query, resultIndex, resultCount, highlightLimit) {
+    if (typeof query !== 'string' || query.length === 0) return '';
+    if (resultCount <= 0) return 'No results';
+    if (resultIndex < 0) {
+      return resultCount >= highlightLimit ? highlightLimit + '+ results' : 'Results available';
+    }
+    return (resultIndex + 1) + '/' + resultCount;
+  }
+
+  function wrappedControlIndex(currentIndex, controlCount, backwards) {
+    if (controlCount <= 0) return -1;
+    var direction = backwards === true ? -1 : 1;
+    var safeIndex = currentIndex >= 0 && currentIndex < controlCount ? currentIndex : 0;
+    return (safeIndex + direction + controlCount) % controlCount;
+  }
+
   global.LeanTTYTerminalPolicy = {
     MAX_CLIPBOARD_BYTES: MAX_CLIPBOARD_BYTES,
     MAX_CLIPBOARD_BASE64_LENGTH: MAX_CLIPBOARD_BASE64_LENGTH,
@@ -189,6 +209,9 @@
     pendingWheelLines: pendingWheelLines,
     centerGridLeadingPadding: centerGridLeadingPadding,
     isLinkModifierActive: isLinkModifierActive,
-    shouldActivateLink: shouldActivateLink
+    shouldActivateLink: shouldActivateLink,
+    shouldRunTerminalSecondaryAction: shouldRunTerminalSecondaryAction,
+    searchResultLabel: searchResultLabel,
+    wrappedControlIndex: wrappedControlIndex
   };
 })(globalThis);

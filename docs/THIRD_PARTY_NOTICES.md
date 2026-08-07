@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Audit date: 2026-08-03.
+Audit date: 2026-08-06.
 
 LeanTTY includes or depends on the software listed below. The authoritative
 inputs for this audit are the checked-in Cargo/OHPM/NPM lockfiles and the
@@ -12,6 +12,7 @@ resources actually packaged in the ARM64 release HAP.
 |---|---|---|---|---|
 | `xterm.js`, `xterm.css` | `@xterm/xterm 6.0.0` | https://github.com/xtermjs/xterm.js/releases/tag/6.0.0 | MIT | `98D0973151AFF2991D335B1ADBBDAC2E14DA26341ABE329D677D4C0034402BDF` / `854A7C0FB70E8B1A083C16797AB827299FB18744F5AD34F227B48337E33293C6` |
 | `addon-fit.js` | `@xterm/addon-fit 0.11.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-fit | MIT | `4DF3789FA7BFF5D545BA38462A8CD2F7460BA971021BCE3F81C2870F937A201E` |
+| `addon-search.js` | `@xterm/addon-search 0.16.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-search | MIT | `BEADC1A87F56C24068389EDCEF219988FADE893B7836C95015157B3C0D812B70` |
 | `addon-web-links.js` | `@xterm/addon-web-links 0.12.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-web-links | MIT | `E34337F790D1CC817312A1AC1C00C473A7C504F471A70086DB57CA9CD0335CA9` |
 | `addon-serialize.js` | `@xterm/addon-serialize 0.14.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-serialize | MIT | `7F10D39FE8E1B27996BC7BB66F31409E7943455B04A991FEC2A9DFA15EAF2B98` |
 | `addon-webgl.js` | `@xterm/addon-webgl 0.19.0` | https://github.com/xtermjs/xterm.js/tree/6.0.0/addons/addon-webgl | MIT | `E84BF980D7A5C3D0A69352A31F4C2D92B6EDC3ABEBC722D856C3872573FEA095` |
@@ -25,6 +26,7 @@ Copyright notices supplied by the locked packages:
   (c) 2014-2016, SourceLair Private Company; Copyright (c) 2012-2013,
   Christopher Jeffrey.
 - addon-fit: Copyright (c) 2019, The xterm.js authors.
+- addon-search: Copyright (c) 2017, The xterm.js authors.
 - addon-web-links: Copyright (c) 2017, The xterm.js authors.
 - addon-serialize: Copyright (c) 2017, The xterm.js authors.
 - addon-webgl: Copyright (c) 2018, The xterm.js authors.

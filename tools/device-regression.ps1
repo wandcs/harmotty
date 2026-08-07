@@ -506,7 +506,8 @@ function Get-LeanTTYAppLogs {
     $output = @(
         & $Hdc -t $Target shell (
             "hilog -z 500 -t app -P $ProcessId " +
-            '-T SessionViewModel,KeyCommandService,SshClient,EntryAbility,Index'
+            '-T SessionViewModel,KeyCommandService,SshClient,EntryAbility,Index,' +
+            'TerminalSurfaceController,TerminalBridge'
         ) 2>&1
     )
     $exitCode = $LASTEXITCODE
@@ -523,7 +524,7 @@ function Wait-LeanTTYAppLog {
         [Parameter(Mandatory = $true)][string]$Target,
         [Parameter(Mandatory = $true)][string]$ProcessId,
         [Parameter(Mandatory = $true)][string]$Pattern,
-        [ValidateRange(1, 30)][int]$TimeoutSeconds = 10
+        [ValidateRange(1, 60)][int]$TimeoutSeconds = 10
     )
 
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()

@@ -6,7 +6,13 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:;">
   <link rel="stylesheet" href="xterm.css">
   <style>
-    :root { --terminal-background: #1E1E2E; }
+    :root {
+      --terminal-background: #1E1E2E;
+      --terminal-foreground: #CDD6F4;
+      --search-border: #585B70;
+      --search-control: #45475A;
+      --search-accent: #89B4FA;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; }
     #terminal-container { width: 100%; height: 100%; position: relative; }
@@ -53,6 +59,75 @@
       white-space: nowrap;
       pointer-events: none;
     }
+    #search-panel {
+      position: absolute;
+      top: 8px;
+      right: 46px;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      width: 420px;
+      max-width: calc(100% - 56px);
+      height: 34px;
+      padding: 4px;
+      gap: 3px;
+      color: var(--terminal-foreground);
+      background: var(--terminal-background);
+      border: 1px solid var(--search-border);
+      border-radius: 5px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+      font: 12px 'HarmonyOS Sans', sans-serif;
+    }
+    #search-panel[hidden] { display: none; }
+    #search-input {
+      min-width: 0;
+      height: 24px;
+      flex: 1 1 auto;
+      padding: 1px 7px;
+      color: var(--terminal-foreground);
+      caret-color: var(--search-accent);
+      background: var(--search-control);
+      border: 1px solid transparent;
+      border-radius: 3px;
+      outline: none;
+      font: 12px 'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace;
+    }
+    #search-input:focus { border-color: var(--search-accent); }
+    #search-result {
+      flex: 0 0 auto;
+      min-width: 44px;
+      max-width: 90px;
+      overflow: hidden;
+      color: var(--terminal-foreground);
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #search-panel button {
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      color: var(--terminal-foreground);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 3px;
+      outline: none;
+      font: 16px/22px 'HarmonyOS Sans', sans-serif;
+    }
+    #search-panel button:hover:not(:disabled),
+    #search-panel button:focus-visible {
+      background: var(--search-control);
+      border-color: var(--search-border);
+    }
+    #search-panel button:disabled { opacity: 0.38; }
+    @media (max-width: 320px) {
+      #search-panel {
+        top: 44px;
+        right: 10px;
+        max-width: calc(100% - 20px);
+      }
+    }
     @font-face {
       font-family: 'JetBrains Mono Nerd Font Mono';
       src: url('JetBrainsMonoNerdFontMono-Regular.ttf') format('truetype');
@@ -70,10 +145,19 @@
 <body>
   <div id="terminal-container">
     <div id="link-preview" class="xterm-hover"></div>
+    <div id="search-panel" role="search" aria-label="Find in terminal" hidden>
+      <input id="search-input" type="text" aria-label="Search text"
+        placeholder="Find" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <span id="search-result" aria-live="polite"></span>
+      <button id="search-previous" type="button" aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
+      <button id="search-next" type="button" aria-label="Next match" title="Next match (Enter)">↓</button>
+      <button id="search-close" type="button" aria-label="Close search" title="Close search (Escape)">×</button>
+    </div>
   </div>
 
   <script src="xterm.js"></script>
   <script src="addon-fit.js"></script>
+  <script src="addon-search.js"></script>
   <script src="addon-web-links.js"></script>
   <script src="addon-serialize.js"></script>
   <script src="addon-webgl.js"></script>
@@ -87,6 +171,7 @@
     var nativePort = null;
     var term = null;
     var fitAddon = null;
+    var searchAddon = null;
     var webglAddon = null;
     var webLinksAddon = null;
     var serializeAddon = null;
@@ -123,6 +208,12 @@
       metaKey: false
     };
     var pendingLinkClick = null;
+    var searchComposing = false;
+    var searchQuery = '';
+    var searchResultIndex = -1;
+    var searchResultCount = 0;
+    var searchOwnsSelection = false;
+    var SEARCH_HIGHLIGHT_LIMIT = 1000;
     var LINK_DRAG_TOLERANCE_PIXELS = 4;
     var BRIDGE_VERSION = 'H2';
     var BRIDGE_NATIVE_TO_WEB = 'N2W';
@@ -272,10 +363,11 @@
       var direction = raw.substring(versionEnd + 1, directionEnd);
       var channel = raw.substring(directionEnd + 1, channelEnd);
       var kind = raw.substring(channelEnd + 1, kindEnd);
+      var payload = raw.substring(kindEnd + 1);
       if (direction !== BRIDGE_NATIVE_TO_WEB ||
           (channel !== BRIDGE_DATA && channel !== BRIDGE_CONTROL) || kind.length === 0 ||
-          !isSupportedNativeMessage(channel, kind)) return null;
-      return { channel: channel, kind: kind, payload: raw.substring(kindEnd + 1) };
+          !isSupportedNativeMessage(channel, kind, payload)) return null;
+      return { channel: channel, kind: kind, payload: payload };
     }
 
     function parseTerminalPacket(raw) {
@@ -294,14 +386,167 @@
       };
     }
 
-    function isSupportedNativeMessage(channel, kind) {
+    function isSupportedNativeMessage(channel, kind, payload) {
       if (channel === BRIDGE_DATA) {
         return kind === 'terminal';
       }
       return kind === 'theme' || kind === 'focus' || kind === 'blur' ||
         kind === 'clearSelection' || kind === 'ping' ||
         kind === 'fit' || kind === 'fontSize' || kind === 'copySelection' ||
-        kind === 'secondaryAction' || kind === 'snapshotRequest' || kind === 'restoreSnapshot';
+        kind === 'secondaryAction' || kind === 'snapshotRequest' || kind === 'restoreSnapshot' ||
+        (kind === 'searchOpen' && payload.length === 0);
+    }
+
+    function searchElement(id) {
+      return document.getElementById(id);
+    }
+
+    function isSearchOpen() {
+      var panel = searchElement('search-panel');
+      return !!panel && !panel.hidden;
+    }
+
+    function searchOptions() {
+      var style = getComputedStyle(document.documentElement);
+      return {
+        regex: false,
+        wholeWord: false,
+        caseSensitive: false,
+        decorations: {
+          matchBackground: style.getPropertyValue('--search-control').trim() || '#45475A',
+          matchBorder: style.getPropertyValue('--search-border').trim() || '#585B70',
+          matchOverviewRuler: style.getPropertyValue('--search-accent').trim() || '#89B4FA',
+          activeMatchBackground: style.getPropertyValue('--search-border').trim() || '#585B70',
+          activeMatchBorder: style.getPropertyValue('--search-accent').trim() || '#89B4FA',
+          activeMatchColorOverviewRuler: style.getPropertyValue('--search-accent').trim() || '#89B4FA'
+        }
+      };
+    }
+
+    function updateSearchFeedback() {
+      var result = searchElement('search-result');
+      var previous = searchElement('search-previous');
+      var next = searchElement('search-next');
+      var label = LeanTTYTerminalPolicy.searchResultLabel(
+        searchQuery, searchResultIndex, searchResultCount, SEARCH_HIGHLIGHT_LIMIT);
+      if (result) {
+        result.textContent = label;
+        result.title = label;
+      }
+      var navigationDisabled = searchQuery.length === 0 || searchResultCount <= 0;
+      if (previous) previous.disabled = navigationDisabled;
+      if (next) next.disabled = navigationDisabled;
+    }
+
+    function resetSearchResults() {
+      searchResultIndex = -1;
+      searchResultCount = 0;
+      updateSearchFeedback();
+    }
+
+    function runSearch(backwards, queryChanged) {
+      if (!searchAddon || !term) return;
+      var input = searchElement('search-input');
+      var nextQuery = input ? input.value : '';
+      if (nextQuery.length === 0) {
+        searchQuery = '';
+        searchAddon.clearDecorations();
+        if (searchOwnsSelection && term) term.clearSelection();
+        searchOwnsSelection = false;
+        resetSearchResults();
+        return;
+      }
+      if (queryChanged || nextQuery !== searchQuery) {
+        searchAddon.clearDecorations();
+        term.clearSelection();
+        searchOwnsSelection = true;
+      }
+      searchQuery = nextQuery;
+      if (backwards) {
+        searchAddon.findPrevious(searchQuery, searchOptions());
+      } else {
+        searchAddon.findNext(searchQuery, searchOptions());
+      }
+    }
+
+    function openSearch() {
+      var panel = searchElement('search-panel');
+      var input = searchElement('search-input');
+      if (!panel || !input || !searchAddon) return;
+      if (panel.hidden) {
+        panel.hidden = false;
+        input.value = '';
+        searchQuery = '';
+        resetSearchResults();
+      }
+      input.focus();
+      input.select();
+    }
+
+    function closeSearch(restoreTerminalFocus) {
+      var panel = searchElement('search-panel');
+      var input = searchElement('search-input');
+      if (!panel || panel.hidden) return;
+      panel.hidden = true;
+      searchComposing = false;
+      searchQuery = '';
+      searchResultIndex = -1;
+      searchResultCount = 0;
+      if (input) input.value = '';
+      if (searchAddon) searchAddon.clearDecorations();
+      if (searchOwnsSelection && term) term.clearSelection();
+      searchOwnsSelection = false;
+      updateSearchFeedback();
+      if (restoreTerminalFocus && term) term.focus();
+    }
+
+    function handleSearchPanelKeydown(event) {
+      if (!isSearchOpen() || searchComposing || event.isComposing) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSearch(true);
+        return;
+      }
+      if (event.key === 'Enter' && event.target === searchElement('search-input')) {
+        event.preventDefault();
+        event.stopPropagation();
+        runSearch(event.shiftKey, false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      var controls = [searchElement('search-input'), searchElement('search-previous'),
+        searchElement('search-next'), searchElement('search-close')];
+      var currentIndex = controls.indexOf(document.activeElement);
+      var nextIndex = LeanTTYTerminalPolicy.wrappedControlIndex(
+        currentIndex, controls.length, event.shiftKey);
+      if (nextIndex >= 0 && controls[nextIndex]) {
+        event.preventDefault();
+        event.stopPropagation();
+        controls[nextIndex].focus();
+      }
+    }
+
+    function initializeSearchUi() {
+      var panel = searchElement('search-panel');
+      var input = searchElement('search-input');
+      var previous = searchElement('search-previous');
+      var next = searchElement('search-next');
+      var close = searchElement('search-close');
+      if (!panel || !input || !previous || !next || !close) return;
+      input.addEventListener('compositionstart', function() { searchComposing = true; });
+      input.addEventListener('compositionend', function() {
+        searchComposing = false;
+        runSearch(false, true);
+      });
+      input.addEventListener('input', function() {
+        if (!searchComposing) runSearch(false, true);
+      });
+      panel.addEventListener('keydown', handleSearchPanelKeydown);
+      previous.addEventListener('click', function() { runSearch(true, false); });
+      next.addEventListener('click', function() { runSearch(false, false); });
+      close.addEventListener('click', function() { closeSearch(true); });
+      updateSearchFeedback();
     }
 
     function serializeTerminalSnapshot(availableLength) {
@@ -467,8 +712,15 @@
 
     function applyTerminalTheme(themeObj) {
       if (!themeObj || typeof themeObj.background !== 'string' || themeObj.background.length === 0) return;
+      if (isSearchOpen()) closeSearch(true);
       themeObj.overviewRulerBorder = themeObj.background;
       document.documentElement.style.setProperty('--terminal-background', themeObj.background);
+      document.documentElement.style.setProperty('--terminal-foreground', themeObj.foreground || '#CDD6F4');
+      document.documentElement.style.setProperty('--search-border',
+        themeObj.selectionBackground || '#585B70');
+      document.documentElement.style.setProperty('--search-control',
+        themeObj.selectionInactiveBackground || '#45475A');
+      document.documentElement.style.setProperty('--search-accent', themeObj.blue || '#89B4FA');
       if (term) {
         term.options.theme = themeObj;
       }
@@ -618,6 +870,7 @@
 
       applyTerminalTheme(defaultTheme);
       term = new Terminal({
+        allowProposedApi: true,
         theme: defaultTheme,
         fontSize: 14,
         fontFamily: "'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace",
@@ -637,6 +890,13 @@
 
       fitAddon = new FitAddon.FitAddon();
       term.loadAddon(fitAddon);
+      searchAddon = new SearchAddon.SearchAddon({ highlightLimit: SEARCH_HIGHLIGHT_LIMIT });
+      term.loadAddon(searchAddon);
+      searchAddon.onDidChangeResults(function(result) {
+        searchResultIndex = result.resultIndex;
+        searchResultCount = result.resultCount;
+        updateSearchFeedback();
+      });
       serializeAddon = new SerializeAddon.SerializeAddon();
       term.loadAddon(serializeAddon);
       var terminalContainer = document.getElementById('terminal-container');
@@ -647,14 +907,22 @@
       });
       term.loadAddon(webLinksAddon);
       terminalContainer.addEventListener('wheel', handleAlternateWheel, true);
+      terminalContainer.addEventListener('mousedown', function(event) {
+        var panel = searchElement('search-panel');
+        if (panel && event.target && panel.contains(event.target)) return;
+        if (isSearchOpen()) closeSearch(false);
+      }, true);
       terminalContainer.addEventListener('mousedown', beginLinkClick, true);
       terminalContainer.addEventListener('mousemove', trackLinkDrag, true);
       terminalContainer.addEventListener('mouseup', function() {
         pendingLinkClick = null;
       });
+      initializeSearchUi();
+      term.buffer.onBufferChange(function() { closeSearch(true); });
       window.addEventListener('keydown', handleLinkKeyEvent, true);
       window.addEventListener('keyup', handleLinkKeyEvent, true);
       window.addEventListener('blur', function() {
+        closeSearch(false);
         linkModifierState.ctrlKey = false;
         linkModifierState.altKey = false;
         linkModifierState.shiftKey = false;
@@ -815,10 +1083,11 @@
             case 'focus':
               if (message.channel !== BRIDGE_CONTROL) break;
               bellAttentionGate.rearmDelivery();
-              if (term) { term.focus(); }
+              if (term && !isSearchOpen()) { term.focus(); }
               break;
             case 'blur':
               if (message.channel !== BRIDGE_CONTROL) break;
+              closeSearch(false);
               if (term) { term.blur(); }
               break;
             case 'clearSelection':
@@ -872,6 +1141,10 @@
                 }
               }
               break;
+            case 'searchOpen':
+              if (message.channel !== BRIDGE_CONTROL || message.payload.length !== 0) break;
+              openSearch();
+              break;
           }
         };
 
@@ -896,6 +1169,7 @@
     }
 
     function handleSecondaryAction() {
+      if (!LeanTTYTerminalPolicy.shouldRunTerminalSecondaryAction(isSearchOpen())) return;
       if (copyTerminalSelection()) return;
       pasteFromSystemClipboard();
     }

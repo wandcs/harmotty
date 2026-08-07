@@ -48,7 +48,7 @@ challenge 和 `sessionId + generation + roundId`，UI 不再根据私钥失败�
 决定下一方法。网络认证交换使用 30 秒超时，等待用户回答使用 300 秒超时，断开与取消
 都会终止当前等待。
 
-`russh 0.62.4` 提供相关客户端 API 是实现候选事实，不等于 LeanTTY 已经在 ARM64 HAP
+`russh 0.62.5` 提供相关客户端 API 是实现候选事实，不等于 LeanTTY 已经在 ARM64 HAP
 和物理 HarmonyOS PC 上完成互操作。仓库现已提供独立的受控 russh 服务端和 OpenSSH
 端到端协议基线；这证明测试场景可重现，不证明 LeanTTY 客户端已经实现或通过互操作。
 

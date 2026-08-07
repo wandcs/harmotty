@@ -387,6 +387,38 @@ struct SessionReceivers {
     output_pause_rx: tokio::sync::mpsc::Receiver<bool>,
 }
 
+async fn run_channel_writer(
+    channel: russh::ChannelWriteHalf<russh::client::Msg>,
+    mut write_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
+    mut resize_rx: tokio::sync::mpsc::Receiver<(u32, u32)>,
+    control_callback: JsCallback,
+) {
+    loop {
+        tokio::select! {
+          data = write_rx.recv() => {
+            match data {
+              Some(bytes) => {
+                if let Err(error) = channel.data(&bytes[..]).await {
+                  send_control(&control_callback, &format!("WRITE_ERROR:{}", error));
+                }
+              }
+              None => break,
+            }
+          }
+          size = resize_rx.recv() => {
+            match size {
+              Some((cols, rows)) => {
+                if let Err(error) = channel.window_change(cols, rows, 0, 0).await {
+                  send_control(&control_callback, &format!("RESIZE_ERROR:{}", error));
+                }
+              }
+              None => break,
+            }
+          }
+        }
+    }
+}
+
 enum ConnectWaitResult<T, E> {
     Connected(T),
     Failed(E),
@@ -951,7 +983,7 @@ async fn run_session(
         }
     }
 
-    let mut channel = match ssh.channel_open_session().await {
+    let channel = match ssh.channel_open_session().await {
         Ok(value) => value,
         Err(error) => {
             send_control(&control_callback, &format!("CHANNEL:{}", error));
@@ -975,6 +1007,14 @@ async fn run_session(
     eprintln!("[LTTY_SSH] session={} stage=connected", session_id);
     send_control(&control_callback, "CONNECTED");
 
+    let (mut channel_read, channel_write) = channel.split();
+    let channel_writer = tokio::spawn(run_channel_writer(
+        channel_write,
+        receivers.write_rx,
+        receivers.resize_rx,
+        control_callback.clone(),
+    ));
+
     let mut pending_output: Vec<u8> = Vec::new();
     let mut output_tick = tokio::time::interval(Duration::from_millis(16));
     output_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -986,6 +1026,8 @@ async fn run_session(
     let mut delivery_metrics = OutputDeliveryMetrics::default();
     let mut exit_code: i32 = -1;
     let mut connection_task_ended = false;
+    let mut connection_task_result = None;
+    let mut local_disconnect_requested = false;
 
     loop {
         tokio::select! {
@@ -1006,7 +1048,7 @@ async fn run_session(
             output_paused = paused.unwrap_or(false);
             eprintln!("[LTTY_SSH] session={} output_paused={}", session_id, output_paused);
           }
-          message = channel.wait(), if !output_paused && pending_output.len() < 512 * 1024 => {
+          message = channel_read.wait(), if !output_paused && pending_output.len() < 512 * 1024 => {
             match message {
               Some(russh::ChannelMsg::Data { ref data }) |
               Some(russh::ChannelMsg::ExtendedData { ref data, .. }) => {
@@ -1037,34 +1079,25 @@ async fn run_session(
               Some(_) => {}
             }
           }
-          data = receivers.write_rx.recv() => {
-            match data {
-              Some(bytes) => {
-                if let Err(error) = channel.data(&bytes[..]).await {
-                  send_control(&control_callback, &format!("WRITE_ERROR:{}", error));
-                }
-              }
-              None => break,
-            }
-          }
-          size = receivers.resize_rx.recv() => {
-            match size {
-              Some((cols, rows)) => {
-                if let Err(error) = channel.window_change(cols, rows, 0, 0).await {
-                  send_control(&control_callback, &format!("RESIZE_ERROR:{}", error));
-                }
-              }
-              None => break,
-            }
-          }
           _ = receivers.disconnect_rx.recv() => {
-            let _ = channel.eof().await;
-            let _ = ssh
-              .disconnect(russh::Disconnect::ByApplication, "", "")
-              .await;
+            local_disconnect_requested = true;
+            break;
+          }
+          result = &mut ssh => {
+            connection_task_result = Some(result);
             break;
           }
         }
+    }
+
+    channel_writer.abort();
+    let _ = channel_writer.await;
+    if local_disconnect_requested {
+        let _ = tokio::time::timeout(
+            Duration::from_secs(1),
+            ssh.disconnect(russh::Disconnect::ByApplication, "", ""),
+        )
+        .await;
     }
 
     if !pending_output.is_empty() {
@@ -1089,8 +1122,15 @@ async fn run_session(
             );
         }
     }
-    let keepalive_timed_out = if connection_task_ended {
-        match ssh.await {
+    let connection_result = if let Some(result) = connection_task_result {
+        Some(result)
+    } else if connection_task_ended {
+        Some(ssh.await)
+    } else {
+        None
+    };
+    let keepalive_timed_out = match connection_result {
+        Some(result) => match result {
             Err(russh::Error::KeepaliveTimeout) => {
                 eprintln!(
                     "[LTTY_SSH] session={} stage=keepalive_timeout intervalSeconds={} max={}",
@@ -1108,9 +1148,8 @@ async fn run_session(
                 false
             }
             Ok(()) => false,
-        }
-    } else {
-        false
+        },
+        None => false,
     };
     send_control(
         &control_callback,
