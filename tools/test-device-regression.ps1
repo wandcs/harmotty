@@ -453,6 +453,9 @@ foreach ($scriptName in @(
             $content.Contains('$activePaneBounds') -and
             $content.Contains('[Collections.Generic.List[string]]::new()') -and
             $content.Contains('$activePaneBounds.Contains($bounds)') -and
+            $content.Contains('Get-LeanTTYActiveTerminalInputNodes') -and
+            $content.Contains("attributes.opacity -eq '1.000000'") -and
+            $content.Contains("attributes.zIndex -eq '1'") -and
             $content.Contains('does not ') -and
             $content.Contains('satisfy physical-keyboard or Chinese/English IME acceptance') -and
             $content.Contains("'layout-search-open.json'") -and

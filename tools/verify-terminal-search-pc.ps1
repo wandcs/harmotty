@@ -109,6 +109,35 @@ function Get-LeanTTYTabNodes {
     })
 }
 
+function Get-LeanTTYActiveTerminalInputNodes {
+    param([Parameter(Mandatory = $true)]$Layout)
+    $result = [Collections.Generic.List[object]]::new()
+    $visit = {
+        param($Node, [bool]$InsideActiveSurface)
+        if ($null -eq $Node) { return }
+        $inside = $InsideActiveSurface
+        if ([string]$Node.attributes.type -eq '__Common__') {
+            $bounds = [string]$Node.attributes.bounds
+            if ($bounds -match '^\[\d+,(?<top>\d+)\]\[\d+,(?<bottom>\d+)\]$' -and
+                [int]$Matches.top -ge 100 -and [int]$Matches.bottom -gt 120) {
+                $inside = [string]$Node.attributes.opacity -eq '1.000000' -and
+                    [string]$Node.attributes.zIndex -eq '1'
+            }
+        }
+        if ($inside -and
+            [string]$Node.attributes.type -eq 'textField' -and
+            [string]$Node.attributes.hint -eq 'Terminal input' -and
+            [string]$Node.attributes.visible -eq 'true') {
+            $result.Add($Node)
+        }
+        foreach ($child in @($Node.children)) {
+            & $visit $child $inside
+        }
+    }
+    & $visit $Layout $false
+    return @($result)
+}
+
 function Wait-TerminalWorkspaceState {
     param(
         [Parameter(Mandatory = $true)][int]$PaneCount,
@@ -122,7 +151,7 @@ function Wait-TerminalWorkspaceState {
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     do {
         $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
-        $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        $terminalInputs = @(Get-LeanTTYActiveTerminalInputNodes -Layout $layout)
         $activePaneBounds = [Collections.Generic.List[string]]::new()
         foreach ($terminalInput in $terminalInputs) {
             $bounds = [string]$terminalInput.attributes.bounds
@@ -410,7 +439,7 @@ function Restore-TerminalWorkspace {
             Start-Sleep -Milliseconds 300
             continue
         }
-        $terminalInputs = @(Get-LeanTTYTerminalInputNodes -Layout $layout)
+        $terminalInputs = @(Get-LeanTTYActiveTerminalInputNodes -Layout $layout)
         $activePaneBounds = [Collections.Generic.List[string]]::new()
         foreach ($terminalInput in $terminalInputs) {
             $bounds = [string]$terminalInput.attributes.bounds
