@@ -148,8 +148,28 @@ Dependabot 告警 [`GHSA-m65r-rprj-r5rg`](https://github.com/Eugeny/russh/securi
   PowerShell 空字符串参数绑定拒绝，定位为 harness 失败并补充回归门禁，未作为产品失败。
   本项仍保持未完成：HDC 系统按键注入不能替代真实物理键盘，以及中英文输入法组合、
   候选提交和快捷键冲突验收。
-- [ ] 验证单 Pane、双 Pane 和多 Tab 的当前 Pane 归属，切换、关闭、warm Tab 淘汰、应用
+- [x] 验证单 Pane、双 Pane 和多 Tab 的当前 Pane 归属，切换、关闭、warm Tab 淘汰、应用
   最小化/恢复和 ArkWeb renderer 重建后不串查询、高亮、滚动位置或焦点。
+  2026-08-07 在 HAD-W32 USB ARM64 物理 PC 上以同一诊断 HAP（SHA-256
+  `B9F9F1547BBB1C2E519681200DCCAA129FFB1E418341CD9C9AC1F3C698CB104A`）和干净 harness
+  `6f13f2698987322e723fd375b80b0407c2fe3638` 完成三个命名场景。`pane-tab-ownership`
+  attempt `97adbd6199814978b586b6d7051b27c9` 验证单 Pane、双 Pane 与双 Tab 的搜索在切换、
+  关闭和往返后均关闭且焦点只回到活动 Pane；右 Pane 和第二 Tab 对第一 Surface 的
+  `Syntax` scrollback 都明确返回 `No results`。`pane-scroll-left-match.png`、
+  `pane-scroll-after-focus-switch.png` 和 `tab-scroll-first-return.png` 共同记录左 Surface
+  的匹配高亮只在搜索打开时存在，关闭后 viewport 仍停在同一段输出，右 Surface 保持
+  自己的空提示符，Tab 往返也未带入查询、高亮或滚动位置。结构化证据位于
+  `C:\tmp\leantty-terminal-search-pane-tab-20260807-final2\device-terminal-search.json`。
+  `warm-tab-eviction` attempt `2bd0fd720496461583b3fe31523c931e` 观察生产 30 秒保留期后的
+  `TerminalBridge` 销毁，重新挂载后查询缺席且终端焦点恢复；证据位于
+  `C:\tmp\leantty-terminal-search-warm-20260807-final\device-terminal-search.json`。
+  `window-renderer-lifecycle` attempt `9a03ae60bc0646e9b0b0cdaf5ff151f9` 证明最小化/恢复保持同一
+  PID，搜索关闭且终端重新聚焦；随后验收入口只触发生产 checkpoint/renderer 终止路径，
+  旧 bridge 销毁、新 bridge 初始化，重建后查询缺席且焦点恢复。该场景首先发现窗口恢复
+  分支未调用既有焦点恢复入口，已由 `629efb8` 最小修复并在同一路径复验；最终证据位于
+  `C:\tmp\leantty-terminal-search-lifecycle-20260807-final2\device-terminal-search.json`。三个
+  场景的搜索状态、单 Tab/单 Pane 工作区和屏幕常亮租约清理均通过；其余前置失败均已定位
+  为 layout、Pane 顺序、日志等待或 warm Surface 识别的 harness 问题并保留失败证据。
 - [ ] 验证普通输出、中文/宽字符、多行、大 scrollback 和持续输出；回归 tmux、vim、less
   等 alternate-screen/TUI，selection、复制粘贴、链接和鼠标上报保持原有行为。
 - [ ] 用第 1 节基线比较打开、逐字查询、跳转、持续输出和关闭的耗时与资源行为；先报告
