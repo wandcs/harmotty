@@ -626,6 +626,9 @@ assert.match(indexPage,
   /private onMainWindowVisibilityChanged[\s\S]*?captureMountedTerminalSnapshots\(\)/,
   'backgrounding the window must checkpoint every currently mounted terminal');
 assert.match(indexPage,
+  /private onMainWindowVisibilityChanged[\s\S]*?if \(this\.mainWindowVisible\) \{[\s\S]*?this\.restoreActivePaneFocus\(\)/,
+  'restoring the window must restore focus to the active pane');
+assert.match(indexPage,
   /private checkpointAndDestroyTabBridge[\s\S]*?checkpointingTabIds[\s\S]*?runtime\.surface\.captureSnapshot\(\(\) =>[\s\S]*?finishTabCheckpoint/,
   'an idle tab must remain mounted until its asynchronous eviction checkpoint completes');
 assert.match(indexPage, /BrowserLauncher\.open\(/,

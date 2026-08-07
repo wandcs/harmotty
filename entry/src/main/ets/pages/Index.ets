@@ -273,6 +273,7 @@ struct Index {
   private onMainWindowVisibilityChanged(): void {
     logger.info('Main window visibility applied: visible=' + this.mainWindowVisible.toString())
     if (this.mainWindowVisible) {
+      this.restoreActivePaneFocus()
       return
     }
     this.captureMountedTerminalSnapshots()
