@@ -6,5 +6,5 @@ useDefault = true
 [[allowlists]]
 description = "Vendored xterm assets are pinned and verified by assets-manifest.json"
 paths = [
-  '''^entry/src/main/resources/rawfile/(?:xterm\.js|xterm\.css|addon-fit\.js|addon-webgl\.js)$'''
+  '''^entry/src/main/resources/rawfile/(?:xterm\.js|xterm\.css|addon-fit\.js|addon-search\.js|addon-webgl\.js)$'''
 ]
