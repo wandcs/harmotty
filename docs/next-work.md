@@ -123,9 +123,18 @@ Dependabot 告警 [`GHSA-m65r-rprj-r5rg`](https://github.com/Eugeny/russh/securi
 
 ## 5. ARM64 HarmonyOS PC 验收
 
-- [ ] 建立可重复的命名物理机场景，复用真实搜索事件链并记录候选与 harness 身份；如需
+- [x] 建立可重复的命名物理机场景，复用真实搜索事件链并记录候选与 harness 身份；如需
   验收入口，只允许编译期隔离、最小触发且 release 分支裁剪的测试能力，不建立第二套
   搜索实现。
+  2026-08-07 新增 `tools/verify-terminal-search-pc.ps1` 的 `open-close-focus` 场景，直接
+  注入产品 `Ctrl+Alt+F` 路由，不使用 acceptance 搜索入口；结构化记录 HAP SHA/大小、
+  harness commit/tree、设备类型、layout、打开/关闭截图、耗时、失败域和清理结果。HAD-W32
+  USB ARM64 实跑使用 HAP SHA-256
+  `5F46D6FA9CC0921C76E1BBB8937ED5FABCC35B7EEB916DF7F213B14C853F86C5`、harness
+  `ba6521b7dcd0e825ed6ef2953f0e2a73cb0b6232`，确认搜索输入打开后可见且聚焦、Escape
+  关闭后终端焦点恢复；attempt `da26c63174a44151b0f0f1df3d34e0cc` 与证据位于
+  `C:\tmp\leantty-terminal-search-open-close-20260807\device-terminal-search.json`，临时搜索
+  状态关闭和屏幕常亮租约恢复均通过。
 - [ ] 在物理键盘和中英文输入法下验证打开、逐字输入、下一处、上一处、关闭、焦点恢复、
   无结果和首尾回绕；确认快捷键不与 HarmonyOS、输入法或终端常用按键产生不可接受冲突。
 - [ ] 验证单 Pane、双 Pane 和多 Tab 的当前 Pane 归属，切换、关闭、warm Tab 淘汰、应用
