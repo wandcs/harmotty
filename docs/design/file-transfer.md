@@ -526,7 +526,7 @@ IDLE
 文件字节不得经过 ArkTS、WebView H2 Bridge 或终端输出中转。Rust 从已验证的本地
 受控路径流式读写；ArkTS 只接收进度、完成和安全错误类别。
 
-当前 `russh 0.62.4` 上游示例使用 `russh-sftp 2.3.0`。它是实现候选，不是未经验证
+当前 `russh 0.62.5` 上游示例使用 `russh-sftp 2.3.0`。它是实现候选，不是未经验证
 即可加入的结论；落地前必须完成许可证、依赖、ARM64 构建和目标服务器互操作审计。
 
 ### 6.3 进度与错误
@@ -949,7 +949,7 @@ Host/Identity 用例按 8.1.4 的最小复用范围实现；冲突用例按 8.1.
 - [Chromium：下载冲突使用扩展名前的数字计数器](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/components/download/internal/common/download_path_reservation_tracker.cc)
 - [Chromium Downloads API：`uniquify` 冲突行为](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/common/extensions/api/downloads.webidl)
 - [Apple：保留多个冲突版本时为额外版本增加数字](https://support.apple.com/guide/mac-help/mh40780/mac)
-- [russh 0.62.4 SFTP client 示例](https://docs.rs/crate/russh/0.62.4/source/examples/sftp_client.rs)
+- [russh 0.62.5 SFTP client 示例](https://docs.rs/crate/russh/0.62.5/source/examples/sftp_client.rs)
 - [`russh-sftp` 2.3.0 文档](https://docs.rs/russh-sftp/2.3.0/russh_sftp/)
 - [`russh-sftp` `SftpSession`：create、open flags 与 rename](https://docs.rs/russh-sftp/2.3.0/russh_sftp/client/struct.SftpSession.html)
 - [HarmonyOS 文件授权持久化](https://developer.huawei.com/consumer/cn/doc/HarmonyOS-Guides/native-fileshare-guidelines)

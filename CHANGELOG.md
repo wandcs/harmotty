@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Security
+
+- Updated `russh` from 0.62.4 to 0.62.5 to enforce established-channel
+  validation in the repository-only SSH server fixture while retaining the
+  production client's existing `ring`, RSA and no-default-features boundary.
+
 ## [1.1.1] - 2026-08-06
 
 ### Fixed

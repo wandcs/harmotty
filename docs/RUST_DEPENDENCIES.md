@@ -1,6 +1,6 @@
 # Rust Dependency License Inventory
 
-Generated and reviewed on 2026-08-03 from `leantty_ssh/Cargo.lock` in a WSL
+Generated and reviewed on 2026-08-07 from `leantty_ssh/Cargo.lock` in a WSL
 shell opened at the mounted checkout:
 
 ```bash
@@ -15,7 +15,7 @@ conservatively even when they are not linked into the final shared library.
 
 ## Apache-2.0
 
-`russh 0.62.4`, `russh-cryptovec 0.62.0`, `russh-util 0.52.0`
+`russh 0.62.5`, `russh-cryptovec 0.62.0`, `russh-util 0.52.0`
 
 ## MIT
 

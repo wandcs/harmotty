@@ -85,14 +85,14 @@
 
 ## 4. 在正式候选封板前升级 russh
 
-Dependabot 告警 [`GHSA-m65r-rprj-r5rg` / `CVE-2026-68930`](https://github.com/Eugeny/russh/security/advisories/GHSA-m65r-rprj-r5rg)
+Dependabot 告警 [`GHSA-m65r-rprj-r5rg`](https://github.com/Eugeny/russh/security/advisories/GHSA-m65r-rprj-r5rg)
 影响 `russh <= 0.62.4` 的服务端 channel 生命周期，首个修复版本为 `0.62.5`。LeanTTY
 生产应用只使用客户端路径，直接受影响的是仓库专用 `russh::server` 认证 fixture；但
 `0.62.5` 同时修改客户端 `Channel::data()` 背压行为，因此仍须作为产品依赖升级验证，
 不能只按“测试工具修复”处理。该告警不改变已提交审核的 1.1.1，也不单独触发 1.1.2；
 升级及下列证据必须在选定 1.2.0 正式候选提交、运行完整发布门禁之前闭合。
 
-- [ ] 将 `leantty_ssh/Cargo.lock` 中的 `russh 0.62.4` 精确升级到 `0.62.5`，保持现有
+- [x] 将 `leantty_ssh/Cargo.lock` 中的 `russh 0.62.4` 精确升级到 `0.62.5`，保持现有
   `ring`、`rsa` 和 `default-features = false` 边界；核对锁文件只包含预期依赖变化，
   同步 `RUST_DEPENDENCIES.md`、开发环境、第三方声明和 `CHANGELOG.md` 中受影响的版本及
   安全记录。不修改或 vendoring russh 源码，不为此次补丁升级新增传输抽象。
