@@ -280,9 +280,9 @@ assert.match(terminalHtml,
 assert.doesNotMatch(terminalHtml, /term\.scrollToTop\(\)/,
   'search must not pre-scroll the viewport before the addon locates the first match');
 assert.match(terminalHtml,
-  /terminalContainer\.addEventListener\('mousedown',[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(false\);[\s\S]*?true\);/,
+  /terminalContainer\.addEventListener\('mousedown', function\(event\) \{[\s\S]*?panel\.contains\(event\.target\)[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(false\);[\s\S]*?true\);/,
   'terminal pointer interaction must release search-owned selection before normal selection, links, or mouse reporting');
-const searchPointerRelease = terminalHtml.indexOf("terminalContainer.addEventListener('mousedown', function() {");
+const searchPointerRelease = terminalHtml.indexOf("terminalContainer.addEventListener('mousedown', function(event) {");
 const existingPointerDispatch = terminalHtml.indexOf(
   "terminalContainer.addEventListener('mousedown', beginLinkClick, true);");
 assert.ok(searchPointerRelease >= 0 && searchPointerRelease < existingPointerDispatch,
@@ -290,6 +290,9 @@ assert.ok(searchPointerRelease >= 0 && searchPointerRelease < existingPointerDis
 const searchPointerReleaseBody = terminalHtml.slice(searchPointerRelease, existingPointerDispatch);
 assert.doesNotMatch(searchPointerReleaseBody, /preventDefault|stopPropagation|stopImmediatePropagation/,
   'search selection release must not consume the pointer event');
+assert.match(searchPointerReleaseBody,
+  /var panel = searchElement\('search-panel'\);[\s\S]*?panel\.contains\(event\.target\)[\s\S]*?return;/,
+  'search controls must remain interactive instead of being treated as terminal pointer input');
 assert.match(terminalHtml,
   /function applyTerminalTheme\(themeObj\)[\s\S]*?if \(isSearchOpen\(\)\) closeSearch\(true\);/,
   'theme changes must close short-lived search state before replacing decoration colors');

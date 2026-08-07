@@ -907,7 +907,9 @@
       });
       term.loadAddon(webLinksAddon);
       terminalContainer.addEventListener('wheel', handleAlternateWheel, true);
-      terminalContainer.addEventListener('mousedown', function() {
+      terminalContainer.addEventListener('mousedown', function(event) {
+        var panel = searchElement('search-panel');
+        if (panel && event.target && panel.contains(event.target)) return;
         if (isSearchOpen()) closeSearch(false);
       }, true);
       terminalContainer.addEventListener('mousedown', beginLinkClick, true);
