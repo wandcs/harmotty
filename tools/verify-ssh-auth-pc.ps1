@@ -510,7 +510,10 @@ function Submit-ConnectedInput {
 }
 
 function Invoke-LeanTTYPasteShortcut {
-    & $hdc -t $Target shell 'uitest uiInput keyEvent 2072 2038' | Out-Null
+    # HAD-W32 does not synthesize a trusted ArkWeb paste event for a two-key
+    # automation chord. Alt is ignored by the Web Ctrl+V route while allowing
+    # the system UI injector to deliver the complete browser key event.
+    & $hdc -t $Target shell 'uitest uiInput keyEvent 2072 2045 2038' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY paste shortcut' }
 }
 
@@ -830,6 +833,7 @@ function Write-AuthEvidence {
             fixedDelayUsedAsVerdict = $false
             paneRouting = 'sorted-terminal-input-accessibility-nodes'
             minimizeTrigger = 'HarmonyOS-EnhanceMinimizeBtn'
+            pasteTrigger = 'HarmonyOS-uitest-Ctrl-Alt-V-trusted-browser-event'
         }
         preferences = [ordered]@{
             verificationRequested = [bool]$VerifyPreferencesUnchanged

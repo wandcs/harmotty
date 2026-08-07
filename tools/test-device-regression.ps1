@@ -414,6 +414,7 @@ foreach ($scriptName in @(
             $content.Contains("'ltty-input-check russhmain'") -and
             $content.Contains("'ltty-paste-prepare russhmain 524288'") -and
             $content.Contains("'Clipboard paste ok,524288'") -and
+            $content.Contains("'uitest uiInput keyEvent 2072 2045 2038'") -and
             $content.Contains("'ltty-perf-prepare russhmain 12000 80'") -and
             $content.Contains('"completenessPercent":100') -and
             $content.Contains("'resize cols=\d+ rows=\d+'") -and
