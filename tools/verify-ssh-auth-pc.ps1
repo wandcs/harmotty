@@ -1244,7 +1244,9 @@ try {
         -Pattern 'paste case=russhmain bytes=524288 result=matched' `
         -TimeoutSeconds 30 | Out-Null
 
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-perf-prepare russhmain 12000 80'
+    Wait-AuthLog -Pattern 'Tab title update: .*LTTY_PERF_BEGIN__:russhmain:' -TimeoutSeconds 15
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-perf-run russhmain'
     Wait-AuthLog `
@@ -1299,7 +1301,11 @@ try {
         $memorySamples = [Collections.Generic.List[object]]::new()
         for ($sampleIndex = 1; $sampleIndex -le 3; $sampleIndex++) {
             $caseId = $modeSlug + '0' + $sampleIndex.ToString()
+            Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
             Submit-ConnectedInput -Text "ltty-perf-prepare $caseId 12000 80"
+            Wait-AuthLog `
+                -Pattern ('Tab title update: .*LTTY_PERF_BEGIN__:' + $caseId + ':') `
+                -TimeoutSeconds 15
             Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
             Submit-ConnectedInput -Text "ltty-perf-run $caseId"
             Wait-AuthLog `

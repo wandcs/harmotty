@@ -433,6 +433,7 @@ foreach ($scriptName in @(
             $content.Contains("'performance-matrix'") -and
             $content.Contains("@('Off', 'Low', 'Medium', 'High', 'Extreme')") -and
             $content.Contains('ltty-perf-prepare $caseId 12000 80') -and
+            $content.Contains("'Tab title update: .*LTTY_PERF_BEGIN__:' + `$caseId + ':'") -and
             $content.Contains('renderSamples = @($renderSamples)') -and
             $content.Contains('memorySamples = @($memorySamples)') -and
             $content.Contains("hidumper -s 10 -a 'hitchs app0'") -and
