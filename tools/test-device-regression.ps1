@@ -466,6 +466,39 @@ foreach ($scriptName in @(
             $content.Contains('transientSearchClosed = $searchClosed') -and
             $content.Contains('Stop-LeanTTYDeviceAwakeLease')
         ) 'Terminal-search physical scenario lacks identity, product routing, evidence, or cleanup'
+
+        $tokens = $null
+        $parseErrors = $null
+        $syntaxTree = [Management.Automation.Language.Parser]::ParseFile(
+            $scriptPath,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+        Assert-True ($parseErrors.Count -eq 0) 'Terminal-search harness could not be parsed for layout tests'
+        foreach ($functionName in 'Get-LeanTTYTerminalContentTop', 'Get-LeanTTYTabNodes') {
+            $functionDefinition = $syntaxTree.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -eq $functionName
+            }, $true) | Select-Object -First 1
+            Assert-True ($null -ne $functionDefinition) "Missing terminal-search helper: $functionName"
+            Invoke-Expression $functionDefinition.Extent.Text
+        }
+        $scaledChromeLayout = @'
+{
+  "attributes": {"type":"root","bounds":"[0,0][2926,1926]"},
+  "children": [
+    {"attributes":{"type":"Stack","clickable":"true","description":"active","bounds":"[143,67][470,135]"},"children":[]},
+    {"attributes":{"type":"Stack","clickable":"true","description":"content decoy","bounds":"[143,300][470,368]"},"children":[]},
+    {"attributes":{"type":"Web","visible":"true","originalText":"resource:/RAWFILE/terminal.html","bounds":"[121,135][2926,1926]"},"children":[]}
+  ]
+}
+'@ | ConvertFrom-Json -Depth 10
+        $scaledTabs = @(Get-LeanTTYTabNodes -Layout $scaledChromeLayout)
+        Assert-True (
+            $scaledTabs.Count -eq 1 -and
+            [string]$scaledTabs[0].attributes.description -eq 'active'
+        ) 'Terminal-search harness did not derive the scaled Chrome boundary from terminal content'
     }
 }
 
