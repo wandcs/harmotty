@@ -263,6 +263,20 @@ try {
         (ConvertTo-LeanTTYWslPath -WindowsPath 'D:\SDK\native sysroot') -eq
         '/mnt/d/SDK/native sysroot'
     ) 'WSL path conversion did not preserve spaces'
+    $mappedCargoPath = ConvertFrom-LeanTTYWslPathWithinRoot `
+        -WslRoot '/home/test/.cargo' `
+        -WindowsRoot '\\wsl.localhost\Ubuntu-26.04\home\test\.cargo' `
+        -WslPath '/home/test/.cargo/registry/src/index.example/russh-0.62.5/Cargo.toml'
+    Assert-True (
+        $mappedCargoPath -eq
+        '\\wsl.localhost\Ubuntu-26.04\home\test\.cargo\registry\src\index.example\russh-0.62.5\Cargo.toml'
+    ) 'WSL Cargo path conversion did not preserve the path within Cargo home'
+    Assert-Throws -Action {
+        ConvertFrom-LeanTTYWslPathWithinRoot `
+            -WslRoot '/home/test/.cargo' `
+            -WindowsRoot '\\wsl.localhost\Ubuntu-26.04\home\test\.cargo' `
+            -WslPath '/home/test/.cargo-foreign/registry/Cargo.toml'
+    } -Message 'WSL Cargo path conversion accepted a path outside Cargo home'
 
     $devBuildText = Get-Content -LiteralPath (
         Join-Path $PSScriptRoot 'dev-build.ps1'
@@ -309,11 +323,13 @@ try {
         )).Count -ge 2 -and
         $buildAllText.Contains("entry\libs\arm64-v8a\libleantty_ssh.so") -and
         $buildAllText.Contains("abi = 'arm64-v8a'") -and
-        $buildAllText.Contains('--filter-platform aarch64-unknown-linux-ohos')
+        $buildAllText.Contains("'--filter-platform', 'aarch64-unknown-linux-ohos'")
     ) 'Release packaging no longer enforces one ARM64 ABI across HAP, APP and metadata'
     Assert-True (
         $buildAllText.Contains("'THIRD_PARTY_NOTICES.md' =") -and
-        $buildAllText.Contains('Unable to resolve locked ARM64 Rust dependencies for release notices')
+        $buildAllText.Contains('Unable to resolve locked ARM64 Rust dependencies for release notices') -and
+        $buildAllText.Contains('Invoke-LeanTTYRustWsl') -and
+        -not $buildAllText.Contains('& cargo metadata --locked --offline')
     ) 'Release artifacts no longer require locked dependency license notices'
     Assert-True (
         Test-Path -LiteralPath (Join-Path $PSScriptRoot 'test-acceptance-harness.ps1') -PathType Leaf

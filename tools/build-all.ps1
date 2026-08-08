@@ -22,6 +22,7 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'build-lock.ps1')
 . (Join-Path $PSScriptRoot 'package-policy.ps1')
 . (Join-Path $PSScriptRoot 'acceptance-source.ps1')
+. (Join-Path $PSScriptRoot 'rust-wsl.ps1')
 $productName = 'default'
 $projectProfilePath = Join-Path $repoRoot 'build-profile.json5'
 $localSigningConfigPath = Join-Path $repoRoot 'signing.local.json5'
@@ -532,15 +533,17 @@ if ($Metadata) {
 
     $rustLicenseDir = Join-Path $licenseDir 'rust'
     New-Item -ItemType Directory -Force -Path $rustLicenseDir | Out-Null
-    Push-Location (Join-Path $repoRoot 'leantty_ssh')
     try {
-        $cargoMetadataJson = & cargo metadata --locked --offline `
-            --filter-platform aarch64-unknown-linux-ohos --format-version 1
-        $cargoMetadataExitCode = $LASTEXITCODE
-    } finally {
-        Pop-Location
-    }
-    if ($cargoMetadataExitCode -ne 0) {
+        $cargoMetadataJson = Invoke-LeanTTYRustWsl -RepoRoot $repoRoot -CargoArguments @(
+            'metadata',
+            '--manifest-path', './leantty_ssh/Cargo.toml',
+            '--locked',
+            '--offline',
+            '--filter-platform', 'aarch64-unknown-linux-ohos',
+            '--format-version', '1'
+        )
+        $wslCargoHome = Get-LeanTTYWslCargoHome
+    } catch {
         throw 'Unable to resolve locked ARM64 Rust dependencies for release notices'
     }
     $cargoMetadata = ($cargoMetadataJson -join "`n") | ConvertFrom-Json
@@ -557,7 +560,11 @@ if ($Metadata) {
             throw "Rust package has no license metadata: $($package.name) $($package.version)"
         }
 
-        $packageSourceDir = Split-Path -Parent $package.manifest_path
+        $packageManifestPath = ConvertFrom-LeanTTYWslPathWithinRoot `
+            -WslRoot $wslCargoHome.WslPath `
+            -WindowsRoot $wslCargoHome.WindowsPath `
+            -WslPath $package.manifest_path
+        $packageSourceDir = Split-Path -Parent $packageManifestPath
         $licenseFiles = @(Get-ChildItem -LiteralPath $packageSourceDir -File |
             Where-Object {
                 $_.Name -match '^(?i:LICENSE|LICENCE|COPYING|COPYRIGHT|NOTICE|UNLICENSE)'
