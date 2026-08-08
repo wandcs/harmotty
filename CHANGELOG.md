@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [1.2.0] - In development
+## [1.2.0] - 2026-08-08
 
 ### Added
 
