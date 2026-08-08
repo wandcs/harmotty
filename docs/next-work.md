@@ -46,10 +46,10 @@ SSH 主路径、保留候选搜索矩阵、窗口/UI 证据复核、BEL、五档
   `Ctrl+Shift+W`；若按键后前台切到飞书，应关闭飞书重试，不修改 LeanTTY。
 - [ ] 在用户实际 SSH 服务器上用 Medium 和 Extreme 各完成一轮 tmux、vim、less 与一个
   主流 Agent TUI，检查中文/宽字符、alternate buffer、selection、复制粘贴、OSC 52、
-  HTTP(S)/OSC 8 链接、鼠标上报、滚轮和 resize；随后在系统 reduced-motion 开启时触发
-  活动/后台 Tab/分屏 BEL，确认只保留静态标记、没有呼吸动画，并恢复原系统设置。HDC
-  设置搜索只发现“开发者选项 → 过渡动画缩放”，未擅自改动，不能冒充用户级
-  reduced-motion 验收。
+  HTTP(S)/OSC 8 链接、鼠标上报、滚轮和 resize，并主观确认 Extreme 可读性及 BEL 节奏。
+  当前 HAD-W32 设置搜索对“减少动态效果”无结果；“动画”只返回开发者选项的过渡动画
+  缩放。SDK 只提供 reduced-motion 状态读取、没有设置接口，因此当前目标系统的用户级
+  reduced-motion 场景记为不适用，不改开发者倍率；静态降级仍由自动化门禁约束。
 
 ## 2. 收口与发布
 

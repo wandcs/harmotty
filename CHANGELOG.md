@@ -48,7 +48,9 @@
   terminal search ownership/lifecycle, UI/window review, SSH transport, BEL,
   five transparency levels and continuous-output performance distributions.
   Remaining acceptance is limited to real keyboard/IME, user-server TUI,
-  reduced-motion and subjective visual checks before release packaging.
+  and subjective visual checks before release packaging; the target system has
+  no discoverable user-level reduced-motion setting, so that device scenario is
+  recorded as not applicable while the static fallback remains covered.
 
 ## [1.1.1] - 2026-08-06
 

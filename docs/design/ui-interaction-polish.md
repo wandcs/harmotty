@@ -552,8 +552,9 @@ HDC 吞掉最终 `ssh-keygen -R` 的 Enter 提交遥测。该假阴性促使断�
 客观设备矩阵已经覆盖当前深色主题的窗口尺寸、Tab/Pane、搜索、五档 alpha/Regular、BEL
 状态、持续输出、最小化/恢复和 renderer 生命周期。HDC 不能代替以下人为判断：真实物理
 键盘 Tab/Shift+Tab focus ring；中英文 IME；用户服务器上的 tmux/vim/less/Agent TUI；
-Extreme 的长期可读性；BEL 节奏是否舒适；系统 reduced-motion。设置搜索只找到“开发者
-选项 → 过渡动画缩放”，本轮没有改动它，也不把开发者动画倍率冒充用户级 reduced-motion。
+Extreme 的长期可读性；BEL 节奏是否舒适。当前 HAD-W32 设置搜索对“减少动态效果”无结果，
+“动画”只找到“开发者选项 → 过渡动画缩放”；SDK 只提供状态读取、没有设置接口，因此用户级
+reduced-motion 在当前目标系统记为不适用。没有改动开发者动画倍率，也不拿它冒充该场景。
 
 ## 验证边界
 
@@ -586,8 +587,9 @@ Extreme 的长期可读性；BEL 节奏是否舒适；系统 reduced-motion。�
 - 记录目标设备、精确 HAP/commit、截图或录屏、layout/hilog、重试和清理结果；先比较
   不透明与候选透明的分布和失败域，不用单次主观感受代替证据。
 
-仍需人工完成真实物理键盘 focus ring、中英文输入法、用户服务器 TUI、主观可读性/BEL
-节奏和系统 reduced-motion；详情以 `docs/next-work.md` 的两项活动工作为准。
+仍需人工完成真实物理键盘 focus ring、中英文输入法、用户服务器 TUI 和主观可读性/BEL
+节奏；当前系统未暴露的用户级 reduced-motion 不阻塞发布，详情以 `docs/next-work.md` 的
+两项活动工作为准。
 
 ## 裁剪与停止条件
 
@@ -606,7 +608,8 @@ Extreme 的长期可读性；BEL 节奏是否舒适；系统 reduced-motion。�
 
 - 2026-08-08：精确保留候选完成 UI/window 证据复核、搜索、SSH 主路径、BEL、五档透明与
   五档持续输出分布；候选客观停止条件均未触发。真实键盘/IME、用户服务器 TUI、主观观感
-  和系统 reduced-motion 不由 HDC 代签，继续保留为最后人工门禁。
+  不由 HDC 代签，继续保留为最后人工门禁；当前目标系统未暴露用户级 reduced-motion，
+  该场景记为不适用并保留静态自动化约束。
 - 2026-08-08：提交前审查保持 `tab.id` 为稳定渲染身份，BEL 呼吸由瞬时 token/Prop 触发，
   不再通过改变 ForEach key 重建整个 Tab，避免提示动画干扰 Tab/关闭按钮焦点与组件状态。
 - 2026-08-08：用户通过调试比较器选择 Regular；正式实现固定一次根级
