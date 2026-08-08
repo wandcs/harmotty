@@ -377,12 +377,16 @@ BEL 是本轮唯一允许具有明显运动的元素。
 搜索条目标宽度约 344px，按以下紧密分组：
 
 ```text
-[ Find…              1/7 ][↑][↓][×]
+[ Find…              1/7 ][↑|↓] [×]
 ```
 
 - 查询输入可用宽度保持约 190–220px；结果区固定约 48px；按钮为 26–28px，按钮间距 2px。
 - 空查询和非空无结果都显示 `0/0`；普通结果显示当前位置/总数；超出上限显示 `1000+`。
   空查询的可访问说明为 `Type to search`，非空无结果为 `No results`。
+- Previous/Next 是同一搜索导航任务，共用一条外框并以中线分隔；Close 是退出动作，使用
+  独立外框和 2px 额外间距。三个按钮都保留 26px 命中尺寸、可见 focus ring，并以统一的
+  300ms 深色 Tips 显示 `Shift+Enter`、`Enter`、`Esc`。禁用导航只弱化图标颜色，不降低
+  整个按钮 opacity，避免连带削弱 Tips 可读性。
 - 面板仍位于当前 Terminal Surface 右上角，但必须避开 Pane 关闭按钮、scrollbar 和分屏
   边界；窄 Pane 时输入区先收缩，按钮与结果反馈保持可操作。
 - 不改变 `Ctrl+Alt+F`、Enter、Shift+Enter、Escape、输入法、焦点和搜索所有权语义。

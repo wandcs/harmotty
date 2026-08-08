@@ -859,6 +859,31 @@ assert.match(terminalHtml,
 assert.match(terminalHtml, /#search-panel button\s*\{[\s\S]*?flex:\s*0 0 26px;[\s\S]*?width:\s*26px;/,
   'search actions must remain compact and equally sized');
 assert.match(terminalHtml,
+  /id="search-navigation" role="group" aria-label="Search result navigation"[\s\S]*?id="search-previous"[\s\S]*?id="search-next"[\s\S]*?<\/div>[\s\S]*?id="search-close"/,
+  'previous and next must share a semantic navigation group while close remains separate');
+assert.match(terminalHtml,
+  /#search-navigation\s*\{[\s\S]*?border:\s*1px solid var\(--search-border\);[\s\S]*?#search-next\s*\{[\s\S]*?border-left:\s*1px solid var\(--search-border\);[\s\S]*?#search-close\s*\{[\s\S]*?border:\s*1px solid var\(--search-border\);/,
+  'search navigation must use one grouped outline and close must keep an independent outline');
+for (const [id, shortcut] of [
+  ['search-previous', 'Shift+Enter'],
+  ['search-next', 'Enter'],
+  ['search-close', 'Esc']
+]) {
+  assert.match(terminalHtml,
+    new RegExp(`id="${id}"[\\s\\S]*?data-tip="${shortcut.replaceAll('+', '\\+')}"`),
+    `${id} must expose its shortcut through the shared hover-tip treatment`);
+}
+assert.match(terminalHtml,
+  /#search-panel button\[data-tip\]::after[\s\S]*?transition-delay:\s*300ms;/,
+  'search shortcut tips must use the same restrained 300 ms hover delay');
+assert.match(terminalHtml,
+  /#search-panel button:disabled\s*\{\s*color:\s*var\(--search-border\);\s*\}/,
+  'disabled navigation must mute only the icon so its shortcut tip stays readable');
+assert.doesNotMatch(terminalHtml, /#search-panel button:disabled\s*\{[^}]*opacity:/,
+  'disabled navigation must not fade the hover-tip pseudo elements');
+assert.doesNotMatch(terminalHtml, /id="search-(?:previous|next|close)"[^>]*\stitle=/,
+  'search controls must not stack browser title popups over the shared shortcut tips');
+assert.match(terminalHtml,
   /new Terminal\(\{[\s\S]*?allowProposedApi:\s*true,[\s\S]*?allowTransparency:\s*true,/,
   'xterm transparency must be enabled before the terminal opens');
 assert.match(terminalHtml,

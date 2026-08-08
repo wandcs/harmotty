@@ -400,6 +400,26 @@ normal/alternate buffer、selection/clipboard/OSC/link/mouse policy、resize 与
 重建；HDC chord 证明生产 `Ctrl+Alt+F` 路由，但证据明确声明它不能替代真实物理键盘和
 中英文 IME。
 
+## 2026-08-08 搜索按钮视觉收敛
+
+搜索条保持 344px、26px 按钮和既有事件所有权，只调整三个图标按钮的局部结构与表现：
+Previous/Next 进入语义 `group`，共用一条外框并以 1px 中线分隔；Close 保持独立外框和
+额外 2px 间距。没有把三个动作合成一个控件：前后导航属于同一任务，Close 是退出边界。
+三者删除浏览器 `title`，改用同一 300ms 深色 Tips 显示 `Shift+Enter`、`Enter`、`Esc`；
+无障碍名称同时包含动作和键位。空查询时 Previous/Next 只用主题 border token 弱化图标，
+不降低节点 opacity，因此禁用态 Tips 仍保持完整对比度。
+
+Web terminal policy 的结构契约先按旧 DOM 失败、实现后通过；测试同时锁定分组/独立边界、
+三项 Tips、焦点和禁用态不连带淡化提示。HAD-W32（USB、ARM64）debug HAP 构建、测试签名、
+安装和启动成功，SHA-256 为
+`D07734F99822E798C36A0F90D35F973297BE12E08586CD624E2CC26FB43804DF`，源码基线提交为
+`f31cebf327920b8fccd6211351e0811cdd4eecf0` 加当前工作树改动。真机常态截图确认导航组外框、
+中线、独立 Close 及紧凑间距；真实鼠标逐项显示 `Shift+Enter`、`Enter`、`Esc`，空查询的
+禁用导航提示仍清楚。输入 `t` 后得到 `1/2`，Tab 依次聚焦 Previous、Next、Close；点击
+Next/Previous 得到 `2/2 → 1/2`，点击 Close 后搜索关闭。截图和 layout 位于
+`C:\tmp\leantty-search-controls-20260808-r1`。该 debug HAP 只证明本次定向改动，不替代
+从新精确提交重建的正式候选。
+
 ## 人工验收结果
 
 - 2026-08-08，用户关闭鸿蒙飞书后，用真实物理键盘和中英文输入法完成组合输入、导航、

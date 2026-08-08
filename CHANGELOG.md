@@ -38,6 +38,10 @@
   `Ctrl+=` adjust font size and `Ctrl+Alt+-` / `Ctrl+Alt+=` adjust transparency,
   including while the menu is open. Each button now shows its shortcut in a
   native hover tip and exposes the same key in its accessible description.
+- Grouped terminal-search Previous/Next under one outlined navigation control
+  with a separator while keeping Close independently outlined. All three icons
+  now use consistent shortcut tips, accessible key descriptions and visible
+  focus treatment; disabled navigation no longer fades its tip text.
 
 ### Security
 
