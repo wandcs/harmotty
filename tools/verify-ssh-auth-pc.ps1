@@ -764,12 +764,12 @@ function Get-AuthPerfRenderRecord {
 function Invoke-AuthPerfSample {
     param([Parameter(Mandatory = $true)][string]$CaseId)
     for ($commandAttempt = 1; $commandAttempt -le 2; $commandAttempt++) {
-        $preparedPattern = "perf case=$CaseId bytes=696000 state=prepared"
-        $preparedCount = Get-FixtureLogMatchCount -Pattern ([regex]::Escape($preparedPattern))
+        $preparedPattern = 'perf case=' + [regex]::Escape($CaseId) + ' bytes=\d+ state=prepared'
+        $preparedCount = Get-FixtureLogMatchCount -Pattern $preparedPattern
         Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
         Submit-ConnectedInput -Text "ltty-perf-prepare $CaseId 12000 80"
         Wait-FixtureLogMatchCount `
-            -Pattern ([regex]::Escape($preparedPattern)) `
+            -Pattern $preparedPattern `
             -GreaterThan $preparedCount `
             -TimeoutSeconds 15 | Out-Null
 

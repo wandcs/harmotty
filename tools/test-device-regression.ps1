@@ -433,6 +433,7 @@ foreach ($scriptName in @(
             $content.Contains("'performance-matrix'") -and
             $content.Contains("@('Off', 'Low', 'Medium', 'High', 'Extreme')") -and
             $content.Contains('Invoke-AuthPerfSample -CaseId $caseId') -and
+            $content.Contains("' bytes=\d+ state=prepared'") -and
             $content.Contains('Fixture did not accept the PERF run command') -and
             $content.Contains('commandAttempts') -and
             $content.Contains('renderSamples = @($renderSamples)') -and
