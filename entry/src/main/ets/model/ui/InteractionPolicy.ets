@@ -55,6 +55,15 @@ export class InteractionPolicy {
     return hasActiveSession && !confirmationSuppressed
   }
 
+  static shouldPersistBellAttention(isActiveTab: boolean, isFocusedPane: boolean,
+    isWindowVisible: boolean, isOverlayOpen: boolean): boolean {
+    return !isActiveTab || !isFocusedPane || !isWindowVisible || isOverlayOpen
+  }
+
+  static bellPulseCount(persistAttention: boolean): number {
+    return persistAttention ? 2 : 1
+  }
+
   static workspaceNavigationAction(keyCode: number, ctrlKey: boolean,
     altKey: boolean, shiftKey: boolean): WorkspaceNavigationAction {
     if (!ctrlKey) {

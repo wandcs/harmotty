@@ -7,8 +7,9 @@
   <link rel="stylesheet" href="xterm.css">
   <style>
     :root {
-      --terminal-background: #1E1E2E;
+      --terminal-background: rgba(0, 0, 0, 0);
       --terminal-foreground: #CDD6F4;
+      --terminal-overlay-background: #1E1E2E;
       --search-border: #585B70;
       --search-control: #45475A;
       --search-accent: #89B4FA;
@@ -20,7 +21,7 @@
     #terminal-container,
     #terminal-container > .xterm,
     .xterm .xterm-viewport {
-      background-color: var(--terminal-background);
+      background-color: transparent;
     }
     #terminal-container > .xterm {
       width: 100%;
@@ -50,9 +51,9 @@
       max-width: calc(100% - 24px);
       padding: 4px 8px;
       overflow: hidden;
-      color: #CDD6F4;
-      background: rgba(17, 17, 27, 0.94);
-      border: 1px solid rgba(205, 214, 244, 0.28);
+      color: var(--terminal-foreground);
+      background: var(--terminal-overlay-background);
+      border: 1px solid var(--search-border);
       border-radius: 4px;
       font: 12px 'HarmonyOS Sans', sans-serif;
       text-overflow: ellipsis;
@@ -62,17 +63,17 @@
     #search-panel {
       position: absolute;
       top: 8px;
-      right: 46px;
+      right: 54px;
       z-index: 30;
       display: flex;
       align-items: center;
-      width: 420px;
+      width: 344px;
       max-width: calc(100% - 56px);
       height: 34px;
       padding: 4px;
-      gap: 3px;
+      gap: 2px;
       color: var(--terminal-foreground);
-      background: var(--terminal-background);
+      background: var(--terminal-overlay-background);
       border: 1px solid var(--search-border);
       border-radius: 5px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
@@ -82,7 +83,7 @@
     #search-input {
       min-width: 0;
       height: 24px;
-      flex: 1 1 auto;
+      flex: 1 1 208px;
       padding: 1px 7px;
       color: var(--terminal-foreground);
       caret-color: var(--search-accent);
@@ -95,8 +96,9 @@
     #search-input:focus { border-color: var(--search-accent); }
     #search-result {
       flex: 0 0 auto;
-      min-width: 44px;
-      max-width: 90px;
+      min-width: 48px;
+      width: 48px;
+      max-width: 48px;
       overflow: hidden;
       color: var(--terminal-foreground);
       text-align: center;
@@ -104,16 +106,16 @@
       white-space: nowrap;
     }
     #search-panel button {
-      flex: 0 0 24px;
-      width: 24px;
-      height: 24px;
+      flex: 0 0 26px;
+      width: 26px;
+      height: 26px;
       padding: 0;
       color: var(--terminal-foreground);
       background: transparent;
       border: 1px solid transparent;
       border-radius: 3px;
       outline: none;
-      font: 16px/22px 'HarmonyOS Sans', sans-serif;
+      font: 16px/24px 'HarmonyOS Sans', sans-serif;
     }
     #search-panel button:hover:not(:disabled),
     #search-panel button:focus-visible {
@@ -431,7 +433,10 @@
         searchQuery, searchResultIndex, searchResultCount, SEARCH_HIGHLIGHT_LIMIT);
       if (result) {
         result.textContent = label;
-        result.title = label;
+        var resultDescription = searchQuery.length === 0 ? 'Type to search' :
+          (searchResultCount <= 0 ? 'No results' : label);
+        result.title = resultDescription;
+        result.setAttribute('aria-label', resultDescription);
       }
       var navigationDisabled = searchQuery.length === 0 || searchResultCount <= 0;
       if (previous) previous.disabled = navigationDisabled;
@@ -685,7 +690,7 @@
     }
 
     var defaultTheme = {
-      background: '#1E1E2E',
+      background: 'rgba(0, 0, 0, 0)',
       foreground: '#CDD6F4',
       cursor: '#F5E0DC',
       cursorAccent: '#1E1E2E',
@@ -716,6 +721,8 @@
       themeObj.overviewRulerBorder = themeObj.background;
       document.documentElement.style.setProperty('--terminal-background', themeObj.background);
       document.documentElement.style.setProperty('--terminal-foreground', themeObj.foreground || '#CDD6F4');
+      document.documentElement.style.setProperty('--terminal-overlay-background',
+        themeObj.cursorAccent || '#1E1E2E');
       document.documentElement.style.setProperty('--search-border',
         themeObj.selectionBackground || '#585B70');
       document.documentElement.style.setProperty('--search-control',
@@ -871,6 +878,7 @@
       applyTerminalTheme(defaultTheme);
       term = new Terminal({
         allowProposedApi: true,
+        allowTransparency: true,
         theme: defaultTheme,
         fontSize: 14,
         fontFamily: "'JetBrains Mono Nerd Font Mono', 'HarmonyOS Sans Mono', monospace",

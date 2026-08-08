@@ -195,11 +195,12 @@ assert.equal(policy.shouldActivateLink(exactCtrl, 'none', true, true), false);
 assert.equal(policy.shouldRunTerminalSecondaryAction(false), true);
 assert.equal(policy.shouldRunTerminalSecondaryAction(true), false,
   'an open search must own secondary clicks until terminal mousedown closes it');
-assert.equal(policy.searchResultLabel('', -1, 0, 1000), '');
-assert.equal(policy.searchResultLabel('missing', -1, 0, 1000), 'No results');
+assert.equal(policy.searchResultLabel('', -1, 0, 1000), '0/0');
+assert.equal(policy.searchResultLabel('missing', -1, 0, 1000), '0/0');
 assert.equal(policy.searchResultLabel('match', 0, 2, 1000), '1/2');
 assert.equal(policy.searchResultLabel('match', 1, 2, 1000), '2/2');
-assert.equal(policy.searchResultLabel('match', -1, 1000, 1000), '1000+ results');
+assert.equal(policy.searchResultLabel('match', -1, 7, 1000), '0/7');
+assert.equal(policy.searchResultLabel('match', -1, 1000, 1000), '1000+');
 assert.equal(policy.wrappedControlIndex(0, 4, false), 1);
 assert.equal(policy.wrappedControlIndex(3, 4, false), 0);
 assert.equal(policy.wrappedControlIndex(0, 4, true), 3);
@@ -230,8 +231,8 @@ assert.match(terminalHtml,
   /\.xterm \.xterm-scrollable-element > \.scrollbar\.vertical > \.slider\s*\{[^}]*border:\s*2px solid transparent;[^}]*background-clip:\s*content-box !important;/s,
   'the scrollbar must keep an eight-pixel hit target with a compact visible thumb');
 assert.match(terminalHtml,
-  /html, body,[^}]*#terminal-container,[^}]*#terminal-container > \.xterm,[^}]*\.xterm \.xterm-viewport\s*\{[^}]*background(?:-color)?:\s*var\(--terminal-background\)/s,
-  'terminal padding and leftover cell space must share the active terminal background');
+  /html, body,[^}]*#terminal-container,[^}]*#terminal-container > \.xterm,[^}]*\.xterm \.xterm-viewport\s*\{[^}]*background(?:-color)?:\s*transparent/s,
+  'terminal padding and leftover cell space must expose the single ArkUI surface background');
 assert.match(terminalHtml, /document\.documentElement\.style\.setProperty\('--terminal-background', themeObj\.background\)/,
   'theme changes must propagate their background to the Web terminal chrome');
 assert.match(terminalHtml, /themeObj\.overviewRulerBorder = themeObj\.background/,
@@ -597,13 +598,67 @@ assert.doesNotMatch(terminalSurfaceController, /terminateRendererForAcceptance|A
 
 const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
+const entryAbility = readFileSync(
+  new URL('../../entry/src/main/ets/entryability/EntryAbility.ets', import.meta.url), 'utf8');
+const themeConstants = readFileSync(
+  new URL('../../entry/src/main/ets/view/theme/ThemeConstants.ets', import.meta.url), 'utf8');
+const themeManager = readFileSync(
+  new URL('../../entry/src/main/ets/view/theme/ThemeManager.ets', import.meta.url), 'utf8');
+const userPreferences = readFileSync(
+  new URL('../../entry/src/main/ets/model/settings/UserPreferences.ets', import.meta.url), 'utf8');
+const chromeBar = readFileSync(
+  new URL('../../entry/src/main/ets/view/components/ChromeBar.ets', import.meta.url), 'utf8');
+const entryModule = readFileSync(
+  new URL('../../entry/src/main/module.json5', import.meta.url), 'utf8');
+assert.match(entryAbility, /setWindowBackgroundColor\('#00000000'\)/,
+  'the native window must expose the content surface alpha to the compositor');
+assert.match(entryAbility, /setWindowContainerColor\('#00000000', '#FF1E1E2E'\)/,
+  'the active HarmonyOS PC container must expose the application surface while inactive stays opaque');
+assert.match(entryAbility,
+  /windowTransparencyAvailable[\s\S]*setWindowContainerColor[\s\S]*windowTransparencyAvailable', true/,
+  'content transparency must be enabled only after the platform container accepts transparency');
+assert.match(entryModule, /"name": "ohos\.permission\.SET_WINDOW_TRANSPARENT"/,
+  'the normal system-grant permission for transparent 2in1 containers must be declared');
+assert.match(indexPage,
+  /\.backgroundBlurStyle\(this\.backgroundMaterial,[\s\S]*FOLLOWS_WINDOW_ACTIVE_STATE/,
+  'one window-root material plane must follow the active window state');
+assert.match(indexPage,
+  /backgroundMaterial = this\.windowTransparencyAvailable[\s\S]*TransparencyMode\.OFF[\s\S]*BlurStyle\.BACKGROUND_REGULAR : BlurStyle\.NONE/,
+  'the fixed Regular material must apply only when platform transparency is active');
+assert.doesNotMatch(indexPage,
+  /BACKGROUND_THIN|BACKGROUND_THICK|BACKGROUND_ULTRA_THICK|\.backdropBlur\(|\.backgroundEffect\(|filter:\s*blur|Gaussian/,
+  'alternative material selectors and raw, CSS, WebGL, or custom Gaussian blur paths must stay out');
+assert.match(themeConstants,
+  /background: string = 'rgba\(0, 0, 0, 0\)'[\s\S]*surfaceBackground: string = '#D11E1E2E'/,
+  'the dark xterm renderer must stay transparent behind the content surface owner');
+assert.match(themeConstants,
+  /background: string = 'rgba\(0, 0, 0, 0\)'[\s\S]*surfaceBackground: string = '#D1EFF1F5'/,
+  'the light xterm renderer must stay transparent behind the content surface owner');
+assert.match(themeManager,
+  /HIGH = 0[\s\S]*MEDIUM = 1[\s\S]*LOW = 2[\s\S]*OFF = 3[\s\S]*EXTREME = 4/,
+  'the five-mode model must preserve the three existing semantic preference values');
+assert.match(themeManager,
+  /contentOpacity[\s\S]*1\.00[\s\S]*0\.72[\s\S]*0\.90[\s\S]*0\.60[\s\S]*0\.82/,
+  'theme authority must own all five approved content opacity values');
+assert.match(themeManager,
+  /chromeOpacity[\s\S]*1\.00[\s\S]*0\.80[\s\S]*0\.94[\s\S]*0\.70[\s\S]*0\.88/,
+  'theme authority must own all five derived Chrome opacity values');
+assert.match(userPreferences,
+  /TERMINAL_TRANSPARENCY_MODE_KEY[\s\S]*loadTransparencyMode\(\)[\s\S]*saveTransparencyMode\(value: number\)/,
+  'the semantic transparency mode must persist in the existing local preferences projection');
+assert.match(entryAbility,
+  /setTransparencyMode\([\s\S]*TransparencyPolicy\.normalize\(UserPreferences\.loadTransparencyMode\(\)\)/,
+  'startup must restore and validate the locally persisted transparency mode');
 assert.doesNotMatch(indexPage, /recyclePaneWebViewWhenDrained/,
   'normal disconnect and failure must keep the current terminal surface mounted');
 assert.match(indexPage, /runtime\.surface\.setOnOpenUrl\(/,
   'each terminal surface must route URL requests through its owning pane');
 assert.match(indexPage,
-  /InteractionPolicy\.isTerminalSearchShortcut\([\s\S]*?activePaneRuntime\(\)[\s\S]*?runtime\.surface\.openSearch\(\)/,
+  /InteractionPolicy\.isTerminalSearchShortcut\([\s\S]*?this\.openActivePaneSearch\(\)/,
   'the exact shortcut must target only the active pane runtime');
+assert.match(indexPage,
+  /private openActivePaneSearch\(\): void \{[\s\S]*?activePaneRuntime\(\)[\s\S]*?runtime\.surface\.openSearch\(\)/,
+  'shortcut and menu search must share the active-pane routing helper');
 assert.match(indexPage,
   /private activePaneRuntime\(\): PaneRuntime \| null \{[\s\S]*?this\.appVm\.getActivePane\(\)[\s\S]*?this\.findPaneRuntime\(pane\.id\)/,
   'search routing must resolve the stable active pane id instead of an adjacent runtime or index');
@@ -645,6 +700,11 @@ assert.match(acceptanceSource, /Invoke-WithLeanTTYAcceptanceSource/,
   'debug build transformation wrapper must exist');
 assert.match(acceptanceSource, /Acceptance: Rebuild Renderer/,
   'debug build transformation must own the renderer acceptance menu');
+assert.match(acceptanceSource,
+  /ACCEPTANCE_TESTS \? 7 : 6/,
+  'debug builds must add only the renderer trigger to keyboard menu traversal');
+assert.doesNotMatch(acceptanceSource, /Debug Material|Acceptance: Open Search|BACKGROUND_ULTRA_THICK/,
+  'debug builds must reuse production material and Search controls');
 assert.match(acceptanceSource, /terminateRendererForAcceptance/,
   'debug build transformation must own the renderer termination trigger');
 assert.match(acceptanceSource, /pasteClipboardForAcceptance/,
@@ -656,14 +716,61 @@ assert.match(indexPage, /for \(let i = 0; i < MENU_ACTION_COUNT; i\+\+\)/,
 assert.match(indexPage, /\(next \+ direction \+ MENU_ACTION_COUNT\) % MENU_ACTION_COUNT/,
   'keyboard menu selection must wrap across the compile-time action count');
 assert.match(indexPage,
-  /selected === 3\) \{ this\.handleFontIncrease\(\)[\s\S]*selected === 4\) \{ this\.handleFontReset\(\)[\s\S]*selected === 5\) \{ this\.handleFontDecrease\(\)/,
-  'Enter dispatch must map the reindexed font actions in menu order');
+  /selected === 4 \|\| selected === 5\) \{ return \}[\s\S]*selected === 3\)[\s\S]*this\.openActivePaneSearch\(\)/,
+  'Enter must leave both composite steppers stable while Search opens on the active pane');
 assert.match(indexPage,
-  /menuRow\(3, 'A⁺', 'Font Size \+'[\s\S]*menuRow\(4, 'Aa', 'Reset Font Size'[\s\S]*menuRow\(5, 'A⁻', 'Font Size -'/,
-  'the rendered menu must retain the three font actions at indices 3 through 5');
+  /menuRow\(3, '⌕', 'Search'[\s\S]*transparencyMenuRow\(\)[\s\S]*fontSizeMenuRow\(\)/,
+  'the rendered menu must place production Search before both composite steppers');
+assert.match(indexPage,
+  /menuRow\(3, '⌕', 'Search'[\s\S]*\(\) => \{ this\.openActivePaneSearch\(\) \}, true, false\)/,
+  'menu Search must close the menu without stealing focus back from the search field');
+assert.match(indexPage,
+  /Text\('−'\)[\s\S]*Text\(this\.transparencyLabel\)[\s\S]*Text\('\+'\)/,
+  'the visible transparency control must keep the fixed label between decrement and increment buttons');
+assert.match(indexPage,
+  /Text\('−'\)[\s\S]*\.enabled\(TransparencyPolicy\.canDecrease[\s\S]*Text\('\+'\)[\s\S]*\.enabled\(TransparencyPolicy\.canIncrease/,
+  'both transparency buttons must expose real disabled states at the range boundaries');
+assert.match(indexPage,
+  /private adjustTransparency\(direction: number\): void[\s\S]*canDecrease[\s\S]*canIncrease[\s\S]*stepTransparencyMode\(direction\)[\s\S]*this\.transparencyLabel = TransparencyPolicy\.label\(mode\)/,
+  'the open transparency row must clamp at both boundaries and update its label in place');
+assert.match(indexPage,
+  /menuSelectedIndex === 4[\s\S]*accessibilityText\('Transparency, ' \+ this\.transparencyLabel \+[\s\S]*Use left and right arrow keys to adjust/,
+  'the composite row must expose the current semantic level and keyboard adjustment guidance');
+assert.match(indexPage,
+  /menuSelectedIndex === 4 && event\.keyCode === 2014[\s\S]*adjustTransparency\(-1\)/,
+  'left must decrease only the selected transparency row');
+assert.match(indexPage,
+  /menuSelectedIndex === 4 && event\.keyCode === 2015[\s\S]*adjustTransparency\(1\)/,
+  'right must increase only the selected transparency row');
+assert.match(indexPage,
+  /fontSizeMenuRow\(\)[\s\S]*Text\('−'\)[\s\S]*Text\(this\.fontSize\.toString\(\) \+ ' px'\)[\s\S]*Text\('\+'\)/,
+  'the visible font control must mirror the transparency stepper interaction');
+assert.match(indexPage,
+  /\.enabled\(this\.fontSize > InteractionPolicy\.MIN_FONT_SIZE\)[\s\S]*\.enabled\(this\.fontSize < InteractionPolicy\.MAX_FONT_SIZE\)/,
+  'both font buttons must expose real disabled states at the range boundaries');
+assert.match(indexPage,
+  /menuSelectedIndex === 5 && event\.keyCode === 2014[\s\S]*handleFontDecrease\(\)[\s\S]*menuSelectedIndex === 5 && event\.keyCode === 2015[\s\S]*handleFontIncrease\(\)/,
+  'left and right must adjust only the selected font-size row');
+assert.doesNotMatch(indexPage, /'Font Size \+'|'Reset Font Size'|'Font Size -'/,
+  'the production menu must not retain three redundant font-size rows');
+assert.match(indexPage,
+  /private applyTheme\(\): void[\s\S]*for \(let i = 0; i < this\.paneRuntimes\.length; i\+\+\)[\s\S]*applyTerminalTheme\(themeJson\)/,
+  'changing transparency must reuse the theme bridge for every mounted pane');
+assert.match(indexPage,
+  /contentBg = theme\.background\(this\.windowTransparencyAvailable\)[\s\S]*chromeBg = theme\.chromeBackground\(this\.windowTransparencyAvailable\)/,
+  'both non-overlapping ArkUI surface owners must fall back to opaque when transparency is unavailable');
+assert.match(indexPage,
+  /ChromeBar\(\{[\s\S]*chromeBackground: this\.chromeBg[\s\S]*\.backgroundColor\(this\.contentBg\)/,
+  'Chrome and content must receive separate derived background surfaces');
+assert.match(chromeBar,
+  /@Prop chromeBackground: string[\s\S]*\.backgroundColor\(this\.chromeBackground\)/,
+  'ChromeBar must render the derived Chrome surface instead of its opaque palette base');
+assert.match(indexPage,
+  /@Watch\('onWindowTransparencyAvailabilityChanged'\)[\s\S]*onWindowTransparencyAvailabilityChanged\(\)[\s\S]*this\.applyTheme\(\)/,
+  'the initially opaque surface must refresh only after post-load window transparency succeeds');
 assert.match(acceptanceSource,
   /if \(ACCEPTANCE_TESTS\) \{[\s\S]*menuRow\(6, '↻', 'Acceptance: Rebuild Renderer'/,
-  'the debug source transformation must add the acceptance-only renderer entry');
+  'the debug source transformation must add only the acceptance renderer entry');
 assert.match(acceptanceSource,
   /private rebuildRendererForAcceptance[\s\S]*?if \(!ACCEPTANCE_TESTS\)[\s\S]*?captureSnapshot\(\(captured: boolean\)[\s\S]*?terminateRendererForAcceptance/,
   'the injected acceptance action must wait for a confirmed production snapshot before terminating the renderer');
@@ -681,6 +788,11 @@ const terminalPane = readFileSync(
   new URL('../../entry/src/main/ets/view/components/TerminalPane.ets', import.meta.url), 'utf8');
 assert.match(terminalPane, /renderMode:\s*RenderMode\.ASYNC_RENDER/,
   'terminal panes must use the normal asynchronous ArkWeb render mode');
+assert.doesNotMatch(terminalPane, /paneBackground/,
+  'terminal panes must not repeat the workspace alpha beneath ArkWeb');
+assert.match(terminalPane,
+  /\.backgroundColor\('#00000000'\)/,
+  'the ArkWeb graphic surface and pane stack must remain transparent');
 assert.match(terminalPane, /\.onlineImageAccess\(false\)/,
   'terminal panes must prevent packaged HTML from loading online images');
 assert.match(terminalPane, /sharedRenderProcessToken:\s*'leantty-terminal'/,
@@ -689,13 +801,16 @@ assert.doesNotMatch(terminalPane, /\.onRenderProcess(?:NotResponding|Responding)
   'temporary ArkWeb renderer responsiveness diagnostics must not remain');
 assert.doesNotMatch(terminalPane, /\.javaScriptProxy\(/,
   'the terminal pane must not expose the rejected output-pull proxy');
-assert.match(terminalPane, /@Prop needsAttention: boolean = false/,
-  'the pane must render its app-shell-owned attention state');
+assert.doesNotMatch(terminalPane, /\.border\(\{ width: 2, color: this\.attentionColor \}\)/,
+  'bell attention must not draw a full pane warning border');
+assert.match(terminalPane, /@Prop closeButtonBackground:[\s\S]*@Prop focusRing:/,
+  'the pane close control must use shared light and dark theme tokens');
 
-const chromeBar = readFileSync(
-  new URL('../../entry/src/main/ets/view/components/ChromeBar.ets', import.meta.url), 'utf8');
-assert.match(chromeBar, /tabRenderKey[\s\S]*tabNeedsAttention\(tab\)/,
-  'the tab render key must change when nested pane attention changes');
+assert.match(chromeBar, /private tabRenderKey\(tab: TabInfo\): string \{\s*return tab\.id\s*\}/,
+  'the tab render key must preserve stable Tab identity across title, attention and animation changes');
+assert.match(chromeBar,
+  /@Prop @Watch\('onAttentionPulseTokenChanged'\) attentionPulseToken[\s\S]*onAttentionPulseTokenChanged\(\)[\s\S]*startAttentionPulse\(\)/,
+  'finite BEL animation must restart through a transient prop without remounting the Tab component');
 assert.match(chromeBar,
   /\.constraintSize\(\{\s*maxWidth:\s*'calc\(100% - 172vp\)'\s*\}\)/,
   'the tab strip must use parent layout space left after fixed controls and drag space');
@@ -703,5 +818,43 @@ assert.doesNotMatch(chromeBar, /maxWidth:\s*'\d+%'/,
   'the tab strip must not be capped at a fixed percentage of wide windows');
 assert.doesNotMatch(chromeBar, /chromeBarWidth|\.onAreaChange\(/,
   'the tab strip must not create a self-measurement feedback loop');
+assert.match(chromeBar, /\.fadingEdge\(this\.tabs\.length > 1\)/,
+  'the tab strip must use the platform edge fade without adding width measurement state');
+assert.match(chromeBar, /tabInactiveSurfaceOpacity[\s\S]*\.width\(172\)/,
+  'tabs must keep the fixed width while rendering a restrained inactive surface');
+assert.match(chromeBar, /attentionPulseCount[\s\S]*isAnimationReduceEnabledSync[\s\S]*pulseIndex/,
+  'tab attention must be finite and respect the system reduced-motion preference');
+assert.match(chromeBar, /indicatorColor\(\): string \{[\s\S]*?if \(this\.hasAttention\) \{[\s\S]*?return this\.chromeColors\.attention/,
+  'persistent attention must reuse the leading tab status dot so overflow cannot clip it');
+assert.match(chromeBar, /struct MoreButton[\s\S]*Circle\(\)[\s\S]*Circle\(\)[\s\S]*Circle\(\)[\s\S]*Circle\(\)/,
+  'the window menu must retain the HarmonyOS four-dot mark');
+assert.doesNotMatch(chromeBar, /\.position\(\{ x: 173\.5, y: 11 \}\)/,
+  'inter-tab separation must come from surface contrast without vertical divider lines');
+assert.match(chromeBar,
+  /Column\(\)[\s\S]*\.width\(1\)[\s\S]*\.height\(18\)[\s\S]*ChromeButton\(\{[\s\S]*symbol: '\+'/,
+  'the short divider before the new-tab button must remain visible');
+assert.match(chromeBar, /\.height\(36\)[\s\S]*bottomLeft: 0,[\s\S]*bottomRight: 0/,
+  'all tab surfaces must meet the terminal baseline without rounded lower corners');
+
+assert.match(terminalHtml, /#search-panel\s*\{[\s\S]*?width:\s*344px;/,
+  'the terminal search panel must use the compact desktop width');
+assert.match(terminalHtml, /#search-result\s*\{[\s\S]*?width:\s*48px;[\s\S]*?max-width:\s*48px;/,
+  'the search result region must not create an elastic gap before navigation controls');
+assert.match(terminalHtml, /#search-panel\s*\{[\s\S]*?right:\s*54px;/,
+  'the search panel must keep clear of the pane close control');
+assert.match(terminalHtml,
+  /resultDescription[\s\S]*'Type to search'[\s\S]*'No results'[\s\S]*setAttribute\('aria-label', resultDescription\)/,
+  'compact 0/0 feedback must distinguish an empty query from a completed no-results search for accessibility');
+assert.match(terminalHtml, /#search-panel button\s*\{[\s\S]*?flex:\s*0 0 26px;[\s\S]*?width:\s*26px;/,
+  'search actions must remain compact and equally sized');
+assert.match(terminalHtml,
+  /new Terminal\(\{[\s\S]*?allowProposedApi:\s*true,[\s\S]*?allowTransparency:\s*true,/,
+  'xterm transparency must be enabled before the terminal opens');
+assert.match(terminalHtml,
+  /--terminal-background:\s*rgba\(0, 0, 0, 0\);[\s\S]*--terminal-overlay-background:\s*#1E1E2E;/,
+  'the terminal canvas must be transparent while short-lived controls retain an opaque surface');
+assert.doesNotMatch(terminalHtml,
+  /html, body,[\s\S]*?#terminal-container,[\s\S]*?background-color:\s*var\(--terminal-background\)/,
+  'DOM ancestors must not compound the workspace alpha before the WebGL canvas');
 
 console.log('terminal policy tests passed');

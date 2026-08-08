@@ -15,6 +15,7 @@ import { LocalCommandLine } from '../main/ets/model/terminal/LocalCommandLine'
 import { SessionViewModel } from '../main/ets/viewmodel/SessionViewModel'
 import { BrowserLauncher } from '../main/ets/model/browser/BrowserLauncher'
 import { CommandBarViewModel } from '../main/ets/viewmodel/CommandBarViewModel'
+import { AppTheme, ColorMode, TransparencyMode, TransparencyPolicy } from '../main/ets/view/theme/ThemeManager'
 
 export default function interactionFixesTest() {
   describe('InteractionFixes', () => {
@@ -570,6 +571,63 @@ export default function interactionFixesTest() {
       expect(InteractionPolicy.shouldConfirmApplicationClose(false, false)).assertEqual(false)
       expect(InteractionPolicy.shouldConfirmApplicationClose(true, false)).assertEqual(true)
       expect(InteractionPolicy.shouldConfirmApplicationClose(true, true)).assertEqual(false)
+    })
+
+    it('keepsBellAttentionPendingOnlyOutsideTheVisibleFocusedPane', 0, () => {
+      expect(InteractionPolicy.shouldPersistBellAttention(true, true, true, false)).assertEqual(false)
+      expect(InteractionPolicy.shouldPersistBellAttention(false, true, true, false)).assertEqual(true)
+      expect(InteractionPolicy.shouldPersistBellAttention(true, false, true, false)).assertEqual(true)
+      expect(InteractionPolicy.shouldPersistBellAttention(true, true, false, false)).assertEqual(true)
+      expect(InteractionPolicy.shouldPersistBellAttention(true, true, true, true)).assertEqual(true)
+      expect(InteractionPolicy.bellPulseCount(false)).assertEqual(1)
+      expect(InteractionPolicy.bellPulseCount(true)).assertEqual(2)
+    })
+
+    it('keepsTransparencyToFiveStableSemanticModes', 0, () => {
+      expect(TransparencyPolicy.defaultMode()).assertEqual(TransparencyMode.MEDIUM)
+      expect(TransparencyPolicy.normalize(-1)).assertEqual(TransparencyMode.MEDIUM)
+      expect(TransparencyPolicy.normalize(TransparencyMode.OFF)).assertEqual(TransparencyMode.OFF)
+      expect(TransparencyPolicy.normalize(TransparencyMode.HIGH)).assertEqual(TransparencyMode.HIGH)
+      expect(TransparencyPolicy.normalize(TransparencyMode.LOW)).assertEqual(TransparencyMode.LOW)
+      expect(TransparencyPolicy.normalize(TransparencyMode.EXTREME)).assertEqual(TransparencyMode.EXTREME)
+      expect(TransparencyPolicy.contentOpacity(TransparencyMode.OFF)).assertEqual(1.00)
+      expect(TransparencyPolicy.contentOpacity(TransparencyMode.LOW)).assertEqual(0.90)
+      expect(TransparencyPolicy.contentOpacity(TransparencyMode.MEDIUM)).assertEqual(0.82)
+      expect(TransparencyPolicy.contentOpacity(TransparencyMode.HIGH)).assertEqual(0.72)
+      expect(TransparencyPolicy.contentOpacity(TransparencyMode.EXTREME)).assertEqual(0.60)
+      expect(TransparencyPolicy.chromeOpacity(TransparencyMode.OFF)).assertEqual(1.00)
+      expect(TransparencyPolicy.chromeOpacity(TransparencyMode.LOW)).assertEqual(0.94)
+      expect(TransparencyPolicy.chromeOpacity(TransparencyMode.MEDIUM)).assertEqual(0.88)
+      expect(TransparencyPolicy.chromeOpacity(TransparencyMode.HIGH)).assertEqual(0.80)
+      expect(TransparencyPolicy.chromeOpacity(TransparencyMode.EXTREME)).assertEqual(0.70)
+      expect(TransparencyPolicy.increase(TransparencyMode.OFF)).assertEqual(TransparencyMode.LOW)
+      expect(TransparencyPolicy.increase(TransparencyMode.HIGH)).assertEqual(TransparencyMode.EXTREME)
+      expect(TransparencyPolicy.increase(TransparencyMode.EXTREME)).assertEqual(TransparencyMode.EXTREME)
+      expect(TransparencyPolicy.decrease(TransparencyMode.EXTREME)).assertEqual(TransparencyMode.HIGH)
+      expect(TransparencyPolicy.decrease(TransparencyMode.LOW)).assertEqual(TransparencyMode.OFF)
+      expect(TransparencyPolicy.decrease(TransparencyMode.OFF)).assertEqual(TransparencyMode.OFF)
+      expect(TransparencyPolicy.canDecrease(TransparencyMode.OFF)).assertEqual(false)
+      expect(TransparencyPolicy.canIncrease(TransparencyMode.EXTREME)).assertEqual(false)
+    })
+
+    it('derivesSeparateChromeAndContentSurfacesWithAnOpaqueFallback', 0, () => {
+      let dark: AppTheme = new AppTheme(ColorMode.DARK, TransparencyMode.HIGH)
+      let light: AppTheme = new AppTheme(ColorMode.LIGHT, TransparencyMode.LOW)
+      let extreme: AppTheme = new AppTheme(ColorMode.DARK, TransparencyMode.EXTREME)
+      let off: AppTheme = new AppTheme(ColorMode.LIGHT, TransparencyMode.OFF)
+      expect(dark.background()).assertEqual('#B81E1E2E')
+      expect(dark.chromeBackground()).assertEqual('#CC181825')
+      expect(dark.background(false)).assertEqual('#FF1E1E2E')
+      expect(dark.chromeBackground(false)).assertEqual('#FF181825')
+      expect(dark.terminal.toJsInitObject().indexOf('rgba(0, 0, 0, 0)') >= 0).assertEqual(true)
+      expect(light.background()).assertEqual('#E6EFF1F5')
+      expect(light.chromeBackground()).assertEqual('#F0E6E9EF')
+      expect(light.background(false)).assertEqual('#FFEFF1F5')
+      expect(light.terminal.toJsInitObject().indexOf('rgba(0, 0, 0, 0)') >= 0).assertEqual(true)
+      expect(extreme.background()).assertEqual('#991E1E2E')
+      expect(extreme.chromeBackground()).assertEqual('#B3181825')
+      expect(off.background()).assertEqual('#FFEFF1F5')
+      expect(off.chromeBackground()).assertEqual('#FFE6E9EF')
     })
 
     it('doesNotTreatTerminalQueryResponsesAsLocalCommandText', 0, () => {

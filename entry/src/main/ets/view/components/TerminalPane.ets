@@ -4,15 +4,18 @@ import { TerminalMode } from '../../common/types/TerminalTypes'
 @Component
 export struct TerminalPane {
   private webCtrl: webview.WebviewController = new webview.WebviewController()
-  @Prop paneBackground: string = '#1E1E2E'
   @Prop focusVeilColor: string = '#11111B'
   @Prop focusVeilOpacity: number = 0.20
   @Prop sessionMode: TerminalMode = TerminalMode.IDLE
   @Prop isFocused: boolean = true
   @Prop paneId: string = ''
   @Prop showCloseButton: boolean = false
-  @Prop needsAttention: boolean = false
-  @Prop attentionColor: string = '#F9E2AF'
+  @Prop closeButtonBackground: string = '#181825'
+  @Prop closeButtonBorder: string = '#45475A'
+  @Prop closeButtonText: string = '#CDD6F4'
+  @Prop focusRing: string = '#89B4FA'
+  @State closeButtonHovered: boolean = false
+  @State closeButtonFocused: boolean = false
   onWebControllerReady: (ctrl: webview.WebviewController) => void = () => {}
   onPaneDisappear: () => void = () => {}
   onPaneKeyEvent: (event: KeyEvent) => boolean = () => false
@@ -43,7 +46,7 @@ export struct TerminalPane {
         .zoomAccess(false)
         .zoomControlAccess(false)
         .overviewModeAccess(false)
-        .backgroundColor(this.paneBackground)
+        .backgroundColor('#00000000')
         .onControllerAttached(() => {
         })
         .onPageEnd(() => {
@@ -70,33 +73,32 @@ export struct TerminalPane {
           .transition(TransitionEffect.OPACITY.animation({ duration: 140, curve: Curve.EaseOut }))
       }
 
-      if (this.needsAttention) {
-        Column()
-          .width('100%')
-          .height('100%')
-          .border({ width: 2, color: this.attentionColor })
-          .hitTestBehavior(HitTestMode.None)
-      }
-
       if (this.showCloseButton && this.isFocused) {
         Text('×')
-          .fontSize(18)
-          .fontColor('#CDD6F4')
+          .fontSize(16)
+          .fontColor(this.closeButtonText)
           .textAlign(TextAlign.Center)
-          .width(30)
-          .height(30)
-          .backgroundColor('#181825CC')
-          .border({ width: 1, color: '#45475A', radius: 6 })
+          .width(28)
+          .height(28)
+          .backgroundColor(this.closeButtonHovered ? this.closeButtonBorder : this.closeButtonBackground)
+          .border({
+            width: this.closeButtonFocused ? 2 : 1,
+            color: this.closeButtonFocused ? this.focusRing : this.closeButtonBorder,
+            radius: 6
+          })
           .position({ x: '100%', y: 8 })
           .translate({ x: -38, y: 0 })
           .focusable(true)
           .accessibilityText('Close active pane')
           .onClick(() => { this.onClosePane() })
+          .onHover((hovered: boolean) => { this.closeButtonHovered = hovered })
+          .onFocus(() => { this.closeButtonFocused = true })
+          .onBlur(() => { this.closeButtonFocused = false })
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(this.paneBackground)
+    .backgroundColor('#00000000')
     .onClick(() => {
       this.onPaneFocus(true)
     })

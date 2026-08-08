@@ -2,7 +2,7 @@
 
 > 状态：当前版本路线；采用滚动规划
 >
-> 更新日期：2026-08-06
+> 更新日期：2026-08-08
 >
 > 上位规则：[`project-principles.md`](project-principles.md)
 >
@@ -145,9 +145,10 @@ OpenSSH 的全部工具与 option。端口转发、X11、agent、CA/KRL、批处
 
 ### 为什么现在做
 
-滚动缓冲区搜索属于终端工作本身，是产品原则明确要求长期做好的高频能力。它不引入
-新的执行环境、主机模型或后台生命周期，能够在保持现有 `Tab → Pane → Session` 和
-Terminal Surface 边界的前提下，补齐桌面终端的基础效率。
+滚动缓冲区搜索和安静、清楚的桌面工作区反馈都属于终端工作本身，是产品原则明确要求
+长期做好的高频能力。它们不引入新的执行环境、主机模型或后台生命周期，能够在保持
+现有 `Tab → Pane → Session` 和 Terminal Surface 边界的前提下，补齐桌面终端的基础
+效率与日常可读性。
 
 ### 范围
 
@@ -156,12 +157,19 @@ Terminal Surface 边界的前提下，补齐桌面终端的基础效率。
 - 清楚显示查询、匹配位置和无结果状态，不改变终端内容、选择所有权或远端输入。
 - 覆盖普通屏幕、alternate screen、中文、宽字符、大 scrollback、Tab/Pane 切换和
   renderer 重建边界。
+- 收敛多 Tab 边界与溢出、固定的新建入口、分屏边界、搜索控件密度、键盘焦点和主题
+  token；BEL 使用有限 Tab 提示与来源 Pane 标记，不再包围整个终端内容。
+- 在可读性、终端正确性和低性能负担成立时，提供关、低、中、高、极限五档非循环透明度；
+  Chrome 与内容区由同一档位派生不同 alpha，非 Off 档只使用一次固定 Regular 根材质。
+  不成立时按证据撤回材质或回退不透明，不增加连续参数、独立材质设置或兼容框架。
 
 ### 非目标
 
 - 不做跨 Tab/Session 全局搜索、正则表达式语言、搜索历史、索引服务或持久化。
 - 不搜索远端文件、命令历史、日志或已销毁 Session。
 - 不借此增加命令面板、自定义快捷键或新的通用 UI 框架。
+- 不做 Tab 拖动排序、持续动画、全窗口闪烁、通用外观设置、自适应 Tab 宽度或新图标依赖；
+  不加入自定义 Gaussian、CSS/WebGL blur 或逐 Pane 动态材质。
 
 ### 已满足的进入条件
 
@@ -169,8 +177,9 @@ Terminal Surface 边界的前提下，补齐桌面终端的基础效率。
 - WIP 方案中的交互、xterm 集成、输入/选择冲突和真机验收点已经共同确认。
 - 明确证明现有 Terminal Surface 可以局部实现，无需增加跨 Session 状态或长期索引。
 
-技术方案：[`design/terminal-search.md`](design/terminal-search.md)。上述条件已于
-2026-08-06 闭合，活动顺序与完成状态只在 [`next-work.md`](next-work.md) 维护。
+技术方案：[`design/terminal-search.md`](design/terminal-search.md) 与
+[`design/ui-interaction-polish.md`](design/ui-interaction-polish.md)。上述条件已闭合，
+活动顺序与完成状态只在 [`next-work.md`](next-work.md) 维护。
 
 ## 条件 milestone：1.3 — 受约束的单文件交付
 

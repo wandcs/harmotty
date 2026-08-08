@@ -1,10 +1,10 @@
 # 终端 scrollback 搜索技术方案
 
-> 状态：Implementing；1.2 第 1 节基线已重新闭合
+> 状态：Implemented；最终候选验收待 1.2 收尾统一执行
 >
 > milestone：1.2.0
 >
-> 更新日期：2026-08-07
+> 更新日期：2026-08-08
 >
 > 上位规则：[`project-principles.md`](../project-principles.md)
 >
@@ -144,8 +144,8 @@ Terminal Surface；不重排网格可以避免搜索本身触发 PTY resize。�
   只向应用交付 Ctrl 与 Shift，F 在应用入口前消失，原始左 Shift 序列还出现输入法切换
   提示。用户随后用物理键盘确认该 chord 会触发输入法简繁切换，因此 `Ctrl+Shift+F`
   已被裁剪且不保留兼容别名。唯一入口改为 `Ctrl+Alt+F`；HDC 三键组合和物理键盘都能
-  正常打开产品搜索。中英文逐字输入和远端 TUI 透传仍按第 5 节完整验收，不能由一次
-  打开成功替代。
+  正常打开产品搜索。中英文逐字输入和远端 TUI 透传仍按最终物理机矩阵完整验收，不能
+  由一次打开成功替代。
 
 参考：[Windows Terminal Search](https://learn.microsoft.com/en-us/windows/terminal/search)、
 [Ghostty 1.3.0 scrollback search](https://ghostty.org/docs/install/release-notes/1-3-0)。
@@ -156,11 +156,12 @@ Terminal Surface；不重排网格可以避免搜索本身触发 PTY resize。�
   `caseSensitive: false`；不显示模式开关。英文字母忽略大小写，中文和无大小写概念的
   Unicode 字符按原字符匹配。查询不做 Unicode normalization，因此组合字符与预组合
   字符可以是不同文本。
-- 空字符串不执行搜索，不显示“无结果”，清除当前搜索高亮并禁用上一处/下一处。
-  只包含空格的非空查询仍是有效普通文本；HTML 单行输入不接受 CR/LF。
-- 非空查询没有匹配时显示文字 `No results`，不能只改变颜色；有匹配时显示
-  `当前序号/总数`。结果计数达到 addon 的安全上限时显示有界计数而不伪造精确总数，
-  具体上限在依赖审计中冻结。
+- 空字符串不执行搜索，显示紧凑 `0/0`，清除当前搜索高亮并禁用上一处/下一处；其
+  可访问说明为 `Type to search`。只包含空格的非空查询仍是有效普通文本；HTML 单行
+  输入不接受 CR/LF。
+- 非空查询没有匹配时同样显示 `0/0`，可访问说明为 `No results`，反馈不能只依赖颜色；
+  有匹配时显示 `当前序号/总数`。结果计数达到 addon 的安全上限时显示有界计数而不
+  伪造精确总数，具体上限在依赖审计中冻结。
 - 第一次提交查询从 active buffer 顶部开始选中第一处；`Enter` 向 buffer 底部查找，
   `Shift+Enter` 向顶部查找。两个方向到达边界后循环；只有一个结果时仍保持该结果，
   不短暂显示无结果。
@@ -262,6 +263,8 @@ renderer、内存、失败域和重试次数。第 4 节用这些分布与本基
 为隔离上述快捷键注入限制，调试构建通过既有 `ACCEPTANCE_TESTS` 源码注入机制增加
 `Acceptance: Open Search` 菜单项；它只调用生产 `activePaneRuntime().surface.openSearch()`，
 不实现查询、匹配或第二条 Bridge 路径，release 构建继续自动裁剪所有 acceptance 源码。
+正式四点菜单后来增加了同一生产 Search 入口，因此该临时验收项已删除，当前调试构建直接
+复用正式入口。
 
 证据保存在 `C:\tmp\leantty-1.2-search-ui-20260806`：
 
@@ -364,7 +367,7 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 
 本轮没有运行 `tools/test-regression.ps1`、`tools/verify-pc.ps1` 或完整命名物理矩阵；它们
 仍只用于正式候选。selection/link/TUI、输入法、大 scrollback、持续输出和 renderer 重建
-等剩余设备行为继续保留在 `next-work.md` 第 5 节，不能由这里的开发期记录代替。
+等剩余设备行为继续保留在 `next-work.md` 的最终物理机矩阵，不能由这里的开发期记录代替。
 
 ## 实现中仍须验证
 
@@ -389,7 +392,7 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
   less 等 TUI 回归。
 - 大 scrollback 的打开、逐字输入、跳转和关闭保持及时；先建立基线再确定性能门槛。
 
-## 第 1 节闭合结论
+## 基线闭合结论
 
 1. 1.1.1 已作为确切 GitHub Release 冻结，商店审核与 1.2 开发分开治理。
 2. 布局、输入法、关闭、匹配和 buffer 语义已经冻结；`Ctrl+Shift+F` 已因输入法简繁
@@ -398,8 +401,8 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 4. 官方 search addon 已通过来源、许可证、体积和源码/打包兼容审计；ArkWeb 行为仍按
    实现后真机门禁验证，不把上游浏览器支持声明替代设备证据。
 5. 物理 PC 的持续输出、大 scrollback、资源分布和后续搜索测量协议已有可复验基线；
-   快捷键基线已由实现后诊断和物理键盘证据修正，交互基线重新闭合；第 2 节仍须按各项
-   自动化、生命周期和冲突门禁逐项完成。
+   快捷键基线已由实现后诊断和物理键盘证据修正，交互基线重新闭合；正式候选仍须按
+   最终自动化、生命周期和冲突门禁逐项完成。
 
 如果最小搜索仍要求通用命令面板、跨 Session 索引或高成本前端替换，应停止该方案并
 重新评估问题，而不是为了维持 1.2 版本号扩大架构。

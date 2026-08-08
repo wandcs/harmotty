@@ -37,7 +37,8 @@ export class AnsiColorsLatte extends AnsiColors {
 }
 
 export class TerminalColors {
-  background: string = '#1E1E2E'
+  background: string = 'rgba(0, 0, 0, 0)'
+  surfaceBackground: string = '#D11E1E2E'
   foreground: string = '#CDD6F4'
   cursor: string = '#F5E0DC'
   cursorAccent: string = '#1E1E2E'
@@ -47,7 +48,8 @@ export class TerminalColors {
 }
 
 export class TerminalColorsLatte extends TerminalColors {
-  background: string = '#EFF1F5'
+  background: string = 'rgba(0, 0, 0, 0)'
+  surfaceBackground: string = '#D1EFF1F5'
   foreground: string = '#4C4F69'
   cursor: string = '#DC8A78'
   cursorAccent: string = '#EFF1F5'
@@ -58,14 +60,15 @@ export class TerminalColorsLatte extends TerminalColors {
 
 export class ChromeColors {
   tabBackground: string = '#181825'
-  tabBarBackground: string = '#11111B'
   tabActiveBackground: string = '#1E1E2E'
-  tabActiveIndicator: string = '#89B4FA'
+  tabInactiveSurfaceOpacity: number = 0.42
+  tabHoverSurfaceOpacity: number = 0.72
+  focusRing: string = '#89B4FA'
+  attention: string = '#F9E2AF'
   commandBarBackground: string = '#181825'
   commandBarText: string = '#CDD6F4'
   commandBarPlaceholder: string = '#585B70'
   commandBarBorder: string = '#313244'
-  statusBarBackground: string = '#181825'
   statusText: string = '#A6ADC8'
   statusConnected: string = '#A6E3A1'
   statusDisconnected: string = '#F38BA8'
@@ -75,18 +78,22 @@ export class ChromeColors {
   paneFocusVeilOpacity: number = 0.20
   splitHandle: string = '#6C7086'
   splitHandleActive: string = '#89B4FA'
+  paneControlBackground: string = '#181825'
+  paneControlBorder: string = '#45475A'
+  paneControlText: string = '#CDD6F4'
 }
 
 export class ChromeColorsLatte extends ChromeColors {
   tabBackground: string = '#E6E9EF'
-  tabBarBackground: string = '#DCE0E8'
   tabActiveBackground: string = '#EFF1F5'
-  tabActiveIndicator: string = '#1E66F5'
+  tabInactiveSurfaceOpacity: number = 0.50
+  tabHoverSurfaceOpacity: number = 0.78
+  focusRing: string = '#1E66F5'
+  attention: string = '#DF8E1D'
   commandBarBackground: string = '#E6E9EF'
   commandBarText: string = '#4C4F69'
   commandBarPlaceholder: string = '#9CA0B0'
   commandBarBorder: string = '#CCD0DA'
-  statusBarBackground: string = '#E6E9EF'
   statusText: string = '#6C6F85'
   statusConnected: string = '#40A02B'
   statusDisconnected: string = '#D20F39'
@@ -96,6 +103,9 @@ export class ChromeColorsLatte extends ChromeColors {
   paneFocusVeilOpacity: number = 0.08
   splitHandle: string = '#9CA0B0'
   splitHandleActive: string = '#1E66F5'
+  paneControlBackground: string = '#E6E9EF'
+  paneControlBorder: string = '#BCC0CC'
+  paneControlText: string = '#4C4F69'
 }
 
 export class Sizing {

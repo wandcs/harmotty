@@ -1,6 +1,6 @@
 import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
-import { ThemeManager } from '../view/theme/ThemeManager';
+import { ThemeManager, TransparencyPolicy } from '../view/theme/ThemeManager';
 import { Logger } from '../common/logger/Logger';
 import { UserPreferences } from '../model/settings/UserPreferences';
 import { InteractionPolicy } from '../model/ui/InteractionPolicy';
@@ -9,6 +9,7 @@ import { SshKeyManager } from '../model/ssh/SshKeyManager';
 import { KeyPairInfo } from '../common/types/SshKeyTypes';
 import { FileUtils } from '../common/utils/FileUtils';
 import webview from '@ohos.web.webview';
+import { BusinessError } from '@ohos.base';
 
 const logger: Logger = new Logger('EntryAbility')
 const FALLBACK_TITLE_BUTTON_WIDTH: number = 140
@@ -52,7 +53,10 @@ export default class EntryAbility extends UIAbility {
     DurableStateManager.initialize(this.context)
     AppStorage.setOrCreate('pcTitleButtonReservedWidth', FALLBACK_TITLE_BUTTON_WIDTH)
     AppStorage.setOrCreate('mainWindowVisible', true)
+    AppStorage.setOrCreate('windowTransparencyAvailable', false)
     AppStorage.setOrCreate('terminalFontSize', UserPreferences.initialize(this.context))
+    ThemeManager.getInstance().setTransparencyMode(
+      TransparencyPolicy.normalize(UserPreferences.loadTransparencyMode()))
     AppStorage.setOrCreate('hasActiveSshSession', false)
     AppStorage.setOrCreate('skipNextTerminateConfirmation', false)
     let keys: KeyPairInfo[] = SshKeyManager.listKeys(this.context)
@@ -113,6 +117,7 @@ export default class EntryAbility extends UIAbility {
           return;
         }
         this.mainWindow = mainWindow
+        this.configurePcWindowTransparency(mainWindow)
         this.restoreOrCaptureWindowRect(windowStage, mainWindow, retainedWindowRect)
         this.validatePcWindowChrome(mainWindow)
       })
@@ -211,6 +216,20 @@ export default class EntryAbility extends UIAbility {
       mainWindow.on('windowTitleButtonRectChange', this.titleButtonRectChangeHandler)
     } catch (e) {
       logger.warn('Title button rect validation failed: ' + e)
+    }
+  }
+
+  private configurePcWindowTransparency(mainWindow: window.Window): void {
+    AppStorage.setOrCreate('windowTransparencyAvailable', false)
+    try {
+      mainWindow.setWindowBackgroundColor('#00000000')
+      mainWindow.setWindowContainerColor('#00000000', '#FF1E1E2E')
+      AppStorage.setOrCreate('windowTransparencyAvailable', true)
+      logger.info('Window and PC container configured for restrained terminal transparency')
+    } catch (e) {
+      let error: BusinessError = e as BusinessError
+      logger.warn('PC container transparency unavailable; using opaque terminal surface: code=' +
+        error.code.toString() + ', message=' + error.message)
     }
   }
 
