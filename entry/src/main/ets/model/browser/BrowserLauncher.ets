@@ -1,5 +1,7 @@
-import { common } from '@kit.AbilityKit'
+import { common, Want, wantConstant } from '@kit.AbilityKit'
 import url from '@ohos.url'
+import { UserGuideManager } from '../guide/UserGuideManager'
+import { UserGuidePolicy } from '../guide/UserGuidePolicy'
 
 export class BrowserLauncher {
   static readonly MAX_URL_LENGTH: number = 4096
@@ -99,6 +101,34 @@ export class BrowserLauncher {
         return false
       }
       await context.openLink(parsed.toString(), { appLinkingOnly: false })
+      return true
+    } catch (e) {
+      return false
+    }
+  }
+
+  static isAllowedUserGuideUrl(raw: string, expected: string): boolean {
+    return UserGuidePolicy.isAllowedGuideUri(raw, expected)
+  }
+
+  static async openUserGuide(context: common.UIAbilityContext, raw: string): Promise<boolean> {
+    let expected: string = ''
+    try {
+      expected = UserGuideManager.expectedUri(context)
+    } catch (e) {
+      return false
+    }
+    if (!BrowserLauncher.isAllowedUserGuideUrl(raw, expected)) {
+      return false
+    }
+    try {
+      let want: Want = {
+        action: 'ohos.want.action.viewData',
+        uri: expected,
+        type: 'text/html',
+        flags: wantConstant.Flags.FLAG_AUTH_READ_URI_PERMISSION
+      }
+      await context.startAbility(want)
       return true
     } catch (e) {
       return false

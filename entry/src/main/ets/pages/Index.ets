@@ -837,6 +837,9 @@ struct Index {
       let context = this.getUIContext().getHostContext() as common.UIAbilityContext
       let opened: boolean = await BrowserLauncher.open(context, url)
       if (!opened) {
+        opened = await BrowserLauncher.openUserGuide(context, url)
+      }
+      if (!opened) {
         this.showTransientFeedback('Unable to open link')
       }
     } catch (e) {

@@ -180,6 +180,11 @@ Invoke-RegressionCheck -Name 'web-terminal-policy' -Action {
     if ($LASTEXITCODE -ne 0) { throw 'Web terminal policy tests failed' }
 }
 
+Invoke-RegressionCheck -Name 'offline-user-guide' -Action {
+    & $nodeExe (Join-Path $repoRoot 'tools\web-terminal\test-user-guide.mjs')
+    if ($LASTEXITCODE -ne 0) { throw 'Offline user guide tests failed' }
+}
+
 Invoke-RegressionCheck -Name 'trusted-arkts-tests' -Action {
     Push-Location $repoRoot
     try {

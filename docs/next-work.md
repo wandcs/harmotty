@@ -15,7 +15,9 @@ milestone 不在这里维护第二份清单。
 ## 当前状态与完成定义
 
 1.2 的产品实现已闭合两个受控切片：当前 Pane、当前 Terminal Surface 内的普通文本
-scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛。当前实现包括：
+scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛。离线 User Guide 已获
+当前版本实现授权；第三个受控切片的产品实现和物理机验收已完成。
+已完成实现包括：
 
 - `Ctrl+Alt+F` 和四点菜单 Search 进入当前 Surface 搜索；查询不进入 Session、SSH 或持久化；
 - 固定 172vp Tab、有限 BEL Tab 提示、紧凑搜索、成组 Previous/Next 与独立 Close 边界、
@@ -25,7 +27,9 @@ scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛�
 - 字号 `Ctrl+-` / `Ctrl+=` 与透明度 `Ctrl+Alt+-` / `Ctrl+Alt+=` 成组全局快捷键，四个菜单
   步进按钮使用原生 hover Tips 显示对应键位；
 - 非 Off 档只在窗口根固定一次 `BlurStyle.BACKGROUND_REGULAR`，不提供材质设置、自定义
-  Gaussian、CSS/WebGL blur 或逐 Pane 模糊。
+  Gaussian、CSS/WebGL blur 或逐 Pane 模糊；
+- 顶层帮助保留原文并在末尾生成唯一 OSC 8 离线指南链接；中文默认/完整英文
+  HTML 进入包内 rawfile，Download 同步按逐字节版本、所有权和固定 URI 白名单闭合。
 
 已完成的实现、裁剪决定和定向证据分别记录在
 [`design/terminal-search.md`](design/terminal-search.md)、
@@ -41,7 +45,9 @@ tmux/vim/less/Agent TUI、Medium/Extreme 可读性及 BEL 节奏验收，均未�
 修复；修复已把深浅色 Chrome/非活动 Tab/活动 Tab 收敛为 Catppuccin
 `crust → mantle → base` 三层，并通过五档真机抽查；后续授权的四个步进快捷键、菜单 hover
 Tips 及搜索导航/关闭按钮统一也已通过定向真机验证。上述候选保留为验收基线，但不再作为
-最终发布候选，发布流程必须从包含这些修复的新精确提交重建。不得借此加入无关功能。
+最终发布候选，且随后授权的离线 User Guide 会继续改变产品树；发布流程必须从包含这些
+修复和指南能力的新精确提交重建。2026-08-08，用户确认 1.2 全部测试完成，
+最后的指南短文件名链接与其他收口优化补齐后未发现问题。不得借此加入无关功能。
 
 完成 1.2 必须满足：所有产品改动进入精确且已推送的提交；正式软件门禁与干净 ARM64
 候选通过；同一个保留候选完成全部适用的物理 HarmonyOS PC 场景；设计、版本、签名、

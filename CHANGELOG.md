@@ -8,6 +8,12 @@
 
 - Added current-surface terminal search with the fixed `Ctrl+Alt+F` entry,
   compact match navigation and isolated Pane/Tab lifecycle behavior.
+- Added a bilingual offline User Guide that is generated only from top-level
+  local help. The existing terminal help remains intact, then exposes its short
+  file name as one Ctrl-clickable link while retaining the complete Downloads
+  URI only in the OSC 8 target. Exact-byte reuse, owned-file replacement,
+  foreign-file protection and a strict single-file URI allowlist keep the
+  workflow bounded.
 
 ### Changed
 
@@ -54,13 +60,19 @@
 
 ### Documentation
 
+- Added the reviewed Chinese-default, complete-English User Guide source and a
+  formal-release gate that requires its packaged bytes and version to match the
+  finalized 1.2 Changelog and application version before a candidate is built.
 - Recorded the exact retained 1.2 candidate and physical ARM64 PC evidence for
   terminal search ownership/lifecycle, UI/window review, SSH transport, BEL,
   five transparency levels and continuous-output performance distributions;
   real keyboard/IME, user-server TUI and subjective visual acceptance also
   completed without an observed issue. The target system has no discoverable
   user-level reduced-motion setting, so that device scenario is recorded as not
-  applicable while the static fallback remains covered.
+  applicable while the static fallback remains covered. Final User Guide
+  permission, update/conflict, bilingual rendering and real Ctrl-click behavior
+  were accepted after the visible link was shortened to the file name without
+  changing its complete OSC 8 target.
 
 ## [1.1.1] - 2026-08-06
 
