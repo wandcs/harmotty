@@ -159,6 +159,28 @@ function Get-LeanTTYActiveTerminalInputNodes {
     return @($result)
 }
 
+function Get-LeanTTYActiveTerminalSurfaceNodes {
+    param([Parameter(Mandatory = $true)]$Layout)
+
+    return @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
+        if ([string]$_.attributes.type -ne '__Common__' -or
+            [string]$_.attributes.opacity -ne '1.000000' -or
+            [string]$_.attributes.zIndex -ne '1') {
+            return $false
+        }
+        $bounds = [string]$_.attributes.bounds
+        if ($bounds -notmatch '^\[\d+,(?<top>\d+)\]\[\d+,(?<bottom>\d+)\]$' -or
+            [int]$Matches.top -lt 100 -or [int]$Matches.bottom -le 120) {
+            return $false
+        }
+        return @(Get-LeanTTYLayoutNodes -Node $_ | Where-Object {
+            [string]$_.attributes.type -eq 'Web' -and
+            [string]$_.attributes.visible -eq 'true' -and
+            [string]$_.attributes.originalText -match 'terminal\.html$'
+        }).Count -eq 1
+    })
+}
+
 function Wait-TerminalWorkspaceState {
     param(
         [Parameter(Mandatory = $true)][int]$PaneCount,
@@ -166,6 +188,7 @@ function Wait-TerminalWorkspaceState {
         [Parameter(Mandatory = $true)][int]$SearchCount,
         [Parameter(Mandatory = $true)][string]$LayoutName,
         [ValidateSet('any', 'left', 'right')][string]$FocusedPane = 'any',
+        [bool]$RequireTerminalFocus = $true,
         [ValidateRange(1, 40)][int]$TimeoutSeconds = 20
     )
     $path = Join-Path $EvidenceDirectory $LayoutName
@@ -177,6 +200,12 @@ function Wait-TerminalWorkspaceState {
         foreach ($terminalInput in $terminalInputs) {
             $bounds = [string]$terminalInput.attributes.bounds
             if (-not $activePaneBounds.Contains($bounds)) { $activePaneBounds.Add($bounds) }
+        }
+        $activeSurfaces = @(Get-LeanTTYActiveTerminalSurfaceNodes -Layout $layout)
+        $activePaneCount = if ($terminalInputs.Count -gt 0) {
+            $activePaneBounds.Count
+        } else {
+            $activeSurfaces.Count
         }
         $focusedTerminalInputs = @($terminalInputs | Where-Object {
             [string]$_.attributes.focused -eq 'true'
@@ -192,7 +221,9 @@ function Wait-TerminalWorkspaceState {
         } else {
             -1
         }
-        $focusMatches = if ($SearchCount -eq 1) {
+        $focusMatches = if (-not $RequireTerminalFocus -and $SearchCount -eq 0) {
+            $true
+        } elseif ($SearchCount -eq 1) {
             $searchInputs.Count -eq 1 -and
                 [string]$searchInputs[0].attributes.focused -eq 'true' -and
                 $focusedTerminalInputs.Count -eq 0
@@ -202,14 +233,14 @@ function Wait-TerminalWorkspaceState {
                     ($FocusedPane -eq 'left' -and $focusedIndex -eq 0) -or
                     ($FocusedPane -eq 'right' -and $focusedIndex -eq 1))
         }
-        if ($activePaneBounds.Count -eq $PaneCount -and
+        if ($activePaneCount -eq $PaneCount -and
             $tabs.Count -eq $TabCount -and
             $searchContainers.Count -eq $SearchCount -and
             $searchInputs.Count -eq $SearchCount -and
             $focusMatches) {
             return [pscustomobject]@{
                 layout = $layout
-                paneCount = $activePaneBounds.Count
+                paneCount = $activePaneCount
                 tabCount = $tabs.Count
                 searchCount = $searchInputs.Count
                 focusedPaneIndex = $focusedIndex
@@ -219,7 +250,8 @@ function Wait-TerminalWorkspaceState {
     } while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds)
     throw (
         '[product] Timed out waiting for terminal workspace state: ' +
-        "panes=$PaneCount,tabs=$TabCount,search=$SearchCount,focus=$FocusedPane"
+        "panes=$PaneCount,tabs=$TabCount,search=$SearchCount,focus=$FocusedPane," +
+        "requireTerminalFocus=$RequireTerminalFocus"
     )
 }
 
@@ -462,13 +494,19 @@ function Restore-TerminalWorkspace {
             continue
         }
         $terminalInputs = @(Get-LeanTTYActiveTerminalInputNodes -Layout $layout)
+        $activeSurfaces = @(Get-LeanTTYActiveTerminalSurfaceNodes -Layout $layout)
         $activePaneBounds = [Collections.Generic.List[string]]::new()
         foreach ($terminalInput in $terminalInputs) {
             $bounds = [string]$terminalInput.attributes.bounds
             if (-not $activePaneBounds.Contains($bounds)) { $activePaneBounds.Add($bounds) }
         }
         $tabs = @(Get-LeanTTYTabNodes -Layout $layout)
-        if ($activePaneBounds.Count -gt 1) {
+        $activePaneCount = if ($terminalInputs.Count -gt 0) {
+            $activePaneBounds.Count
+        } else {
+            $activeSurfaces.Count
+        }
+        if ($activePaneCount -gt 1) {
             Invoke-TerminalWorkspaceChord -Action 'focus-right'
             Invoke-TerminalWorkspaceChord -Action 'close-active'
             Start-Sleep -Milliseconds 500
@@ -484,6 +522,7 @@ function Restore-TerminalWorkspace {
             -TabCount 1 `
             -SearchCount 0 `
             -LayoutName 'layout-cleanup-workspace-final.json' `
+            -RequireTerminalFocus ($terminalInputs.Count -gt 0) `
             -TimeoutSeconds 10 | Out-Null
         return
     }
@@ -909,8 +948,13 @@ try {
         Wait-TerminalWorkspaceState `
             -PaneCount 1 -TabCount 1 -SearchCount 0 `
             -LayoutName 'layout-lifecycle-renderer-rebuilt.json' `
+            -RequireTerminalFocus $false `
             -TimeoutSeconds 30 | Out-Null
         $searchClosed = $true
+        Invoke-LocalTerminalCommand -Command 'help'
+        $focusLogs = Wait-SearchAppLog `
+            -Pattern 'ACCEPTANCE_INPUT_SUBMIT sequence=\d+,kind=command' `
+            -TimeoutSeconds 20
         Save-LeanTTYDeviceScreenshot `
             -Hdc $hdc -Target $Target `
             -LocalPath (Join-Path $EvidenceDirectory 'window-renderer-lifecycle.png')
@@ -924,7 +968,8 @@ try {
             rendererBridgeDestroyed = $rendererLogs -match 'TerminalBridge: PERF bridge reason=destroy'
             rendererBridgeReinitialized = $rendererLogs -match 'TerminalBridge: Bridge initialized'
             queryAbsentAfterRendererRebuild = $true
-            terminalFocusRestored = $true
+            terminalFocusRestoredByCommandSubmit = $focusLogs -match
+                'ACCEPTANCE_INPUT_SUBMIT sequence=\d+,kind=command'
         })
     }
 } catch {

@@ -454,6 +454,10 @@ foreach ($scriptName in @(
             $content.Contains('[Collections.Generic.List[string]]::new()') -and
             $content.Contains('$activePaneBounds.Contains($bounds)') -and
             $content.Contains('Get-LeanTTYActiveTerminalInputNodes') -and
+            $content.Contains('Get-LeanTTYActiveTerminalSurfaceNodes') -and
+            $content.Contains('-RequireTerminalFocus $false') -and
+            $content.Contains('terminalFocusRestoredByCommandSubmit') -and
+            $content.Contains("'ACCEPTANCE_INPUT_SUBMIT sequence=\d+,kind=command'") -and
             $content.Contains("attributes.opacity -eq '1.000000'") -and
             $content.Contains("attributes.zIndex -eq '1'") -and
             $content.Contains('does not ') -and
@@ -475,7 +479,11 @@ foreach ($scriptName in @(
             [ref]$parseErrors
         )
         Assert-True ($parseErrors.Count -eq 0) 'Terminal-search harness could not be parsed for layout tests'
-        foreach ($functionName in 'Get-LeanTTYTerminalContentTop', 'Get-LeanTTYTabNodes') {
+        foreach ($functionName in @(
+            'Get-LeanTTYTerminalContentTop',
+            'Get-LeanTTYTabNodes',
+            'Get-LeanTTYActiveTerminalSurfaceNodes'
+        )) {
             $functionDefinition = $syntaxTree.FindAll({
                 param($node)
                 $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
@@ -499,6 +507,26 @@ foreach ($scriptName in @(
             $scaledTabs.Count -eq 1 -and
             [string]$scaledTabs[0].attributes.description -eq 'active'
         ) 'Terminal-search harness did not derive the scaled Chrome boundary from terminal content'
+
+        $rendererRebuiltLayout = @'
+{
+  "attributes": {"type":"root","bounds":"[0,0][2926,1926]"},
+  "children": [
+    {"attributes":{"type":"__Common__","opacity":"1.000000","zIndex":"0","bounds":"[2584,67][2645,128]"},"children":[]},
+    {"attributes":{"type":"__Common__","opacity":"1.000000","zIndex":"1","bounds":"[121,135][2926,1926]"},"children":[
+      {"attributes":{"type":"Web","visible":"true","originalText":"resource:/RAWFILE/terminal.html","bounds":"[121,135][2926,1926]"},"children":[]}
+    ]},
+    {"attributes":{"type":"__Common__","opacity":"0.000000","zIndex":"0","bounds":"[121,135][2926,1926]"},"children":[
+      {"attributes":{"type":"Web","visible":"true","originalText":"resource:/RAWFILE/terminal.html","bounds":"[121,135][2926,1926]"},"children":[]}
+    ]}
+  ]
+}
+'@ | ConvertFrom-Json -Depth 10
+        $activeSurfaces = @(Get-LeanTTYActiveTerminalSurfaceNodes -Layout $rendererRebuiltLayout)
+        Assert-True (
+            $activeSurfaces.Count -eq 1 -and
+            [string]$activeSurfaces[0].attributes.zIndex -eq '1'
+        ) 'Renderer-rebuilt layout did not retain one observable active terminal Surface'
     }
 }
 
