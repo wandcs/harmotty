@@ -37,8 +37,7 @@ const HELP_TEXT: string =
   '  host list                                      List hosts\r\n' +
   '\r\n' +
   '  help [<command>], <command> --help, ?           Show help\r\n' +
-  '  exit                                           Close this pane\r\n' +
-  'ltty> '
+  '  exit                                           Close this pane\r\n'
 
 const SSH_HELP: string = '\r\nUsage: ssh [-p <port>] [-i <identity>] <user>@<host>\r\n' +
   '       ssh [-p <port>] [-i <identity>] <host-name>\r\n\r\n' +
@@ -68,6 +67,7 @@ export interface KeyCommandContext {
   writeOutput: (text: string) => void
   beginKeyPassphraseChange: (keyName: string) => void
   confirmKeyDelete: (name: string, fingerprint: string, onConfirm: () => void, onCancel: () => void) => void
+  showTopLevelHelp: (helpText: string) => void
 }
 
 export class KeyCommandService {
@@ -107,7 +107,7 @@ export class KeyCommandService {
 
   private static executeHelp(result: KeyCommandResult, ctx: KeyCommandContext): void {
     let topic: string = result.keyName.toLowerCase()
-    if (topic.length === 0) { ctx.writeOutput(HELP_TEXT); return }
+    if (topic.length === 0) { ctx.showTopLevelHelp(HELP_TEXT); return }
     if (topic === 'ssh') { ctx.writeOutput(SSH_HELP); return }
     if (topic === 'ssh-keygen') { ctx.writeOutput(KEYGEN_HELP); return }
     if (topic === 'ssh-copy-id') { ctx.writeOutput(COPY_ID_HELP); return }

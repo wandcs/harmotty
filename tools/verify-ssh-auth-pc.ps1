@@ -27,6 +27,8 @@ param(
     [ValidateSet(
         'password-success',
         'transport-main-path',
+        'performance-matrix',
+        'bell-attention',
         'password-kbdint-mixed-echo',
         'multiround-wrong-answer-recovery',
         'publickey-unencrypted',
@@ -119,6 +121,7 @@ if (-not $DiagnosticHap) {
             'tools/candidate-store.ps1',
             'tools/package-policy.ps1',
             'tools/test-build-workflows.ps1',
+            'leantty_ssh/ssh-auth-fixture/src/main.rs',
             'docs/quality-strategy.md',
             'docs/design/ssh-authentication.md',
             'docs/design/terminal-search.md',
@@ -174,6 +177,22 @@ $caughtError = $null
 $preferencesDigestBefore = ''
 $preferencesDigestAfter = ''
 $preferencesDigestUnchanged = $null
+$bellEvidence = [ordered]@{
+    selected = $false
+    activePaneStayedTransient = $null
+    inactiveTabAttentionPersisted = $null
+    inactiveTabAttentionClearedOnEntry = $null
+    splitPaneSourcePersisted = $null
+    splitPaneSourceClearedOnFocus = $null
+    repeatedBellCallbacksCoalesced = $null
+    screenshots = @()
+}
+$performanceEvidence = [ordered]@{
+    selected = $false
+    gpu = $null
+    modes = @()
+    restoredMode = $null
+}
 $stageStartedAt = $null
 $currentStage = 'initialization'
 $failureDomain = 'none'
@@ -182,6 +201,8 @@ $runMode = if ($Only.Count -eq 0 -and -not $DiagnosticHap) { 'acceptance' } else
 $availableStages = @(
     'password-success',
     'transport-main-path',
+    'performance-matrix',
+    'bell-attention',
     'password-kbdint-mixed-echo',
     'multiround-wrong-answer-recovery',
     'generated-disposable-auth-key',
@@ -232,6 +253,8 @@ function Get-LeanTTYFixtureStageBudgetSeconds {
     $budgets = @{
         'password-success' = 75
         'transport-main-path' = 240
+        'performance-matrix' = 420
+        'bell-attention' = 180
         'password-kbdint-mixed-echo' = 120
         'multiround-wrong-answer-recovery' = 180
         'generated-disposable-auth-key' = 60
@@ -462,11 +485,21 @@ function Submit-FocusedDeviceCommand {
         [Parameter(Mandatory = $true)][string]$Command,
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
-    Focus-ActiveCommandInput -LayoutName $LayoutName
-    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
-    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
-    Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
+    for ($commandAttempt = 1; $commandAttempt -le 3; $commandAttempt++) {
+        Focus-ActiveCommandInput -LayoutName $LayoutName
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
+        Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+        try {
+            Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
+            return
+        } catch {
+            if ($commandAttempt -ge 3) {
+                throw '[harness] Device did not submit the focused command after three attempts'
+            }
+            Invoke-LeanTTYDeviceCtrlC -Hdc $hdc -Target $Target
+        }
+    }
 }
 
 function Assert-AuthCommandLoopbackTarget {
@@ -542,6 +575,240 @@ function Invoke-AuthSplitShortcut {
         'uinput -K -d 2072 -d 2047 -d 2020 -u 2020 -u 2047 -u 2072'
     ) | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Unable to invoke LeanTTY split shortcut' }
+}
+
+function Invoke-AuthWorkspaceShortcut {
+    param([Parameter(Mandatory = $true)][ValidateSet(
+        'new-tab', 'close-active', 'next-tab', 'focus-left', 'focus-right'
+    )][string]$Action)
+    $command = switch ($Action) {
+        'new-tab' { 'uinput -K -d 2072 -d 2047 -d 2036 -u 2036 -u 2047 -u 2072' }
+        'close-active' { 'uinput -K -d 2072 -d 2047 -d 2039 -u 2039 -u 2047 -u 2072' }
+        'next-tab' { 'uinput -K -d 2072 -d 2049 -u 2049 -u 2072' }
+        'focus-left' { 'uinput -K -d 2072 -d 2045 -d 2014 -u 2014 -u 2045 -u 2072' }
+        'focus-right' { 'uinput -K -d 2072 -d 2045 -d 2015 -u 2015 -u 2045 -u 2072' }
+    }
+    & $hdc -t $Target shell $command | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to invoke LeanTTY workspace action: $Action" }
+}
+
+function Get-AuthTabNodes {
+    param([Parameter(Mandatory = $true)]$Layout)
+    $root = @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
+        [string]$_.attributes.bundleName -eq 'com.leantty.app'
+    } | Select-Object -First 1)
+    if ($root.Count -ne 1 -or
+        [string]$root[0].attributes.bounds -notmatch '^\[\d+,(?<top>\d+)\]\[\d+,\d+\]$') {
+        throw '[harness] LeanTTY root bounds were not found'
+    }
+    $rootTop = [int]$Matches.top
+    return @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
+        if ([string]$_.attributes.type -ne 'Stack' -or
+            [string]$_.attributes.clickable -ne 'true' -or
+            [string]::IsNullOrWhiteSpace([string]$_.attributes.description)) {
+            return $false
+        }
+        $bounds = [string]$_.attributes.bounds
+        if ($bounds -notmatch '^\[\d+,(?<top>\d+)\]\[\d+,(?<bottom>\d+)\]$') { return $false }
+        return [int]$Matches.top -eq $rootTop -and ([int]$Matches.bottom - $rootTop) -eq 76
+    })
+}
+
+function Wait-AuthTabCount {
+    param(
+        [Parameter(Mandatory = $true)][ValidateRange(1, 2)][int]$Count,
+        [Parameter(Mandatory = $true)][string]$LayoutName
+    )
+    $path = Join-Path $EvidenceDirectory $LayoutName
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $path
+        if (@(Get-AuthTabNodes -Layout $layout).Count -eq $Count) { return $layout }
+        Start-Sleep -Milliseconds 200
+    } while ($stopwatch.Elapsed.TotalSeconds -lt 20)
+    throw "[harness] Timed out waiting for LeanTTY tab count: $Count"
+}
+
+function Invoke-AuthLayoutNodeClick {
+    param([Parameter(Mandatory = $true)]$Node)
+    $center = Get-LeanTTYBoundsCenter -Bounds ([string]$Node.attributes.bounds)
+    & $hdc -t $Target shell "uitest uiInput click $($center.x) $($center.y)" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw '[environment] HarmonyOS layout node click failed' }
+}
+
+function Open-AuthToolMenu {
+    param([Parameter(Mandatory = $true)][string]$LayoutPrefix)
+    $layout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory "$LayoutPrefix-before-menu.json")
+    $root = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        [string]$_.attributes.bundleName -eq 'com.leantty.app'
+    } | Select-Object -First 1)
+    if ($root.Count -ne 1 -or
+        [string]$root[0].attributes.bounds -notmatch '^\[\d+,(?<top>\d+)\]\[\d+,\d+\]$') {
+        throw '[harness] LeanTTY root bounds were not found for the tool menu'
+    }
+    $contentTop = [int]$Matches.top + 76
+    $candidates = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+        if ([string]$_.attributes.type -ne 'Stack' -or
+            [string]$_.attributes.clickable -ne 'true' -or
+            -not [string]::IsNullOrWhiteSpace([string]$_.attributes.text) -or
+            -not [string]::IsNullOrWhiteSpace([string]$_.attributes.description) -or
+            -not [string]::IsNullOrWhiteSpace([string]$_.attributes.id)) {
+            return $false
+        }
+        $bounds = [string]$_.attributes.bounds
+        if ($bounds -notmatch '^\[(?<left>\d+),(?<top>\d+)\]\[(?<right>\d+),(?<bottom>\d+)\]$') {
+            return $false
+        }
+        $width = [int]$Matches.right - [int]$Matches.left
+        $height = [int]$Matches.bottom - [int]$Matches.top
+        return [int]$Matches.left -gt 1000 -and [int]$Matches.bottom -le $contentTop -and
+            $width -ge 40 -and $width -le 90 -and $height -ge 40 -and $height -le 90
+    })
+    if ($candidates.Count -ne 1) { throw '[harness] LeanTTY tool menu button was not uniquely identified' }
+    Invoke-AuthLayoutNodeClick -Node $candidates[0]
+
+    $menuPath = Join-Path $EvidenceDirectory "$LayoutPrefix-menu.json"
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $menuLayout = Get-LeanTTYDeviceLayout -Hdc $hdc -Target $Target -LocalPath $menuPath
+        $labels = @(Get-LeanTTYLayoutNodes -Node $menuLayout | Where-Object {
+            [string]$_.attributes.type -eq 'Text' -and
+            [string]$_.attributes.text -in @('Off', 'Low', 'Medium', 'High', 'Extreme')
+        })
+        if ($labels.Count -eq 1) { return $menuLayout }
+        Start-Sleep -Milliseconds 200
+    } while ($stopwatch.Elapsed.TotalSeconds -lt 10)
+    throw '[environment] LeanTTY transparency menu row did not open'
+}
+
+function Set-AuthTransparencyMode {
+    param(
+        [Parameter(Mandatory = $true)][ValidateSet('Off', 'Low', 'Medium', 'High', 'Extreme')]
+        [string]$Mode,
+        [Parameter(Mandatory = $true)][string]$LayoutPrefix
+    )
+    $order = @('Off', 'Low', 'Medium', 'High', 'Extreme')
+    for ($step = 0; $step -lt 6; $step++) {
+        $layout = Open-AuthToolMenu -LayoutPrefix "$LayoutPrefix-$step"
+        $labels = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+            [string]$_.attributes.type -eq 'Text' -and
+            [string]$_.attributes.text -in $order
+        })
+        if ($labels.Count -ne 1) { throw '[harness] Transparency mode label was not unique' }
+        $current = [string]$labels[0].attributes.text
+        if ($current -eq $Mode) {
+            Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2070
+            return
+        }
+        $parent = ([string]$labels[0].attributes.hierarchy) -replace ',[^,]+$', ''
+        $direction = if ([Array]::IndexOf($order, $Mode) -gt [Array]::IndexOf($order, $current)) {
+            '+'
+        } else {
+            '−'
+        }
+        $buttons = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
+            [string]$_.attributes.type -eq 'Text' -and
+            [string]$_.attributes.text -eq $direction -and
+            [string]$_.attributes.hierarchy -like "$parent,*" -and
+            [string]$_.attributes.clickable -eq 'true' -and
+            [string]$_.attributes.enabled -eq 'true'
+        })
+        if ($buttons.Count -ne 1) { throw "[harness] Transparency $direction button was not unique" }
+        Invoke-AuthLayoutNodeClick -Node $buttons[0]
+        Start-Sleep -Milliseconds 250
+        Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2070
+    }
+    throw "[product] Transparency mode did not reach $Mode"
+}
+
+function Get-AuthProcessMemorySample {
+    $processLines = @(& $hdc -t $Target shell 'ps -ef' 2>&1 | Where-Object {
+        [string]$_ -match 'com\.leantty\.app(?::(?:gpu|render))?\s*$'
+    })
+    $processes = [Collections.Generic.List[object]]::new()
+    foreach ($line in $processLines) {
+        $fields = @(([string]$line).Trim() -split '\s+')
+        if ($fields.Count -lt 8 -or $fields[1] -notmatch '^\d+$') { continue }
+        $pidValue = [int]$fields[1]
+        $status = @(& $hdc -t $Target shell "cat /proc/$pidValue/status" 2>&1) -join "`n"
+        $rssMatch = [regex]::Match($status, '(?m)^VmRSS:\s+(?<kb>\d+)\s+kB$')
+        $hwmMatch = [regex]::Match($status, '(?m)^VmHWM:\s+(?<kb>\d+)\s+kB$')
+        $rsText = @(& $hdc -t $Target shell "hidumper -s 10 -a 'dumpExistPidMem $pidValue'" 2>&1) -join "`n"
+        $gpuMatch = [regex]::Match($rsText, 'allGpuSize:\s*(?<bytes>\d+)')
+        $processes.Add([pscustomobject][ordered]@{
+            name = [string]$fields[-1]
+            pid = $pidValue
+            rssKb = $(if ($rssMatch.Success) { [int64]$rssMatch.Groups['kb'].Value } else { $null })
+            highWaterKb = $(if ($hwmMatch.Success) { [int64]$hwmMatch.Groups['kb'].Value } else { $null })
+            renderServiceGpuBytes = $(if ($gpuMatch.Success) { [int64]$gpuMatch.Groups['bytes'].Value } else { $null })
+        })
+    }
+    return @($processes)
+}
+
+function Get-AuthHitchSample {
+    $text = @(& $hdc -t $Target shell "hidumper -s 10 -a 'hitchs app0'" 2>&1) -join "`n"
+    $over66 = [regex]::Match($text, 'more than 66 ms\s+(?<count>\d+)')
+    $over33 = [regex]::Match($text, 'more than 33 ms\s+(?<count>\d+)')
+    $over16 = [regex]::Match($text, 'more than 16\.67 ms\s+(?<count>\d+)')
+    return [pscustomobject][ordered]@{
+        over66Ms = $(if ($over66.Success) { [int]$over66.Groups['count'].Value } else { $null })
+        over33Ms = $(if ($over33.Success) { [int]$over33.Groups['count'].Value } else { $null })
+        over16_67Ms = $(if ($over16.Success) { [int]$over16.Groups['count'].Value } else { $null })
+    }
+}
+
+function Get-AuthPerfRenderRecord {
+    param([Parameter(Mandatory = $true)][string]$CaseId)
+    $logs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+    foreach ($match in [regex]::Matches($logs, 'PERF render (?<json>\{[^\r\n]+\})')) {
+        try {
+            $record = $match.Groups['json'].Value | ConvertFrom-Json
+            if ([string]$record.caseId -eq $CaseId) { return $record }
+        } catch {}
+    }
+    throw "[harness] PERF render record was not found for $CaseId"
+}
+
+function Invoke-AuthPerfSample {
+    param([Parameter(Mandatory = $true)][string]$CaseId)
+    for ($commandAttempt = 1; $commandAttempt -le 3; $commandAttempt++) {
+        $preparedPattern = 'perf case=' + [regex]::Escape($CaseId) + ' bytes=\d+ state=prepared'
+        $preparedCount = Get-FixtureLogMatchCount -Pattern $preparedPattern
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Submit-ConnectedInput -Text "ltty-perf-prepare $CaseId 12000 80"
+        try {
+            Wait-FixtureLogMatchCount `
+                -Pattern $preparedPattern `
+                -GreaterThan $preparedCount `
+                -TimeoutSeconds 15 | Out-Null
+        } catch {
+            if ($commandAttempt -lt 3) { continue }
+            throw "[harness] Fixture did not accept the PERF prepare command for $CaseId after three attempts"
+        }
+
+        $runPattern = "perf case=$CaseId state=run"
+        $runCount = Get-FixtureLogMatchCount -Pattern ([regex]::Escape($runPattern))
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Submit-ConnectedInput -Text "ltty-perf-run $CaseId"
+        try {
+            Wait-FixtureLogMatchCount `
+                -Pattern ([regex]::Escape($runPattern)) `
+                -GreaterThan $runCount `
+                -TimeoutSeconds 8 | Out-Null
+        } catch {
+            if ($commandAttempt -lt 3) { continue }
+            throw "[harness] Fixture did not accept the PERF run command for $CaseId after three attempts"
+        }
+        Wait-AuthLog `
+            -Pattern ('PERF render .*"caseId":"' + $CaseId + '".*"completenessPercent":100') `
+            -TimeoutSeconds 30
+        $record = Get-AuthPerfRenderRecord -CaseId $CaseId
+        $record | Add-Member -NotePropertyName commandAttempts -NotePropertyValue $commandAttempt
+        return $record
+    }
+    throw "[harness] PERF sample did not complete for $CaseId"
 }
 
 function Wait-AuthPaneCount {
@@ -852,6 +1119,8 @@ function Write-AuthEvidence {
         declaredCoverage = @(
             'password-success',
             'transport-main-path-input-large-paste-continuous-output-resize-disconnect-reconnect',
+            'five-mode-transparency-continuous-output-render-memory-gpu-hitch-distributions',
+            'bell-active-inactive-tab-split-pane-coalescing-and-clear',
             'password-then-keyboard-interactive-mixed-echo',
             'keyboard-interactive-multi-round-wrong-answer-recovery',
             'publickey-unencrypted',
@@ -882,6 +1151,8 @@ function Write-AuthEvidence {
             reverseMappingAbsenceAudit = (-not $mappingActive)
             fixtureProcessAbsenceAudit = $fixtureProcessAbsent
         }
+        performanceMatrix = $performanceEvidence
+        bellAttention = $bellEvidence
         failureDomain = $failureDomain
         failure = $failure
     }
@@ -1023,12 +1294,7 @@ try {
         -Pattern 'paste case=russhmain bytes=524288 result=matched' `
         -TimeoutSeconds 30 | Out-Null
 
-    Submit-ConnectedInput -Text 'ltty-perf-prepare russhmain 12000 80'
-    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-ConnectedInput -Text 'ltty-perf-run russhmain'
-    Wait-AuthLog `
-        -Pattern 'PERF render .*"caseId":"russhmain".*"completenessPercent":100' `
-        -TimeoutSeconds 30
+    Invoke-AuthPerfSample -CaseId 'russhmain' | Out-Null
 
     $resizeCount = Get-FixtureLogMatchCount -Pattern 'resize cols=\d+ rows=\d+'
     Split-AuthPane
@@ -1048,6 +1314,139 @@ try {
     Wait-AuthLog -Pattern 'SSH session connected'
     Close-FixtureShell
     Complete-AuthStage -Name 'transport-main-path'
+    }
+
+    if (Test-AuthStageSelected -Name 'performance-matrix') {
+    Start-AuthStage -Name 'performance-matrix'
+    $performanceEvidence.selected = $true
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-performance-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+
+    $gpuText = @(& $hdc -t $Target shell "hidumper -s 10 -a 'gles'" 2>&1) -join "`n"
+    $gpuVendor = [regex]::Match($gpuText, '(?m)^GL_VENDOR:\s*(?<value>.+)$')
+    $gpuRenderer = [regex]::Match($gpuText, '(?m)^GL_RENDERER:\s*(?<value>.+)$')
+    $gpuVersion = [regex]::Match($gpuText, '(?m)^GL_VERSION:\s*(?<value>.+)$')
+    $performanceEvidence.gpu = [ordered]@{
+        vendor = $(if ($gpuVendor.Success) { $gpuVendor.Groups['value'].Value.Trim() } else { '' })
+        renderer = $(if ($gpuRenderer.Success) { $gpuRenderer.Groups['value'].Value.Trim() } else { '' })
+        version = $(if ($gpuVersion.Success) { $gpuVersion.Groups['value'].Value.Trim() } else { '' })
+    }
+
+    $modeNames = @('Off', 'Low', 'Medium', 'High', 'Extreme')
+    for ($modeIndex = 0; $modeIndex -lt $modeNames.Count; $modeIndex++) {
+        $modeName = $modeNames[$modeIndex]
+        $modeSlug = $modeName.ToLowerInvariant()
+        Set-AuthTransparencyMode -Mode $modeName -LayoutPrefix "performance-$modeSlug"
+        $hitchBefore = Get-AuthHitchSample
+        $renderSamples = [Collections.Generic.List[object]]::new()
+        $memorySamples = [Collections.Generic.List[object]]::new()
+        for ($sampleIndex = 1; $sampleIndex -le 3; $sampleIndex++) {
+            $caseId = $modeSlug + '0' + $sampleIndex.ToString()
+            $renderSamples.Add((Invoke-AuthPerfSample -CaseId $caseId))
+            $memorySamples.Add([pscustomobject][ordered]@{
+                sample = $sampleIndex
+                processes = @(Get-AuthProcessMemorySample)
+            })
+        }
+        $screenshotName = "performance-$modeSlug.png"
+        Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
+            -LocalPath (Join-Path $EvidenceDirectory $screenshotName)
+        $performanceEvidence.modes += [pscustomobject][ordered]@{
+            mode = $modeName
+            renderSamples = @($renderSamples)
+            memorySamples = @($memorySamples)
+            hitchBefore = $hitchBefore
+            hitchAfter = Get-AuthHitchSample
+            screenshot = $screenshotName
+        }
+    }
+    Set-AuthTransparencyMode -Mode 'Medium' -LayoutPrefix 'performance-restore-medium'
+    $performanceEvidence.restoredMode = 'Medium'
+    Close-FixtureShell
+    Complete-AuthStage -Name 'performance-matrix'
+    }
+
+    if (Test-AuthStageSelected -Name 'bell-attention') {
+    Start-AuthStage -Name 'bell-attention'
+    $bellEvidence.selected = $true
+    Start-AuthCommand -User 'password'
+    Wait-AuthLog -Pattern 'native auth event kind=password'
+    Submit-AuthValue -Value $credentials.password -LayoutName 'layout-bell-password.json'
+    Wait-AuthLog -Pattern 'SSH session connected'
+
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-ConnectedInput -Text 'ltty-bell active01 500'
+    Start-Sleep -Milliseconds 1600
+    $activeLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+    Save-SafeDiagnosticText -Text $activeLogs -FileName 'bell-active-app-logs.txt'
+    if ($activeLogs -match 'Pane attention set:') {
+        throw '[product] Focused active-pane BEL incorrectly persisted attention'
+    }
+    Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory 'bell-active-after-pulse.png')
+    $bellEvidence.activePaneStayedTransient = $true
+    $bellEvidence.screenshots += 'bell-active-after-pulse.png'
+
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-ConnectedInput -Text 'ltty-bell inactive01 5000'
+    Wait-FixtureLog -Pattern 'bell case=inactive01 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
+    Invoke-AuthWorkspaceShortcut -Action 'new-tab'
+    Wait-AuthTabCount -Count 2 -LayoutName 'layout-bell-inactive-new-tab.json' | Out-Null
+    Wait-FixtureLog -Pattern 'bell case=inactive01 state=sent' -TimeoutSeconds 10 | Out-Null
+    Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
+    Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory 'bell-inactive-tab-marker.png')
+    $bellEvidence.inactiveTabAttentionPersisted = $true
+    $bellEvidence.screenshots += 'bell-inactive-tab-marker.png'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-AuthWorkspaceShortcut -Action 'next-tab'
+    Wait-AuthLog -Pattern 'Pane attention cleared:' -TimeoutSeconds 10
+    $bellEvidence.inactiveTabAttentionClearedOnEntry = $true
+    Invoke-AuthWorkspaceShortcut -Action 'next-tab'
+    Invoke-AuthWorkspaceShortcut -Action 'close-active'
+    Wait-AuthTabCount -Count 1 -LayoutName 'layout-bell-inactive-tab-cleaned.json' | Out-Null
+
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-ConnectedInput -Text 'ltty-bell split01 5000'
+    Wait-FixtureLog -Pattern 'bell case=split01 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
+    Split-AuthPane
+    Wait-FixtureLog -Pattern 'bell case=split01 state=sent' -TimeoutSeconds 10 | Out-Null
+    Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
+    Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
+        -LocalPath (Join-Path $EvidenceDirectory 'bell-split-pane-marker.png')
+    $bellEvidence.splitPaneSourcePersisted = $true
+    $bellEvidence.screenshots += 'bell-split-pane-marker.png'
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-AuthWorkspaceShortcut -Action 'focus-left'
+    Wait-AuthLog -Pattern 'Pane attention cleared:' -TimeoutSeconds 10
+    $bellEvidence.splitPaneSourceClearedOnFocus = $true
+
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Submit-ConnectedInput -Text 'ltty-bell flood01 5000'
+    Submit-ConnectedInput -Text 'ltty-bell flood02 5000'
+    Wait-FixtureLog -Pattern 'bell case=flood01 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
+    Wait-FixtureLog -Pattern 'bell case=flood02 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
+    Invoke-AuthWorkspaceShortcut -Action 'focus-right'
+    Wait-FixtureLog -Pattern 'bell case=flood01 state=sent' -TimeoutSeconds 10 | Out-Null
+    Wait-FixtureLog -Pattern 'bell case=flood02 state=sent' -TimeoutSeconds 10 | Out-Null
+    Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
+    Start-Sleep -Milliseconds 1200
+    $floodLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
+    Save-SafeDiagnosticText -Text $floodLogs -FileName 'bell-repeated-app-logs.txt'
+    if ([regex]::Matches($floodLogs, 'Pane attention set:').Count -ne 1) {
+        throw '[product] Repeated BEL did not coalesce to one pending attention transition'
+    }
+    $bellEvidence.repeatedBellCallbacksCoalesced = $true
+    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+    Invoke-AuthWorkspaceShortcut -Action 'focus-left'
+    Wait-AuthLog -Pattern 'Pane attention cleared:' -TimeoutSeconds 10
+    Invoke-AuthWorkspaceShortcut -Action 'focus-right'
+    Invoke-ActivePaneCloseButton -LayoutName 'layout-bell-close-idle-pane.json'
+    Wait-AuthPaneCount -Count 1 -LayoutName 'layout-bell-single-pane.json' | Out-Null
+    Close-FixtureShell
+    Complete-AuthStage -Name 'bell-attention'
     }
 
     if (Test-AuthStageSelected -Name 'password-kbdint-mixed-echo') {

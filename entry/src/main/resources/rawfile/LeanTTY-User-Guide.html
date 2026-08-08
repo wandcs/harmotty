@@ -1,0 +1,1765 @@
+<!doctype html>
+<!-- leantty-owned-user-guide -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="referrer" content="no-referrer">
+  <meta name="leantty-guide-revision" content="1">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>LeanTTY 1.2.0 使用指南 / User Guide</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #101013;
+      --surface: #151519;
+      --surface-raised: #1a1a1f;
+      --surface-soft: #202027;
+      --text: #e9e9ec;
+      --text-strong: #ffffff;
+      --muted: #a7a8ae;
+      --quiet: #777980;
+      --line: #34353c;
+      --line-strong: #505159;
+      --mint: #82ddc7;
+      --mint-strong: #9be8d6;
+      --mint-wash: rgba(130, 221, 199, 0.1);
+      --amber: #e8c27a;
+      --amber-wash: rgba(232, 194, 122, 0.09);
+      --red: #f0a0ad;
+      --code-bg: #1e1e2e;
+      --code-text: #cdd6f4;
+      --code-line: #45475a;
+      --shadow: rgba(0, 0, 0, 0.32);
+      --sans: "HarmonyOS Sans SC", "HarmonyOS Sans", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+      --mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+      --content: 780px;
+      --rail: 224px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 32px;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.68;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 20;
+      height: 3px;
+      background: linear-gradient(90deg, #e2e2e5 0%, #929399 44%, #414249 100%);
+    }
+
+    a {
+      color: var(--mint-strong);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.2em;
+    }
+
+    a:hover { color: var(--text-strong); }
+
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--mint);
+      outline-offset: 4px;
+      border-radius: 2px;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 12px;
+      left: 16px;
+      z-index: 100;
+      transform: translateY(-160%);
+      padding: 8px 12px;
+      border: 1px solid var(--mint);
+      background: var(--surface-raised);
+      color: var(--text-strong);
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .masthead {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 38px 0 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .language-control {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #language-zh:checked ~ .guide-en,
+    #language-en:checked ~ .guide-zh { display: none; }
+
+    .masthead-meta {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .language-switch {
+      display: inline-flex;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+    }
+
+    .language-switch label {
+      min-width: 58px;
+      padding: 4px 9px;
+      border-radius: 5px;
+      color: var(--quiet);
+      font-size: 12px;
+      line-height: 1.35;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .language-switch label:hover { color: var(--text-strong); }
+
+    #language-zh:checked ~ .guide-zh label[for="language-zh"],
+    #language-en:checked ~ .guide-en label[for="language-en"] {
+      background: var(--surface-soft);
+      color: var(--text-strong);
+    }
+
+    #language-zh:focus-visible ~ .guide-zh label[for="language-zh"],
+    #language-en:focus-visible ~ .guide-en label[for="language-en"] {
+      outline: 2px solid var(--mint);
+      outline-offset: 3px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-strong);
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 20px var(--shadow);
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 680;
+      letter-spacing: -0.02em;
+    }
+
+    .edition {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .hero {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 76px 0 82px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(360px, 0.78fr);
+      gap: clamp(48px, 7vw, 96px);
+      align-items: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 16px;
+      color: var(--mint);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      color: var(--text-strong);
+      line-height: 1.18;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 700px;
+      margin: 0;
+      font-size: clamp(42px, 6vw, 72px);
+      font-weight: 670;
+      letter-spacing: -0.055em;
+    }
+
+    .hero-copy {
+      max-width: 620px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: clamp(17px, 2vw, 20px);
+      line-height: 1.58;
+    }
+
+    .scope-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin: 30px 0 0;
+      padding: 0;
+      color: var(--muted);
+      font-size: 13px;
+      list-style: none;
+    }
+
+    .scope-line li {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .scope-line li::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--mint);
+      box-shadow: 0 0 0 3px var(--mint-wash);
+    }
+
+    .terminal-demo {
+      position: relative;
+      overflow: hidden;
+      min-height: 330px;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background: var(--code-bg);
+      box-shadow: 0 26px 70px var(--shadow);
+    }
+
+    .terminal-bar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-raised);
+    }
+
+    .terminal-title {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .terminal-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--line-strong);
+    }
+
+    .terminal-body {
+      padding: 25px 24px 28px;
+      color: #d7d8dc;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .prompt { color: var(--mint-strong); }
+    .command { color: #ffffff; }
+    .terminal-muted { color: #7f8188; }
+
+    .connection-track {
+      position: relative;
+      margin: 24px 0 2px;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      list-style: none;
+    }
+
+    .connection-track::before {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: 8px;
+      right: 8px;
+      height: 1px;
+      background: linear-gradient(90deg, var(--mint), #929399 50%, var(--text));
+    }
+
+    .connection-track li {
+      position: relative;
+      padding-top: 23px;
+      color: var(--quiet);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .connection-track li::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 9px;
+      height: 9px;
+      border: 2px solid var(--code-bg);
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 0 1px var(--mint);
+    }
+
+    .connection-track li:nth-child(2) { text-align: center; }
+    .connection-track li:nth-child(2)::before { left: calc(50% - 5px); background: #929399; box-shadow: 0 0 0 1px #929399; }
+    .connection-track li:last-child { text-align: right; color: var(--text); }
+    .connection-track li:last-child::before { left: auto; right: 3px; background: var(--text); box-shadow: 0 0 0 1px var(--text); }
+
+    .layout {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: var(--rail) minmax(0, var(--content));
+      gap: clamp(54px, 8vw, 112px);
+      align-items: start;
+      justify-content: center;
+    }
+
+    .toc {
+      position: sticky;
+      top: 26px;
+      padding: 24px 0 40px;
+    }
+
+    .toc-label {
+      margin: 0 0 13px;
+      color: var(--quiet);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .toc ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .toc a {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      padding: 7px 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .toc a:hover { color: var(--text-strong); }
+
+    .toc-index {
+      color: var(--quiet);
+      font-family: var(--mono);
+      font-size: 10px;
+      line-height: 2.2;
+    }
+
+    main { min-width: 0; }
+
+    .doc-section {
+      padding: 64px 0 72px;
+      border-top: 1px solid var(--line);
+    }
+
+    .doc-section:first-child { border-top-color: var(--line-strong); }
+
+    .section-kicker {
+      margin: 0 0 12px;
+      color: var(--mint);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 650;
+      letter-spacing: -0.035em;
+    }
+
+    h3 {
+      margin: 38px 0 12px;
+      font-size: 19px;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+    }
+
+    p { margin: 14px 0; }
+
+    .section-intro {
+      max-width: 680px;
+      margin: 16px 0 34px;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .steps {
+      margin: 34px 0 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-top: 1px solid var(--line-strong);
+      list-style: none;
+    }
+
+    .step {
+      min-width: 0;
+      padding: 22px 22px 4px 0;
+    }
+
+    .step + .step {
+      padding-left: 22px;
+      border-left: 1px solid var(--line);
+    }
+
+    .step-number {
+      display: block;
+      margin-bottom: 24px;
+      color: var(--mint);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-strong);
+      font-size: 16px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    pre {
+      position: relative;
+      overflow-x: auto;
+      margin: 22px 0;
+      padding: 18px 20px;
+      border: 1px solid var(--code-line);
+      border-radius: 10px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.65;
+      tab-size: 2;
+    }
+
+    pre code { color: inherit; }
+
+    code,
+    kbd {
+      font-family: var(--mono);
+      font-size: 0.88em;
+    }
+
+    :not(pre) > code {
+      padding: 0.12em 0.36em;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--surface-raised);
+      color: var(--text-strong);
+      white-space: nowrap;
+    }
+
+    kbd {
+      display: inline-block;
+      min-width: 1.65em;
+      margin: 0 0.08em;
+      padding: 0.12em 0.42em 0.18em;
+      border: 1px solid var(--line-strong);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      background: var(--surface-raised);
+      color: var(--text-strong);
+      line-height: 1.3;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .callout {
+      margin: 28px 0;
+      padding: 18px 20px;
+      border-left: 3px solid var(--mint);
+      background: var(--mint-wash);
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: var(--amber-wash);
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text-strong);
+    }
+
+    .callout p { margin: 0; color: var(--muted); }
+
+    .practice-grid {
+      margin: 32px 0 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .practice-item {
+      min-width: 0;
+      padding: 24px 24px 24px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .practice-item:nth-child(even) {
+      padding-right: 0;
+      padding-left: 24px;
+      border-left: 1px solid var(--line);
+    }
+
+    .practice-label {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--mint);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+    }
+
+    .practice-item h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+
+    .practice-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 26px 0;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th:first-child,
+    td:first-child { padding-left: 0; }
+
+    th:last-child,
+    td:last-child { padding-right: 0; }
+
+    tr:last-child td { border-bottom: 0; }
+
+    th {
+      color: var(--quiet);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    td:first-child { color: var(--text-strong); }
+
+    .key-grid {
+      margin: 28px 0 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .key-row {
+      min-width: 0;
+      padding: 15px 16px 15px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .key-row:nth-child(even) {
+      padding-right: 0;
+      padding-left: 16px;
+      border-left: 1px solid var(--line);
+    }
+
+    .key-action {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .key-combo {
+      flex: 0 0 auto;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .feature-list {
+      margin: 22px 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 28px;
+      list-style: none;
+    }
+
+    .feature-list li {
+      position: relative;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .feature-list li::before {
+      content: "";
+      position: absolute;
+      top: 0.72em;
+      left: 0;
+      width: 6px;
+      height: 1px;
+      background: var(--mint);
+    }
+
+    details {
+      border-top: 1px solid var(--line);
+    }
+
+    details:last-of-type { border-bottom: 1px solid var(--line); }
+
+    summary {
+      padding: 18px 2px;
+      color: var(--text-strong);
+      font-weight: 620;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+
+    summary::after {
+      content: "+";
+      float: right;
+      color: var(--mint);
+      font-family: var(--mono);
+      font-weight: 400;
+    }
+
+    details[open] summary::after { content: "−"; }
+
+    .details-body {
+      max-width: 690px;
+      padding: 0 34px 20px 2px;
+      color: var(--muted);
+    }
+
+    .details-body p:first-child { margin-top: 0; }
+
+    .footer {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 44px 0 58px;
+      display: flex;
+      justify-content: space-between;
+      gap: 32px;
+      border-top: 1px solid var(--line-strong);
+      color: var(--quiet);
+      font-size: 12px;
+    }
+
+    .footer strong { color: var(--muted); font-weight: 620; }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --page: #f7f7f8;
+        --surface: #ffffff;
+        --surface-raised: #f0f0f2;
+        --surface-soft: #e9e9ec;
+        --text: #26272b;
+        --text-strong: #101114;
+        --muted: #5f6168;
+        --quiet: #7b7d84;
+        --line: #d9dade;
+        --line-strong: #bfc1c7;
+        --mint: #197f69;
+        --mint-strong: #116c59;
+        --mint-wash: rgba(25, 127, 105, 0.08);
+        --amber: #93681b;
+        --amber-wash: rgba(147, 104, 27, 0.08);
+        --red: #a73b50;
+        --code-bg: #1e1e2e;
+        --code-text: #cdd6f4;
+        --code-line: #45475a;
+        --shadow: rgba(28, 29, 34, 0.13);
+      }
+
+      .terminal-body { color: #d7d8dc; }
+      .terminal-demo .prompt { color: #9be8d6; }
+      .terminal-demo .command { color: #ffffff; }
+      .terminal-demo .terminal-muted { color: #929399; }
+      .connection-track li:last-child { color: #e9e9ec; }
+      .connection-track li::before { border-color: var(--code-bg); }
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 58px;
+      }
+
+      .terminal-demo { max-width: 620px; }
+
+      .layout {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+
+      .toc {
+        position: static;
+        overflow-x: auto;
+        padding: 0 0 24px;
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .toc-label { display: none; }
+
+      .toc ol {
+        display: flex;
+        gap: 20px;
+        min-width: max-content;
+      }
+
+      .toc a {
+        display: flex;
+        gap: 6px;
+      }
+
+      main { max-width: var(--content); }
+    }
+
+    @media (max-width: 640px) {
+      .masthead,
+      .hero,
+      .layout,
+      .footer {
+        width: min(100% - 32px, 1180px);
+      }
+
+      .masthead { padding-top: 28px; }
+      .edition { display: none; }
+      .masthead-meta { gap: 0; }
+      .language-switch label { min-width: 52px; padding-inline: 7px; }
+
+      .hero {
+        padding: 48px 0 58px;
+        gap: 38px;
+      }
+
+      h1 { font-size: clamp(38px, 12vw, 56px); }
+      .terminal-demo { min-height: 0; border-radius: 12px; }
+      .terminal-body { padding: 20px 17px 22px; font-size: 12px; }
+
+      .doc-section { padding: 50px 0 58px; }
+
+      .steps,
+      .practice-grid,
+      .key-grid,
+      .feature-list { grid-template-columns: 1fr; }
+
+      .step { padding: 20px 0; }
+      .step + .step { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+      .step-number { margin-bottom: 10px; }
+
+      .key-row:nth-child(even) {
+        padding-left: 0;
+        border-left: 0;
+      }
+
+      .practice-item,
+      .practice-item:nth-child(even) {
+        padding: 20px 0;
+        border-left: 0;
+      }
+
+      .footer { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+
+    @media print {
+      :root {
+        color-scheme: light;
+        --page: #ffffff;
+        --surface: #ffffff;
+        --surface-raised: #f2f2f2;
+        --text: #242424;
+        --text-strong: #000000;
+        --muted: #444444;
+        --quiet: #666666;
+        --line: #d0d0d0;
+        --line-strong: #aaaaaa;
+        --mint: #176f5e;
+        --mint-strong: #176f5e;
+        --mint-wash: #edf7f4;
+        --code-bg: #f4f4f4;
+        --code-text: #111111;
+        --code-line: #aaaaaa;
+        --shadow: transparent;
+      }
+
+      body::before,
+      .toc { display: none; }
+
+      .masthead,
+      .hero,
+      .layout,
+      .footer { width: 100%; }
+
+      .hero { grid-template-columns: 1fr; padding: 36px 0; }
+      .terminal-demo { display: none; }
+      .layout { display: block; }
+      .doc-section { break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+      pre { color: #111111; }
+    }
+  </style>
+</head>
+<body>
+  <input class="language-control" type="radio" name="guide-language" id="language-zh" checked>
+  <input class="language-control" type="radio" name="guide-language" id="language-en">
+
+  <div class="guide-page guide-zh" lang="zh-CN">
+  <a class="skip-link" href="#zh-content">跳到使用指南</a>
+
+  <header class="masthead">
+    <a class="brand" href="#zh-top" aria-label="返回 LeanTTY 使用指南顶部">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" role="img" aria-label="LeanTTY 图标">
+        <defs>
+          <linearGradient id="surface-zh" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#1a1a1f"/>
+            <stop offset="0.52" stop-color="#151519"/>
+            <stop offset="1" stop-color="#101013"/>
+          </linearGradient>
+          <linearGradient id="rail-zh" x1="176" y1="0" x2="848" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#e2e2e5"/>
+            <stop offset="0.44" stop-color="#929399"/>
+            <stop offset="1" stop-color="#414249"/>
+          </linearGradient>
+          <linearGradient id="accent-zh" x1="0" y1="354" x2="0" y2="704" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#9be8d6"/>
+            <stop offset="1" stop-color="#55c7a6"/>
+          </linearGradient>
+        </defs>
+        <rect width="1024" height="1024" fill="url(#surface-zh)"/>
+        <rect x="176" y="176" width="672" height="44" rx="22" fill="url(#rail-zh)"/>
+        <rect x="220" y="354" width="68" height="350" rx="12" fill="url(#accent-zh)"/>
+        <rect x="220" y="636" width="232" height="68" rx="12" fill="url(#accent-zh)"/>
+        <path d="M506 439L712 531L506 623" fill="none" stroke="#f7f7f8" stroke-width="60"
+          stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">LeanTTY</span>
+    </a>
+    <div class="masthead-meta">
+      <span class="edition">使用指南 · 1.2.0</span>
+      <div class="language-switch" role="group" aria-label="指南语言">
+        <label for="language-zh">中文</label>
+        <label for="language-en" lang="en">English</label>
+      </div>
+    </div>
+  </header>
+
+  <div id="zh-top" class="hero">
+    <div>
+      <p class="eyebrow">LeanTTY 快速使用指南</p>
+      <h1>先安全连接，<br>再高效工作。</h1>
+      <p class="hero-copy">
+        这份离线指南给出从第一次连接到日常操作的最短可靠路径。先掌握复制、链接和搜索，
+        再按需查看命令、安全边界与故障恢复。
+      </p>
+      <ul class="scope-line" aria-label="首先掌握的操作">
+        <li>选中后右键复制</li>
+        <li>Ctrl+点击打开链接</li>
+        <li>连接前核对指纹</li>
+      </ul>
+    </div>
+
+    <div class="terminal-demo" role="img"
+      aria-label="LeanTTY 会话从本地提示符经过主机校验进入远程 Shell">
+      <div class="terminal-bar">
+        <span class="terminal-title">ltty · 本地</span>
+        <span class="terminal-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">ltty&gt;</span> <span class="command">ssh user@example.com</span></div>
+        <div class="terminal-muted">信任前，请先核对主机指纹。</div>
+        <div>SHA256:<span class="terminal-muted">…服务器返回的指纹…</span></div>
+        <div><span class="terminal-muted">Trust this host?</span> <span class="command">yes</span></div>
+        <br>
+        <div><span class="prompt">user@example.com:~$</span> <span class="command">_</span></div>
+        <ol class="connection-track" aria-label="连接路径">
+          <li>本地</li>
+          <li>校验</li>
+          <li>远端</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="指南目录">
+      <p class="toc-label">本页内容</p>
+      <ol>
+        <li><a href="#zh-practices"><span class="toc-index">01</span><span>日常最佳实践</span></a></li>
+        <li><a href="#zh-start"><span class="toc-index">02</span><span>开始连接</span></a></li>
+        <li><a href="#zh-trust"><span class="toc-index">03</span><span>信任与身份</span></a></li>
+        <li><a href="#zh-workspace"><span class="toc-index">04</span><span>工作区</span></a></li>
+        <li><a href="#zh-shortcuts"><span class="toc-index">05</span><span>快捷键</span></a></li>
+        <li><a href="#zh-commands"><span class="toc-index">06</span><span>本地命令</span></a></li>
+        <li><a href="#zh-data"><span class="toc-index">07</span><span>数据与隐私</span></a></li>
+        <li><a href="#zh-recovery"><span class="toc-index">08</span><span>故障恢复</span></a></li>
+      </ol>
+    </nav>
+
+    <main id="zh-content">
+      <section id="zh-practices" class="doc-section">
+        <p class="section-kicker">每天都会用到</p>
+        <h2>先掌握六个高频动作。</h2>
+        <p class="section-intro">
+          这些操作能减少菜单查找和重复输入，也是 LeanTTY 中最直接、最稳定的工作方式。
+        </p>
+
+        <div class="practice-grid">
+          <article class="practice-item">
+            <span class="practice-label">COPY</span>
+            <h3>选中后直接右键</h3>
+            <p>选中文本后，鼠标右键或触摸板双指轻点即可复制；也可以按 <kbd>Ctrl</kbd>+<kbd>C</kbd>。</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">PASTE</span>
+            <h3>无选区时右键粘贴</h3>
+            <p>当前没有选区时，鼠标右键或触摸板双指轻点会粘贴；<kbd>Ctrl</kbd>+<kbd>V</kbd> 同样有效。</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">OPEN LINK</span>
+            <h3>按住 Ctrl 点击 URL</h3>
+            <p>按住 <kbd>Ctrl</kbd> 并单击链接即可交给系统浏览器；TUI 接管鼠标时改用 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+单击。</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">SEARCH</span>
+            <h3>只搜索当前 Pane</h3>
+            <p>按 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> 搜索当前终端表面，使用 <kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> 前后跳转。</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">VERIFY</span>
+            <h3>首次连接先核对指纹</h3>
+            <p>通过已经信任的渠道核对服务器指纹；主机密钥变化时不要直接跳过警告。</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">KEEP WORK</span>
+            <h3>长期任务放在远端 tmux</h3>
+            <p>需要承受应用退出、休眠或网络变化的工作，应运行在远端 tmux 或 screen 中。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="zh-start" class="doc-section">
+        <p class="section-kicker">从这里开始</p>
+        <h2>建立第一个会话</h2>
+        <p class="section-intro">
+          LeanTTY 启动后显示本地 <code>ltty&gt;</code> 提示符。输入一条命令即可前往远端
+          执行环境；首次连接会暂停，让你确认连接的确实是目标服务器。
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <span class="step-number">01 / 连接</span>
+            <strong>指定目标</strong>
+            <p>输入用户名和主机。只有服务器需要时，才额外指定端口或 Identity。</p>
+          </li>
+          <li class="step">
+            <span class="step-number">02 / 校验</span>
+            <strong>核对指纹</strong>
+            <p>首次连接时，通过已经信任的渠道核对服务器返回的主机指纹。</p>
+          </li>
+          <li class="step">
+            <span class="step-number">03 / 工作</span>
+            <strong>完成认证</strong>
+            <p>使用密码、已经验证的私钥或服务器提供的 keyboard-interactive 流程。</p>
+          </li>
+        </ol>
+
+        <h3>直接连接</h3>
+        <pre><code>ssh user@example.com
+ssh -p 2222 user@example.com
+ssh -i id_work user@example.com</code></pre>
+
+        <h3>保存一个短名称</h3>
+        <pre><code>host add work user@example.com:2222
+ssh work</code></pre>
+        <p>
+          保存的 Host 位于 LeanTTY 管理的 <code>~/.ssh/config</code> 区域。连接前可以使用
+          <code>ssh -G work</code> 查看当前支持的最终配置。
+        </p>
+
+        <div class="callout">
+          <strong>LeanTTY 是执行环境的入口。</strong>
+          <p>如果工作必须跨越应用退出、重启或断网继续，请在远端使用 tmux 或 screen。</p>
+        </div>
+      </section>
+
+      <section id="zh-trust" class="doc-section">
+        <p class="section-kicker">安全先于便利</p>
+        <h2>确认主机，掌控身份。</h2>
+        <p class="section-intro">
+          LeanTTY 不会静默接受新的或发生变化的主机密钥。密钥留在本地，秘密输入不会进入
+          命令历史，也不会以普通终端文本回显。
+        </p>
+
+        <h3>主机密钥</h3>
+        <p>
+          首次连接会显示服务器返回的指纹并等待你的决定。接受前，应通过可信渠道核对。
+          如果主机密钥后来发生变化，LeanTTY 会停止连接。
+        </p>
+        <pre><code>ssh-keygen -F example.com
+ssh-keygen -R example.com
+ssh-keygen -F [example.com]:2222
+ssh-keygen -R [example.com]:2222</code></pre>
+
+        <div class="callout warning">
+          <strong>主机密钥变化不是普通提示。</strong>
+          <p>先与服务器所有者确认变更，再删除旧记录并重新连接。</p>
+        </div>
+
+        <h3>私钥</h3>
+        <pre><code>ssh-keygen -t ed25519 -f id_work -C work
+key list
+ssh-keygen -l -f id_work
+ssh-copy-id -i id_work user@example.com</code></pre>
+        <ul class="feature-list">
+          <li>生成 Ed25519 和 RSA-4096 密钥</li>
+          <li>导入并使用加密私钥</li>
+          <li>交互式修改私钥口令</li>
+          <li>密码和 keyboard-interactive 认证</li>
+          <li>多认证方法连续协商</li>
+          <li>使用 <kbd>Ctrl</kbd>+<kbd>C</kbd> 明确取消</li>
+        </ul>
+        <p>
+          <code>key export</code> 会请求 Downloads 访问权限，并且不会覆盖私钥或对应的
+          <code>.pub</code> 文件。导出的私钥是敏感的用户文件；完成预定传输后，请及时移动
+          或删除。
+        </p>
+      </section>
+
+      <section id="zh-workspace" class="doc-section">
+        <p class="section-kicker">克制的工作区</p>
+        <h2>用 Tab 区分上下文，需要对照时再使用双 Pane。</h2>
+        <p class="section-intro">
+          一个 Tab 拥有一个或两个 Pane。每个 Pane 都拥有独立的 SSH Session 和终端表面，
+          因此焦点、搜索、输出与连接状态不会在工作区之间串联。
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>任务</th><th>行为</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>新建 Tab</td><td>创建另一个独立的本地提示符和 Session 路径。</td></tr>
+              <tr><td>拆分 Pane</td><td>在当前 Tab 增加第二个 Pane；LeanTTY 不创建更深的布局。</td></tr>
+              <tr><td>搜索</td><td>只搜索活动 Pane 的内存终端表面；空查询和无结果均显示 <code>0/0</code>。</td></tr>
+              <tr><td>BEL 提醒</td><td>短暂强调来源 Tab；未查看的输出保留小型琥珀色标记。</td></tr>
+              <tr><td>关闭</td><td>关闭已连接的 Pane 会断开该 Pane 的 SSH Session。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>不离开键盘完成搜索</h3>
+        <p>
+          使用 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> 打开搜索。按 <kbd>Enter</kbd> 前往
+          下一个结果，按 <kbd>Shift</kbd>+<kbd>Enter</kbd> 返回上一个结果，按 <kbd>Esc</kbd>
+          关闭。关闭后会恢复终端焦点，不会把搜索内容发送给远端。
+        </p>
+
+        <h3>外观服从内容</h3>
+        <p>
+          四点菜单提供关、低、中、高、极限五档透明度，以及交互一致的字号调节器。终端或
+          TUI 明确设置的背景色始终优先；不支持窗口透明的平台会回退到不透明表面。
+        </p>
+      </section>
+
+      <section id="zh-shortcuts" class="doc-section">
+        <p class="section-kicker">键盘优先</p>
+        <h2>让操作留在工作流里。</h2>
+        <p class="section-intro">
+          快捷键固定且数量克制。四点菜单会在对应操作旁显示相同按键。
+        </p>
+
+        <div class="key-grid" aria-label="LeanTTY 快捷键">
+          <div class="key-row"><span class="key-action">新建 Tab</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></span></div>
+          <div class="key-row"><span class="key-action">拆分 Pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></span></div>
+          <div class="key-row"><span class="key-action">下一个 Tab</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Tab</kbd></span></div>
+          <div class="key-row"><span class="key-action">上一个 Tab</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd></span></div>
+          <div class="key-row"><span class="key-action">聚焦左 / 右 Pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd></span></div>
+          <div class="key-row"><span class="key-action">关闭活动 Pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></span></div>
+          <div class="key-row"><span class="key-action">搜索活动 Pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></span></div>
+          <div class="key-row"><span class="key-action">复制 / 粘贴</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></span></div>
+          <div class="key-row"><span class="key-action">减小 / 增大字号</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>=</kbd></span></div>
+          <div class="key-row"><span class="key-action">重置字号</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>0</kbd></span></div>
+          <div class="key-row"><span class="key-action">降低 / 提高透明度</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>−</kbd>/<kbd>=</kbd></span></div>
+          <div class="key-row"><span class="key-action">打开链接</span><span class="key-combo"><kbd>Ctrl</kbd>+<span>鼠标左键</span></span></div>
+        </div>
+
+        <h3>选区与 TUI 鼠标模式</h3>
+        <p>
+          选中文本后，鼠标右键或触摸板双指轻点会立即复制，也可以按
+          <kbd>Ctrl</kbd>+<kbd>C</kbd>；没有选区时，<kbd>Ctrl</kbd>+<kbd>C</kbd> 仍是终端中断，
+          右键或触摸板双指轻点则用于粘贴。当 tmux 或其他 TUI 接管鼠标后，按住
+          <kbd>Shift</kbd> 拖动可强制本地选择；使用 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+鼠标左键
+          打开链接。
+        </p>
+      </section>
+
+      <section id="zh-commands" class="doc-section">
+        <p class="section-kicker">本地命令参考</p>
+        <h2>命令面小而明确。</h2>
+        <p class="section-intro">
+          以下命令只在本地 <code>ltty&gt;</code> 提示符下运行。连接成功后，输入归远端 Shell
+          所有。
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>命令</th><th>用途</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>help</code>、<code>?</code></td><td>显示本地帮助，并在末尾提供本完整指南的链接。</td></tr>
+              <tr><td><code>help &lt;command&gt;</code></td><td>显示一个受支持命令的简短帮助。</td></tr>
+              <tr><td><code>ssh …</code></td><td>直接连接，或通过保存的 OpenSSH Host 连接。</td></tr>
+              <tr><td><code>ssh -G &lt;host-name&gt;</code></td><td>不发起连接，显示当前支持的最终配置。</td></tr>
+              <tr><td><code>host add|set|list|rm</code></td><td>管理 OpenSSH Host 配置中由 LeanTTY 拥有的区域。</td></tr>
+              <tr><td><code>key list|import|export|rm</code></td><td>管理已经验证的 LeanTTY 密钥对。</td></tr>
+              <tr><td><code>ssh-keygen …</code></td><td>生成、检查或更新密钥与主机信任记录。</td></tr>
+              <tr><td><code>ssh-copy-id …</code></td><td>通过现有 SSH 路径安装一行公钥。</td></tr>
+              <tr><td><code>exit</code></td><td>关闭当前空闲 Pane 或对应 Tab 路径。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          使用 <code>help ssh</code>、<code>help host</code>、<code>help key</code>、
+          <code>help ssh-keygen</code> 或 <code>&lt;command&gt; --help</code> 查看准确语法。
+          不支持的选项会明确失败，不会被静默忽略。
+        </p>
+      </section>
+
+      <section id="zh-data" class="doc-section">
+        <p class="section-kicker">默认留在本地</p>
+        <h2>哪些会保留，哪些不会。</h2>
+        <p class="section-intro">
+          LeanTTY 只保留安全重连所需的最少持久状态。终端内容和认证秘密不属于持久状态。
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>保留</th><th>不会有意保留</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>OpenSSH Host 配置</td><td>密码和认证回答</td></tr>
+              <tr><td>已经信任的主机密钥</td><td>口令和未提交的秘密输入</td></tr>
+              <tr><td>已经验证的密钥对</td><td>命令历史</td></tr>
+              <tr><td>字号和主窗口位置</td><td>应用退出后的 Tab、Pane、Session 与终端回滚区</td></tr>
+              <tr><td>所选透明度档位</td><td>账号、云工作区或使用情况遥测</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Host 配置、可信主机密钥、已验证密钥对、字号和窗口位置使用加密的 HarmonyOS
+          Asset Store 记录，并设计为在同一应用身份下跨普通卸载保留。透明度会在正常重启后
+          恢复，但不属于跨卸载保留的资产。
+        </p>
+
+        <div class="callout warning">
+          <strong>卸载不是完整的数据擦除命令。</strong>
+          <p>卸载前，请删除你能识别的密钥、Host 和主机信任记录。</p>
+        </div>
+      </section>
+
+      <section id="zh-recovery" class="doc-section">
+        <p class="section-kicker">出现问题时</p>
+        <h2>明确恢复，不靠猜测。</h2>
+        <p class="section-intro">
+          LeanTTY 会显示失败，而不是隐藏失败。先阅读活动 Pane 中的信息，再选择能够保留
+          信任边界的最小恢复操作。
+        </p>
+
+        <details open>
+          <summary>连接或认证看起来卡住了</summary>
+          <div class="details-body">
+            <p>
+              按 <kbd>Ctrl</kbd>+<kbd>C</kbd>。连接和认证提示具有明确的取消路径，会返回
+              <code>ltty&gt;</code>，且不会保留未完成的秘密输入。
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>服务器主机密钥发生变化</summary>
+          <div class="details-body">
+            <p>
+              不要绕过警告。先与服务器所有者确认变化，执行 LeanTTY 显示的准确
+              <code>ssh-keygen -R</code> 命令，再重新连接并核对新指纹。
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>服务器反复要求密码</summary>
+          <div class="details-body">
+            <p>
+              确认所选 Host 能解析出 <code>User</code>，并且 <code>IdentityFile</code> 指向
+              <code>key list</code> 中的密钥。使用 <code>ssh -G &lt;host-name&gt;</code> 查看最终值。
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>密钥导出失败</summary>
+          <div class="details-body">
+            <p>
+              授予 Downloads 访问权限，并确认目标私钥文件名和对应的 <code>.pub</code>
+              文件都不存在。LeanTTY 不会覆盖已经导出的密钥。
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>休眠或网络变化后 SSH 断开</summary>
+          <div class="details-body">
+            <p>
+              使用界面中可见的重连路径。SSH 不提供透明漫游；需要承受中断的工作应保存在
+              远端 tmux 或 screen 中。
+            </p>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div><strong>LeanTTY 1.2.0</strong> · 离线使用指南 · 修订 1</div>
+    <div>先核对，再连接；先保留工作，再处理断线。</div>
+  </footer>
+  </div>
+
+  <div class="guide-page guide-en" lang="en">
+  <a class="skip-link" href="#en-content">Skip to the guide</a>
+
+  <header class="masthead">
+    <a class="brand" href="#en-top" aria-label="LeanTTY user guide home">
+      <svg class="brand-mark" viewBox="0 0 1024 1024" role="img" aria-label="LeanTTY logo">
+        <defs>
+          <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#1a1a1f"/>
+            <stop offset="0.52" stop-color="#151519"/>
+            <stop offset="1" stop-color="#101013"/>
+          </linearGradient>
+          <linearGradient id="rail" x1="176" y1="0" x2="848" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#e2e2e5"/>
+            <stop offset="0.44" stop-color="#929399"/>
+            <stop offset="1" stop-color="#414249"/>
+          </linearGradient>
+          <linearGradient id="accent" x1="0" y1="354" x2="0" y2="704" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#9be8d6"/>
+            <stop offset="1" stop-color="#55c7a6"/>
+          </linearGradient>
+        </defs>
+        <rect width="1024" height="1024" fill="url(#surface)"/>
+        <rect x="176" y="176" width="672" height="44" rx="22" fill="url(#rail)"/>
+        <rect x="220" y="354" width="68" height="350" rx="12" fill="url(#accent)"/>
+        <rect x="220" y="636" width="232" height="68" rx="12" fill="url(#accent)"/>
+        <path d="M506 439L712 531L506 623" fill="none" stroke="#f7f7f8" stroke-width="60"
+          stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">LeanTTY</span>
+    </a>
+    <div class="masthead-meta">
+      <span class="edition">USER GUIDE · 1.2.0</span>
+      <div class="language-switch" role="group" aria-label="Guide language">
+        <label for="language-zh" lang="zh-CN">中文</label>
+        <label for="language-en">English</label>
+      </div>
+    </div>
+  </header>
+
+  <div id="en-top" class="hero">
+    <div>
+      <p class="eyebrow">LeanTTY quick user guide</p>
+      <h1>Connect safely.<br>Work efficiently.</h1>
+      <p class="hero-copy">
+        This offline guide gives you the shortest reliable path from a first connection to daily work.
+        Learn copy, links and search first; use commands, security and recovery when you need them.
+      </p>
+      <ul class="scope-line" aria-label="Practices to learn first">
+        <li>Select, then secondary-click to copy</li>
+        <li>Ctrl+Click to open links</li>
+        <li>Verify before connecting</li>
+      </ul>
+    </div>
+
+    <div class="terminal-demo" role="img"
+      aria-label="A LeanTTY session progressing from a local prompt through host verification to a remote shell">
+      <div class="terminal-bar">
+        <span class="terminal-title">ltty · idle</span>
+        <span class="terminal-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">ltty&gt;</span> <span class="command">ssh user@example.com</span></div>
+        <div class="terminal-muted">Verify the host fingerprint before you trust it.</div>
+        <div>SHA256:<span class="terminal-muted">…received fingerprint…</span></div>
+        <div><span class="terminal-muted">Trust this host?</span> <span class="command">yes</span></div>
+        <br>
+        <div><span class="prompt">user@example.com:~$</span> <span class="command">_</span></div>
+        <ol class="connection-track" aria-label="Connection path">
+          <li>Local</li>
+          <li>Verify</li>
+          <li>Remote</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Guide sections">
+      <p class="toc-label">In this guide</p>
+      <ol>
+        <li><a href="#en-practices"><span class="toc-index">01</span><span>Daily best practices</span></a></li>
+        <li><a href="#en-start"><span class="toc-index">02</span><span>Start a session</span></a></li>
+        <li><a href="#en-trust"><span class="toc-index">03</span><span>Trust &amp; identity</span></a></li>
+        <li><a href="#en-workspace"><span class="toc-index">04</span><span>Workspace</span></a></li>
+        <li><a href="#en-shortcuts"><span class="toc-index">05</span><span>Shortcuts</span></a></li>
+        <li><a href="#en-commands"><span class="toc-index">06</span><span>Local commands</span></a></li>
+        <li><a href="#en-data"><span class="toc-index">07</span><span>Data &amp; privacy</span></a></li>
+        <li><a href="#en-recovery"><span class="toc-index">08</span><span>Recovery</span></a></li>
+      </ol>
+    </nav>
+
+    <main id="en-content">
+      <section id="en-practices" class="doc-section">
+        <p class="section-kicker">Use these every day</p>
+        <h2>Learn these six moves first.</h2>
+        <p class="section-intro">
+          These interactions avoid menu hunting and repeated input. They are the shortest, most predictable
+          ways to work in LeanTTY.
+        </p>
+
+        <div class="practice-grid">
+          <article class="practice-item">
+            <span class="practice-label">COPY</span>
+            <h3>Select, then secondary-click</h3>
+            <p>After selecting text, secondary-click—or two-finger tap the touchpad—to copy. <kbd>Ctrl</kbd>+<kbd>C</kbd> also works.</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">PASTE</span>
+            <h3>Secondary-click with no selection</h3>
+            <p>With no selection, secondary-click or two-finger tap to paste. <kbd>Ctrl</kbd>+<kbd>V</kbd> does the same.</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">OPEN LINK</span>
+            <h3>Hold Ctrl and click a URL</h3>
+            <p>Use <kbd>Ctrl</kbd>+Click to open a link in the system browser. When a TUI owns the mouse, use <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+Click.</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">SEARCH</span>
+            <h3>Search only the active pane</h3>
+            <p>Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>, then use <kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd> to move through results.</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">VERIFY</span>
+            <h3>Check the first fingerprint</h3>
+            <p>Verify the server fingerprint through a trusted channel. Never skip a changed-host-key warning.</p>
+          </article>
+          <article class="practice-item">
+            <span class="practice-label">KEEP WORK</span>
+            <h3>Keep long jobs in remote tmux</h3>
+            <p>Run interruption-sensitive work in remote tmux or screen so it survives app exits, sleep and network changes.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="en-start" class="doc-section">
+        <p class="section-kicker">Start here</p>
+        <h2>Your first session</h2>
+        <p class="section-intro">
+          LeanTTY opens at a local <code>ltty&gt;</code> prompt. One command takes you to a remote
+          environment; the first connection pauses so you can verify who is on the other end.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <span class="step-number">01 / CONNECT</span>
+            <strong>Name the destination</strong>
+            <p>Enter a user and host. Add a port or identity only when the server requires it.</p>
+          </li>
+          <li class="step">
+            <span class="step-number">02 / VERIFY</span>
+            <strong>Check the fingerprint</strong>
+            <p>On first contact, compare the received fingerprint through a channel you trust.</p>
+          </li>
+          <li class="step">
+            <span class="step-number">03 / WORK</span>
+            <strong>Authenticate</strong>
+            <p>Use a password, verified private key or the server's keyboard-interactive flow.</p>
+          </li>
+        </ol>
+
+        <h3>Connect directly</h3>
+        <pre><code>ssh user@example.com
+ssh -p 2222 user@example.com
+ssh -i id_work user@example.com</code></pre>
+
+        <h3>Save a short name</h3>
+        <pre><code>host add work user@example.com:2222
+ssh work</code></pre>
+        <p>
+          Saved hosts use LeanTTY's managed section of <code>~/.ssh/config</code>. Inspect the
+          supported effective values before connecting with <code>ssh -G work</code>.
+        </p>
+
+        <div class="callout">
+          <strong>LeanTTY is the entry point.</strong>
+          <p>Use remote tmux or screen when work must survive an application exit, restart or network break.</p>
+        </div>
+      </section>
+
+      <section id="en-trust" class="doc-section">
+        <p class="section-kicker">Security before convenience</p>
+        <h2>Trust the host. Control the identity.</h2>
+        <p class="section-intro">
+          LeanTTY never accepts a new or changed host key silently. Keys remain local, and secret input
+          stays out of command history and normal terminal echo.
+        </p>
+
+        <h3>Host keys</h3>
+        <p>
+          A first connection shows the received fingerprint and waits for your decision. Verify it through
+          a trusted channel before accepting. If the key changes later, LeanTTY stops the connection.
+        </p>
+        <pre><code>ssh-keygen -F example.com
+ssh-keygen -R example.com
+ssh-keygen -F [example.com]:2222
+ssh-keygen -R [example.com]:2222</code></pre>
+
+        <div class="callout warning">
+          <strong>A changed host key is not a routine prompt.</strong>
+          <p>Confirm the change with the server owner before removing the old record and reconnecting.</p>
+        </div>
+
+        <h3>Private keys</h3>
+        <pre><code>ssh-keygen -t ed25519 -f id_work -C work
+key list
+ssh-keygen -l -f id_work
+ssh-copy-id -i id_work user@example.com</code></pre>
+        <ul class="feature-list">
+          <li>Ed25519 and RSA-4096 generation</li>
+          <li>Encrypted private-key import and use</li>
+          <li>Interactive passphrase change</li>
+          <li>Password and keyboard-interactive authentication</li>
+          <li>Multi-method authentication sequences</li>
+          <li>Explicit cancellation with <kbd>Ctrl</kbd>+<kbd>C</kbd></li>
+        </ul>
+        <p>
+          <code>key export</code> asks for Downloads access and never overwrites either the private key
+          or its <code>.pub</code> partner. Exported private keys are sensitive user-owned files; move or
+          delete them after the intended transfer.
+        </p>
+      </section>
+
+      <section id="en-workspace" class="doc-section">
+        <p class="section-kicker">A bounded workspace</p>
+        <h2>Tabs for context. Two panes when comparison helps.</h2>
+        <p class="section-intro">
+          A tab owns one or two panes. Every pane owns an independent SSH session and terminal surface,
+          so focus, search, output and connection state do not leak across the workspace.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Task</th><th>Behavior</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>New tab</td><td>Starts another independent local prompt and session path.</td></tr>
+              <tr><td>Split pane</td><td>Adds one second pane to the current tab. LeanTTY does not create deeper layouts.</td></tr>
+              <tr><td>Search</td><td>Searches only the active pane's in-memory terminal surface. Empty and no-result queries show <code>0/0</code>.</td></tr>
+              <tr><td>BEL attention</td><td>Briefly emphasizes the source tab; unattended output keeps a small amber marker until visited.</td></tr>
+              <tr><td>Close</td><td>Closing a connected pane disconnects that pane's SSH session.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Search without leaving the keyboard</h3>
+        <p>
+          Open search with <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>. Press <kbd>Enter</kbd> for the next
+          result, <kbd>Shift</kbd>+<kbd>Enter</kbd> for the previous result and <kbd>Esc</kbd> to close.
+          Closing search restores terminal focus without sending the query to the remote session.
+        </p>
+
+        <h3>Appearance stays secondary to content</h3>
+        <p>
+          The four-dot menu contains five transparency levels—Off, Low, Medium, High and Extreme—and a
+          matching font-size stepper. Explicit terminal or TUI background colors remain authoritative.
+          Platforms that cannot enable transparency fall back to an opaque surface.
+        </p>
+      </section>
+
+      <section id="en-shortcuts" class="doc-section">
+        <p class="section-kicker">Keyboard first</p>
+        <h2>Keep your hands on the work.</h2>
+        <p class="section-intro">
+          Shortcuts are fixed and intentionally few. The four-dot menu shows the same keys beside the
+          actions it exposes.
+        </p>
+
+        <div class="key-grid" aria-label="LeanTTY keyboard shortcuts">
+          <div class="key-row"><span class="key-action">New tab</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd></span></div>
+          <div class="key-row"><span class="key-action">Split pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></span></div>
+          <div class="key-row"><span class="key-action">Next tab</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Tab</kbd></span></div>
+          <div class="key-row"><span class="key-action">Previous tab</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd></span></div>
+          <div class="key-row"><span class="key-action">Focus left / right pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd></span></div>
+          <div class="key-row"><span class="key-action">Close active pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd></span></div>
+          <div class="key-row"><span class="key-action">Search active pane</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></span></div>
+          <div class="key-row"><span class="key-action">Copy / paste</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></span></div>
+          <div class="key-row"><span class="key-action">Font smaller / larger</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>−</kbd> / <kbd>Ctrl</kbd>+<kbd>=</kbd></span></div>
+          <div class="key-row"><span class="key-action">Reset font size</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>0</kbd></span></div>
+          <div class="key-row"><span class="key-action">Less / more transparent</span><span class="key-combo"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>−</kbd>/<kbd>=</kbd></span></div>
+          <div class="key-row"><span class="key-action">Open a link</span><span class="key-combo"><kbd>Ctrl</kbd>+<span>Left click</span></span></div>
+        </div>
+
+        <h3>Selection and TUI mouse mode</h3>
+        <p>
+          After selecting text, secondary-click—or two-finger tap the touchpad—to copy immediately; you can
+          also press <kbd>Ctrl</kbd>+<kbd>C</kbd>. Without a selection, <kbd>Ctrl</kbd>+<kbd>C</kbd> remains
+          terminal interrupt, while secondary-click or two-finger tap pastes. When tmux or another TUI owns
+          the mouse, hold <kbd>Shift</kbd> while dragging to force local selection, or use
+          <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+Left click to open a link.
+        </p>
+      </section>
+
+      <section id="en-commands" class="doc-section">
+        <p class="section-kicker">Local command reference</p>
+        <h2>Small surface, predictable behavior.</h2>
+        <p class="section-intro">
+          These commands run only at the local <code>ltty&gt;</code> prompt. Once connected, input belongs
+          to the remote shell.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Command</th><th>Purpose</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>help</code>, <code>?</code></td><td>Show local help and the link to this complete guide.</td></tr>
+              <tr><td><code>help &lt;command&gt;</code></td><td>Show concise help for one supported command.</td></tr>
+              <tr><td><code>ssh …</code></td><td>Connect directly or through a saved OpenSSH Host.</td></tr>
+              <tr><td><code>ssh -G &lt;host-name&gt;</code></td><td>Show the supported effective configuration without connecting.</td></tr>
+              <tr><td><code>host add|set|list|rm</code></td><td>Manage LeanTTY's section of OpenSSH host configuration.</td></tr>
+              <tr><td><code>key list|import|export|rm</code></td><td>Manage verified LeanTTY key pairs.</td></tr>
+              <tr><td><code>ssh-keygen …</code></td><td>Generate, inspect or update keys and trusted-host records.</td></tr>
+              <tr><td><code>ssh-copy-id …</code></td><td>Install one public-key line through the existing SSH path.</td></tr>
+              <tr><td><code>exit</code></td><td>Close the current idle pane or tab path.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Use <code>help ssh</code>, <code>help host</code>, <code>help key</code>,
+          <code>help ssh-keygen</code> or <code>&lt;command&gt; --help</code> for exact syntax.
+          Unsupported options fail explicitly instead of being silently ignored.
+        </p>
+      </section>
+
+      <section id="en-data" class="doc-section">
+        <p class="section-kicker">Local by default</p>
+        <h2>What stays. What does not.</h2>
+        <p class="section-intro">
+          LeanTTY keeps the minimum durable state required to reconnect safely. Terminal content and
+          authentication secrets are not part of that durable state.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Retained</th><th>Not intentionally retained</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>OpenSSH host configuration</td><td>Passwords and authentication answers</td></tr>
+              <tr><td>Trusted host keys</td><td>Passphrases and partial secret input</td></tr>
+              <tr><td>Verified key pairs</td><td>Command history</td></tr>
+              <tr><td>Font size and window rectangle</td><td>Tabs, panes, sessions and terminal scrollback after exit</td></tr>
+              <tr><td>Selected transparency level</td><td>Account, cloud workspace or usage telemetry</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Host configuration, trusted host keys, verified key pairs, font size and window geometry use
+          encrypted HarmonyOS Asset Store records designed to survive a normal uninstall for the same app
+          identity. Transparency is restored after restart but is not an uninstall-surviving asset.
+        </p>
+
+        <div class="callout warning">
+          <strong>Uninstall is not a complete data-erasure command.</strong>
+          <p>Remove known keys, Hosts and trusted-host records you can identify before uninstalling.</p>
+        </div>
+      </section>
+
+      <section id="en-recovery" class="doc-section">
+        <p class="section-kicker">When something stops</p>
+        <h2>Recover without guessing.</h2>
+        <p class="section-intro">
+          LeanTTY surfaces failures instead of hiding them. Start with the message in the active pane and
+          use the smallest recovery action that preserves trust.
+        </p>
+
+        <details open>
+          <summary>Connection or authentication appears stuck</summary>
+          <div class="details-body">
+            <p>
+              Press <kbd>Ctrl</kbd>+<kbd>C</kbd>. Connecting and authentication prompts have an explicit
+              cancellation path and return to <code>ltty&gt;</code> without retaining partial secret input.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>The server's host key changed</summary>
+          <div class="details-body">
+            <p>
+              Do not bypass the warning. Verify the change with the server owner, run the exact
+              <code>ssh-keygen -R</code> command shown by LeanTTY, then reconnect and inspect the new
+              fingerprint before accepting it.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Password keeps being requested</summary>
+          <div class="details-body">
+            <p>
+              Confirm that the selected Host resolves a <code>User</code> and that its
+              <code>IdentityFile</code> names a key shown by <code>key list</code>. Use
+              <code>ssh -G &lt;host-name&gt;</code> to inspect the effective supported values.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Key export failed</summary>
+          <div class="details-body">
+            <p>
+              Grant Downloads access and make sure neither the chosen private-key basename nor its
+              <code>.pub</code> partner already exists. LeanTTY does not overwrite exported keys.
+            </p>
+          </div>
+        </details>
+
+        <details>
+          <summary>SSH disconnected after sleep or a network change</summary>
+          <div class="details-body">
+            <p>
+              Use the visible reconnect path. SSH does not provide transparent roaming; keep durable work
+              inside remote tmux or screen when interruptions matter.
+            </p>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div><strong>LeanTTY 1.2.0</strong> · Offline user guide · Revision 1</div>
+    <div>Verify first. Keep work durable. Recover deliberately.</div>
+  </footer>
+  </div>
+</body>
+</html>

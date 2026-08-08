@@ -1,6 +1,6 @@
 # 桌面终端界面与交互收敛
 
-> 状态：Implemented；最终候选验收待 1.2 收尾统一执行
+> 状态：Verified；发布候选待按最新 UI 修复重建
 >
 > milestone：1.2
 >
@@ -84,7 +84,8 @@ Terminal Surface 独占。透明效果不得暴露新的终端内容副本，也
 
 - 活动窗口使用自定义 40vp Chrome；Tab 固定 172vp，Tab 间距 4vp，Tab 区横向滚动，
   `+` 位于滚动区外，标题栏保留至少 96vp 拖拽区域和约 140vp 系统按钮区域。
-- 非活动 Tab 的原基线返回透明表面色；当前实现已改为轻表面、低对比分隔和条件边缘淡出。
+- 非活动 Tab 的原基线返回透明表面色；当前实现让 Chrome 轨道、非活动 Tab、活动/hover Tab
+  分别使用 Catppuccin `crust → mantle → base`，只通过既有 4vp 间距显示相邻边界。
 - `needsAttention` 的原基线在 Pane 四周绘制 2px 黄色边框；当前实现已改为有限 Tab 强调、
   复用 Tab 前导状态点的静态标记，以及分屏来源侧的局部标记。
 - 搜索条原基线固定约 420px；当前实现收敛为 344px，并固定结果区和三个操作按钮宽度。
@@ -93,7 +94,8 @@ Terminal Surface 独占。透明效果不得暴露新的终端内容副本，也
 - xterm 的 `allowTransparency` 必须在 `open` 前确定，并明确可能增加性能成本。当前实现
   让活动态 PC 容器和原生内容窗口透明，仅由 ArkUI 根 Surface 持有选定 alpha；ArkWeb、
   HTML/body 和 xterm/WebGL 保持全透明，避免多层 alpha 叠加。物理 PC 已证明五档
-  Chrome/Content 分层合成链成立，正式候选仍需完成同机性能、TUI 和生命周期矩阵。
+  Chrome/Content 分层合成链成立；正式候选同机性能和生命周期已完成，真实用户服务器
+  TUI 与主观可读性也已由用户完成。
 - 现有深浅主题已统一 Chrome、Terminal、divider、text、accent、attention、focus 与
   Pane 控件 token；生产路径中三个确认无引用的旧组件已删除。
 
@@ -299,6 +301,9 @@ Extreme 也必须在系统材质不可用的无 blur 回退下保持终端字形
 ### 颜色与字体
 
 - 继续使用现有 Catppuccin 深浅色 token，不新增第二套 palette。
+- Chrome 轨道使用深色 `#11111B` / 浅色 `#DCE0E8` crust，并继续承载五档区域 alpha；
+  非活动 Tab 使用不透明 mantle `#181825` / `#E6E9EF`，活动与 hover 使用不透明 base
+  `#1E1E2E` / `#EFF1F5`。Tab 不再依赖容易在 Low 档塌缩的局部 opacity 表达层级。
 - 结构边界优先使用 divider token 的低对比度变体；活动、hover、pressed 和键盘焦点
   逐级增强，但不使用纯白描边。
 - attention 使用现有琥珀色 token；静态标记同时保留形状，不能只靠色相表达状态。
@@ -321,9 +326,9 @@ Tab 多于可视宽度时仍横向滚动；边缘只在确实还有不可见 Tab
 ### Tab 与溢出
 
 - Tab 宽度保持 172vp，不做自适应压缩、最小/最大宽度算法或用户设置。
-- 非活动 Tab 使用极轻表面色；相邻 Tab 只通过 4vp Chrome 间距与 active/inactive/hover
-  表面差异区分，不绘制竖线。所有 Tab 表面延伸到内容区基线且底角不再圆角，活动 Tab 与
-  Terminal 形成连续层次，不增加完整外框。
+- 非活动 Tab 使用 mantle，活动与 hover 使用 base；相邻 Tab 只通过 4vp crust 轨道间距与
+  active/inactive/hover 表面差异区分，不绘制竖线。所有 Tab 表面延伸到内容区基线且底角
+  不再圆角，活动 Tab 与 Terminal 形成连续层次，不增加完整外框。
 - 关闭按钮默认低权重，hover、pressed 和键盘焦点时明确；不能因缩小标题空间而遮住
   状态图标或主机名。
 - 当 Tab 区未溢出时不显示边缘淡出；溢出时淡出不能遮住可点击内容，也不能取代滚动。
@@ -372,12 +377,16 @@ BEL 是本轮唯一允许具有明显运动的元素。
 搜索条目标宽度约 344px，按以下紧密分组：
 
 ```text
-[ Find…              1/7 ][↑][↓][×]
+[ Find…              1/7 ][↑|↓] [×]
 ```
 
 - 查询输入可用宽度保持约 190–220px；结果区固定约 48px；按钮为 26–28px，按钮间距 2px。
 - 空查询和非空无结果都显示 `0/0`；普通结果显示当前位置/总数；超出上限显示 `1000+`。
   空查询的可访问说明为 `Type to search`，非空无结果为 `No results`。
+- Previous/Next 是同一搜索导航任务，共用一条外框并以中线分隔；Close 是退出动作，使用
+  独立外框和 2px 额外间距。三个按钮都保留 26px 命中尺寸、可见 focus ring，并以统一的
+  300ms 深色 Tips 显示 `Shift+Enter`、`Enter`、`Esc`。禁用导航只弱化图标颜色，不降低
+  整个按钮 opacity，避免连带削弱 Tips 可读性。
 - 面板仍位于当前 Terminal Surface 右上角，但必须避开 Pane 关闭按钮、scrollbar 和分屏
   边界；窄 Pane 时输入区先收缩，按钮与结果反馈保持可操作。
 - 不改变 `Ctrl+Alt+F`、Enter、Shift+Enter、Escape、输入法、焦点和搜索所有权语义。
@@ -412,7 +421,10 @@ Window compositor(active transparent; inactive opaque)
 - 动画运行状态是短生命周期 UI 状态，不持久化、不进入 Session、不经过 SSH Bridge。
 - 搜索查询与布局继续由 Terminal Surface 独占；本轮只改变其 CSS/布局。
 - 四点菜单 Search 只调用当前活动 Pane 的既有 `openSearch`；Transparency 和 Font Size 都是
-  单焦点 `[−] 当前值 [+]` 复合行，Left/Right 调整且不关闭菜单，`Ctrl+0` 保留字号重置。
+  单焦点 `[−] 当前值 [+]` 复合行，Left/Right 调整且不关闭菜单。字号全局使用
+  `Ctrl+-` / `Ctrl+=`，透明度使用同一增减语义的 `Ctrl+Alt+-` / `Ctrl+Alt+=`，Alt 层必须
+  阻止透明度调整误入字号分支；`Ctrl+0` 保留字号重置。四个按钮使用平台原生 hover Tips
+  显示各自快捷键，并在无障碍说明中包含同一键位。
 - 主题 token 是颜色与层次的唯一来源；`ThemeManager` 统一派生 Chrome/Content 两个
   非重叠 ArkUI Surface 的 ARGB，Web/xterm 背景保持透明，透明能力检测与回退只决定表现，
   不改变业务状态。
@@ -460,6 +472,9 @@ AttentionService 或 SurfaceEffect 抽象。无引用旧组件的删除必须独
 - Tab 间竖线已移除，所有 Tab 表面接到内容区基线；搜索条仍为 344px，结果区改为 48px，
   空查询和无结果都显示 `0/0`，右侧安全间距增加到 54px；HarmonyOS 2×2 四点菜单已恢复，
   并包含正式 Search、Transparency/Font Size 两个复合步进器；全高分屏线静态 opacity 降为 0.50。
+- 字号步进器沿用 `Ctrl+-` / `Ctrl+=`，透明度步进器新增 `Ctrl+Alt+-` / `Ctrl+Alt+=`；四个
+  全局快捷键在菜单打开或关闭时都由工作区优先处理。四个按钮使用 300ms 延迟的原生
+  `bindTips`，鼠标悬停时显示对应键位；没有引入自定义 Tooltip、计时器或覆盖层框架。
 - 删除生产路径确认无引用的 `TabBar.ets`、`PaneHeader.ets` 和 `ToolMenu.ets`，未引入依赖
   或新的状态/服务层。
 
@@ -487,9 +502,109 @@ Search、Transparency/Font Size 两个步进器、Medium→Extreme→Medium、16
 两个 known_hosts 端点、HDC reverse、fixture 进程/控制目录、额外 Tab 和屏幕常亮租约均
 已清理。
 
-这些是实现与定向验收证据。当前产品深色主题下的窗口尺寸全矩阵、真实物理键盘、连续 BEL、系统
-reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正式候选门禁，因此本文
-保持 `Implementing`，透明也仍可按既定路径回退。
+这些是实现与定向验收证据。后续正式候选结果见下一节；历史调试 HAP 不因最终候选通过而
+改写为发布证据。
+
+## 2026-08-08 1.2 保留候选验收
+
+正式候选来自已推送提交 `59a8cbfb50f7c67931881169a8695a303f22a718`、tree
+`9b3a4437058d27f621bb41c1b0b5c04b90d0be16`；测试签名 ARM64 HAP 为 10,261,825 bytes，
+SHA-256 `3f9e20b195d1353fdd2f59eb2134dbafb018d9baeac06b775dc0f68cbbf9119b`。所有下述设备证据
+都复用这个 HAP；候选后的提交只修改仓库验收 fixture、脚本和文档，候选兼容检查没有发现
+产品输入变化。
+
+### UI、搜索、透明与 BEL
+
+- UI/window 证据位于 `C:\tmp\leantty-1.2-final-ui-window-20260808`。普通、最大化和窄窗
+  分别可见 7/8/3 个裁剪 Tab，固定 `+`、四点菜单、系统按钮、表面区分、空搜索 `0/0`、
+  双 Pane 全高分隔及窗口恢复均可见。原 `device-ui-window.json` 的总结果作废，因为它把
+  “可见 Tab”当总 Tab、把空查询的可访问说明 `Type to search` 当作可视计数、把隐藏 warm
+  WebView 当活动 Pane，并漏掉关闭确认；没有覆盖该文件。校正后的 layout/截图复核和截图
+  SHA-256 写入 `device-ui-window-reviewed.json`，结果为 `passed`。
+- 保留候选搜索全矩阵位于
+  `C:\tmp\leantty-1.2-final-search-retained-20260808-rerun2\device-terminal-search.json`，
+  `device-behavior / acceptance / passed`；五个命名阶段、单 Tab/Pane恢复和常亮租约清理均通过。
+- 五档透明证据位于
+  `C:\tmp\leantty-1.2-final-transparency-20260808-rerun1\device-transparency.json`，结果
+  `passed`。设备实测 Content/Chrome alpha 为 Off `FF/FF`、Low `E6/F0`、Medium `D1/E0`、
+  High `B8/CC`、Extreme `99/B3`；Extreme 加号禁用、重启保持 Extreme、边界不循环，最后
+  恢复 Medium 并关闭菜单。
+- BEL 证据位于
+  `C:\tmp\leantty-1.2-final-bell-20260808-rerun4\device-ssh-auth.json`，结果 `passed`。
+  活动 Pane 瞬时提示、后台 Tab 持久标记与进入清除、分屏局部来源与聚焦清除、重复 BEL
+  合并全部由真实 `SSH → Rust/N-API → ArkTS → Tab/Pane` 链路确认；截图保留活动、后台 Tab
+  和分屏三种状态，cleanup 与 Preferences 不变检查通过。
+
+### 五档持续输出分布
+
+HAD-W32 使用 HUAWEI Maleoon 916、OpenGL ES 3.2 B289。证据位于
+`C:\tmp\leantty-1.2-final-performance-20260808-rerun12\device-ssh-auth.json`；每档连续三次
+12,000 × 80 流均为 100% 完整，三个 hitch 计数档位的增量全部为 0：
+
+| 档位 | rendered min / P50 / max | 完整度 | 主进程 RSS 采样范围 |
+| --- | ---: | ---: | ---: |
+| Off | 2647.5 / 2682.4 / 2752.6 ms | 3 × 100% | 268,636–277,544 KiB |
+| Low | 2602.5 / 2687.3 / 2738.8 ms | 3 × 100% | 283,684–292,372 KiB |
+| Medium | 2793.5 / 2824.5 / 2826.5 ms | 3 × 100% | 298,688–305,320 KiB |
+| High | 2589.8 / 2610.8 / 2764.3 ms | 3 × 100% | 310,396–314,512 KiB |
+| Extreme | 2749.4 / 2762.8 / 2875.3 ms | 3 × 100% | 317,708–321,188 KiB |
+
+RSS 是同一进程按 Off→Extreme 顺序累计输出后的采样，不能解释成透明度本身的档位成本；
+renderer RSS 约 239,928–250,676 KiB，RenderService GPU 样本通常为 2 MiB。时延没有随
+透明强度单调恶化，Extreme 仍在同轮总体分布内，未出现输出缺失、renderer 中断或 hitch
+累计，因此没有触发撤 Regular 或降低透明度的停止条件。
+
+性能阶段本身和资源清理均为 `passed`，但该 JSON 的顶层结果保留为 `failed`：完成采样后
+HDC 吞掉最终 `ssh-keygen -R` 的 Enter 提交遥测。该假阴性促使断开态命令也采用三次有界
+重试；随后短场景
+`C:\tmp\leantty-1.2-final-cleanup-20260808-rerun1\device-ssh-auth.json` 完整通过候选预检、
+密码连接、Preferences 不变、known_hosts 删除及 key/reverse/fixture 独立清理。失败记录仍
+保留，不把顶层字段改写成通过。
+
+### 人工验收结果
+
+客观设备矩阵已经覆盖当前深色主题的窗口尺寸、Tab/Pane、搜索、五档 alpha/Regular、BEL
+状态、持续输出、最小化/恢复和 renderer 生命周期。2026-08-08，用户进一步用真实物理键盘、
+中英文 IME 和实际 SSH 服务器完成人工验收，覆盖 Tab/Shift+Tab focus ring、
+tmux/vim/less/Agent TUI、Extreme 可读性及 BEL 节奏，均未发现问题。当前 HAD-W32 设置搜索
+对“减少动态效果”无结果，
+“动画”只找到“开发者选项 → 过渡动画缩放”；SDK 只提供状态读取、没有设置接口，因此用户级
+reduced-motion 在当前目标系统记为不适用。没有改动开发者动画倍率，也不拿它冒充该场景。
+
+### 2026-08-08 Low 档 Tab 层级修复
+
+用户在最终人工走查中确认 Low 档 Chrome 轨道与 Tab 表面色差不足。根因是所有 Tab 都使用
+`#1E1E2E`，非活动/hover 仅叠加 `0.42/0.72` opacity，而 Low Chrome 又是几乎不透明的
+`#F0181825`；局部 alpha 合成后，非活动 Tab 与底色的差异接近消失。其他透明档位只是因
+桌面透入更多而偶然放大色差，不能作为稳定的状态表达。
+
+修复删除两个局部 opacity token，把 Chrome 轨道 RGB 改为 crust，非活动 Tab 固定 mantle，
+活动与 hover 固定 base；不增加分隔线、描边、设置或状态源。测试签名诊断 HAP SHA-256 为
+`17c327dfb670ca6a3991d05a48e7f0915a539804b7c835fe60f588c23a44c253`。HAD-W32 五档证据位于
+`C:\tmp\leantty-tab-contrast-20260808`：Off/Low/Medium/High/Extreme 的 Chrome 分别实际报告
+`#FF11111B/#F011111B/#E011111B/#CC11111B/#B311111B`，每档布局均为三个
+`#FF181825` 非活动 Tab 和一个 `#FF1E1E2E` 活动 Tab；截图确认 4vp 间距、活动 Tab 连续层次、
+`+` 前短分隔与四点菜单保持不变。设备结束时恢复 Low。该 HAP 只证明本次定向修复，不替代
+从新精确提交重建的正式发布候选。
+
+### 2026-08-08 步进按钮快捷键与 hover 提示
+
+字号保留既有 `Ctrl+-` / `Ctrl+=`，透明度采用相同的减/加键并增加 Alt 层：
+`Ctrl+Alt+-` / `Ctrl+Alt+=`。纯策略分别返回两个目标的调整方向，字号策略明确拒绝 Alt，
+避免透明度键位同时修改字号；路由位于菜单捕获之前，因此菜单开关不改变快捷键语义。
+四个按钮的无障碍说明包含键位，视觉提示采用 HarmonyOS 原生 `bindTips`，300ms 后出现、
+离开后 100ms 消失。早期 `bindPopup` 诊断节点会被菜单层遮挡，已由真机截图否决并删除，
+没有保留第二套提示实现。
+
+Web terminal policy、静态 UI 契约和 78 项 ArkTS 单元测试通过；HAD-W32（USB、ARM64）debug
+HAP 构建、测试签名、安装和启动成功，SHA-256 为
+`A988DFA2089A5A549FB321A506650F8F86395DF5EC23F4A0ED0EC94624C7FB26`，源码基线提交为
+`cd60a83342c08e21111e57c850c9b0eaf9e34e3e` 加当前工作树改动。菜单打开和关闭两种状态都
+实测得到 `Medium/16 → Low/16 → Medium/16 → Medium/15 → Medium/16`，证明四个键位生效
+且互不串线；真实鼠标逐个悬停后，layout 中四个 Popup 均为 visible、opacity 1，并分别显示
+`Ctrl+Alt+-`、`Ctrl+Alt+=`、`Ctrl+-`、`Ctrl+=`。最终字号加提示的屏幕可见截图及逐按钮
+layout 位于 `C:\tmp\leantty-shortcut-buttons-20260808-r1`。该 debug HAP 只证明本次定向
+改动，不替代从新精确提交重建的正式发布候选。
 
 ## 验证边界
 
@@ -503,6 +618,7 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
 - 五档透明度的数值/非循环边界/默认与深浅主题派生、Chrome/Content 分区所有权、Preferences
   恢复、已挂载 Pane 同步、xterm 初始化时机、renderer 重建策略，以及生产只含一次固定
   Regular 根材质且不含其他材质选择或自定义 blur 路径。
+- 四个步进快捷键的目标隔离、菜单开关一致性、按钮与 hover Tips 文本一一对应。
 
 自动化不能证明视觉观感、系统合成成本、物理键盘焦点或 ArkWeb/WebGL 真机行为。
 
@@ -513,16 +629,18 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
 
 ### 物理 HarmonyOS PC 证明
 
-最终验收在实现和自动化闭合后进行，并与搜索剩余门禁一起排在 1.2 收尾阶段：
+保留候选已完成的客观物理门禁包括：
 
 - 当前产品深色主题下的普通/最大化/窄窗口、多 Tab 溢出、`+`、拖拽区、双 Pane 和搜索条
   可见边界；浅色 token 由自动化约束，不为验收增加产品入口。
-- 物理键盘 Tab/Shift+Tab 导航、focus ring、系统窗口按钮与拖拽不回归。
-- 活动 Pane、非活动 Tab、非焦点分屏和连续 BEL 的动画、静态标记、清除及 reduced-motion。
-- 轻透明下普通 Shell、tmux、vim、less、Agent TUI、selection、搜索高亮、链接、鼠标上报、
-  大持续输出、滚动、resize、最小化/恢复和 renderer 重建。
+- 活动 Pane、非活动 Tab、非焦点分屏和连续 BEL 的状态、重复合并、清除与销毁。
+- 轻透明下普通 Shell、搜索高亮、大持续输出、resize、最小化/恢复和 renderer 重建。
+- 菜单打开/关闭时四个步进快捷键的真实状态变化，以及四个按钮的鼠标 hover Tips 可见性。
 - 记录目标设备、精确 HAP/commit、截图或录屏、layout/hilog、重试和清理结果；先比较
   不透明与候选透明的分布和失败域，不用单次主观感受代替证据。
+
+真实物理键盘 focus ring、中英文输入法、用户服务器 TUI 和主观可读性/BEL 节奏已由用户
+完成；当前系统未暴露的用户级 reduced-motion 记为不适用，不阻塞发布。
 
 ## 裁剪与停止条件
 
@@ -539,6 +657,16 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
 
 ## 决策记录
 
+- 2026-08-08：字号沿用 `Ctrl+-` / `Ctrl+=`，透明度采用 `Ctrl+Alt+-` / `Ctrl+Alt+=`；四个
+  按钮用平台原生 hover Tips 展示键位。真机否决会被菜单遮挡的普通 Popup 实现，不建立
+  自定义 Tooltip 或覆盖层。
+- 2026-08-08：Low 档不再用局部 opacity 区分 Tab；采用 Catppuccin
+  `crust → mantle → base` 的显式表面层级，并在 HAD-W32 上逐档确认。保持无 Tab 间竖线、
+  固定 4vp 间距、活动 Tab 连接内容区和单一透明度设置。
+- 2026-08-08：精确保留候选完成 UI/window 证据复核、搜索、SSH 主路径、BEL、五档透明与
+  五档持续输出分布；候选客观停止条件均未触发。用户随后完成真实键盘/IME、用户服务器
+  TUI 和主观观感验收，未发现问题；当前目标系统未暴露用户级 reduced-motion，该场景记为
+  不适用并保留静态自动化约束。
 - 2026-08-08：提交前审查保持 `tab.id` 为稳定渲染身份，BEL 呼吸由瞬时 token/Prop 触发，
   不再通过改变 ForEach key 重建整个 Tab，避免提示动画干扰 Tab/关闭按钮焦点与组件状态。
 - 2026-08-08：用户通过调试比较器选择 Regular；正式实现固定一次根级
@@ -555,11 +683,11 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
   96vp 拖拽区，通过分隔和条件淡出表达边界。
 - 2026-08-07：确认搜索条紧凑化、分屏/图标/焦点/主题一致性进入同一 1.2 收敛切片。
 - 2026-08-07：首轮采用 0.97、无 blur 的轻透明候选；采用有限 Tab 强调、前导状态点和
-  分屏来源点；定向自动化、ARM64 构建与物理 PC 场景通过，正式候选矩阵仍待最终验收完成。
+  分屏来源点；当时定向自动化、ARM64 构建与物理 PC 场景通过，正式候选矩阵尚未执行。
 - 2026-08-07：二次走查确认终端现有留白与右侧 scrollbar 的视觉平衡成立，不作修改；
   修正 Tab 间分隔与内容基线、`0/0` 搜索反馈、搜索/Pane 关闭间距、四点菜单和分屏线权重，
   并采用高 `0.78`、中 `0.88`、低 `0.96` 三档内容透明度及本地重启持久化。
 - 2026-08-08：用活动态透明、非活动态不透明的 PC 容器配置闭合系统合成层；ArkUI 根
   Surface 成为唯一 alpha 所有者，ArkWeb/xterm WebGL 全透明透传，能力失败回退为不透明。
-  HAD-W32 已确认三档标签/alpha 一致、菜单连续循环和 Low 重启恢复；完整候选矩阵仍留在
-  `next-work.md` 的最终物理机矩阵。
+  HAD-W32 当时已确认三档标签/alpha 一致、菜单连续循环和 Low 重启恢复；该历史矩阵后来
+  被五档保留候选验收取代。

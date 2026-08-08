@@ -84,7 +84,24 @@ Before building a release:
 - Confirm the release checkout is detached at the recorded GitHub commit and
   has no tracked modifications.
 - Update CHANGELOG with the release date.
+- Regenerate the packaged `LeanTTY-User-Guide.html` from the finalized target
+  version section in `CHANGELOG.md` and the current user-visible contract. The
+  Chinese default and complete English version must describe exactly the
+  behavior entering this release: add newly delivered workflows, revise changed
+  interactions and remove or clearly exclude anything not shipped. Do not turn
+  the Changelog into release notes inside the guide; use it as the mandatory
+  delta checklist for rebuilding the task-oriented guide.
 - Update every version source defined by [`versioning.md`](versioning.md).
+
+User Guide regeneration is release-source work. Complete and review it in the
+development checkout on the `release/X.Y.Z` branch, commit it with the other
+release-document changes, merge and push it before selecting the release
+commit. The detached production and review checkouts consume the identical HTML
+from that commit and must not regenerate or edit it locally. Any later
+user-visible Changelog change or User Guide byte change invalidates the retained
+candidate and requires a new pushed release commit and clean formal build. The
+guide-specific content, offline and bilingual checks are defined in
+[`design/offline-user-guide.md`](design/offline-user-guide.md).
 
 LeanTTY publishes stable versions directly. Any code, dependency, resource,
 version or packaging change requires a new pushed commit and a new clean build

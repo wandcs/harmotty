@@ -4,8 +4,8 @@
 >
 > Last updated: 2026-08-08
 >
-> Applies to: the current repository `main` development behavior. The public
-> 1.0.1 release may not contain every command described here; check the matching
+> Applies to: the current repository 1.2.0 development behavior. An installed
+> release may not contain every command described here; check the matching
 > GitHub Release and `CHANGELOG.md` before relying on a capability.
 
 LeanTTY is a keyboard-first SSH terminal for a physical ARM64 HarmonyOS PC. It
@@ -46,11 +46,10 @@ through a channel you already trust before accepting it. A later host-key
 change stops the connection and shows the exact cleanup command; LeanTTY does
 not automatically delete or replace the old trust record.
 
-Current source authentication supports a direct password, an unencrypted
-private key, or an encrypted private key with an interactive passphrase. SSH
-`keyboard-interactive`, authentication banners and multi-method authentication
-are part of the 1.1 work in progress and must not be treated as delivered until
-the matching release says so.
+Current source authentication supports direct password, unencrypted and
+encrypted private keys, SSH `keyboard-interactive`, authentication banners and
+multi-method authentication. Check the matching release before relying on a
+development capability in an installed build.
 
 ## Saved hosts and OpenSSH configuration
 
@@ -182,9 +181,27 @@ fingerprint before accepting it.
 
 ## Current local command reference
 
+At the top-level `ltty>` prompt, `help`, `?`, `？`, `-h` and `--help` keep the
+complete terminal help and append one link to the full offline guide. LeanTTY
+creates or refreshes that file only after the command is entered, at:
+
+```text
+Downloads/com.leantty.app/LeanTTY-User-Guide.html
+```
+
+Hold `Ctrl` and left-click the displayed `LeanTTY-User-Guide.html` file name to
+open it in the system browser. Its OSC 8 link retains the complete platform URI
+without displaying the long path in terminal help.
+
+An identical current file is reused without rewriting; an older LeanTTY-owned
+copy is replaced, while a same-name file without LeanTTY's ownership marker is
+left untouched. Topic help such as `help ssh` remains short and does not create
+the file.
+
 | Command | Purpose |
 | --- | --- |
-| `help`, `?`, `help <command>`, `<command> --help` | Show local help |
+| `help`, `?`, `？`, `-h`, `--help` | Show full local help and prepare the offline guide |
+| `help <command>`, `<command> --help` | Show short command help |
 | `ssh [-p port] [-i identity] user@host` | Connect directly |
 | `ssh [-p port] [-i identity] host-name` | Connect through saved configuration |
 | `ssh -G host-name` | Show the supported effective configuration |

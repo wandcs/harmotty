@@ -2,14 +2,17 @@
 .SYNOPSIS
   Verify named terminal-search behavior on a physical HarmonyOS PC.
 .DESCRIPTION
-  Installs one explicit signed diagnostic HAP, drives the production
+  Installs one retained verified candidate (or an explicitly requested
+  diagnostic HAP), drives the production
   Ctrl+Alt+F search route, and records candidate, harness, device, layout,
   screenshot, timing, failure-domain, and cleanup evidence.
 #>
 [CmdletBinding()]
 param(
     [string]$Target = '',
-    [Parameter(Mandatory = $true)][string]$HapPath,
+    [string]$HapPath = '',
+    [switch]$DiagnosticHap,
+    [string]$CandidateBasePath = '',
     [string]$EvidenceDirectory = '',
     [string]$UnlockPasswordPath = '',
     [ValidateSet(
@@ -26,6 +29,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'hdc-common.ps1')
 . (Join-Path $PSScriptRoot 'device-regression.ps1')
+. (Join-Path $PSScriptRoot 'candidate-store.ps1')
 
 $harnessStatus = @(git -C $repoRoot status --porcelain --untracked-files=all 2>&1)
 if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect terminal-search harness source state' }
@@ -36,10 +40,55 @@ $harnessCommit = (& git -C $repoRoot rev-parse HEAD 2>&1).Trim()
 $harnessTree = (& git -C $repoRoot rev-parse 'HEAD^{tree}' 2>&1).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve terminal-search harness identity' }
 
-$HapPath = [IO.Path]::GetFullPath($HapPath)
-if (-not (Test-Path -LiteralPath $HapPath -PathType Leaf)) {
-    throw "Diagnostic HAP is missing: $HapPath"
+$candidateRoot = Get-LeanTTYCandidateRoot `
+    -RepoRoot $repoRoot `
+    -CandidateBasePath $CandidateBasePath
+$candidateRecords = @(Get-LeanTTYCandidateRecords -CandidateRoot $candidateRoot)
+$harnessDifferencePaths = @()
+if ($DiagnosticHap) {
+    if ([string]::IsNullOrWhiteSpace($HapPath)) {
+        throw '-DiagnosticHap requires an explicit -HapPath'
+    }
+    $resolvedHap = [IO.Path]::GetFullPath($HapPath)
+    if (-not (Test-Path -LiteralPath $resolvedHap -PathType Leaf)) {
+        throw "Diagnostic HAP is missing: $resolvedHap"
+    }
+    $candidate = [pscustomobject][ordered]@{
+        sha256 = (Get-FileHash -LiteralPath $resolvedHap -Algorithm SHA256).Hash.ToLowerInvariant()
+        hapPath = $resolvedHap
+        gitCommit = $null
+        gitTree = $null
+        gitDirty = $null
+    }
+} elseif ([string]::IsNullOrWhiteSpace($HapPath)) {
+    $candidate = $candidateRecords | Select-Object -First 1
+    if ($null -eq $candidate) { throw 'No retained candidate exists; run tools/verify-pc.ps1 first' }
+} else {
+    $resolvedHap = [IO.Path]::GetFullPath($HapPath)
+    if (-not (Test-Path -LiteralPath $resolvedHap -PathType Leaf)) {
+        throw "Candidate HAP is missing: $resolvedHap"
+    }
+    $requestedHash = (Get-FileHash -LiteralPath $resolvedHap -Algorithm SHA256).Hash.ToLowerInvariant()
+    $candidate = $candidateRecords | Where-Object { $_.sha256 -eq $requestedHash } | Select-Object -First 1
+    if ($null -eq $candidate) { throw 'The selected HAP is not a retained verified candidate' }
 }
+if (-not $DiagnosticHap) {
+    if ($candidate.gitDirty) { throw 'Terminal-search evidence requires a clean committed candidate' }
+    $harnessDifferencePaths = @(Assert-LeanTTYCandidateHarnessCompatibility `
+        -RepoRoot $repoRoot `
+        -Candidate $candidate `
+        -AllowedHarnessPaths @(
+            'tools/verify-ssh-auth-pc.ps1',
+            'tools/verify-terminal-search-pc.ps1',
+            'tools/device-regression.ps1',
+            'tools/test-device-regression.ps1',
+            'leantty_ssh/ssh-auth-fixture/src/main.rs',
+            'docs/design/terminal-search.md',
+            'docs/design/ui-interaction-polish.md',
+            'docs/next-work.md'
+        ))
+}
+$HapPath = [string]$candidate.hapPath
 if ((Split-Path $HapPath -Leaf) -match 'unsigned') {
     throw 'Terminal-search device verification requires a signed HAP'
 }
@@ -74,7 +123,7 @@ $deviceUnlockResult = ''
 $deviceModel = ''
 $deviceAbi = ''
 $deviceTransport = ''
-$hapHash = (Get-FileHash -LiteralPath $HapPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$hapHash = [string]$candidate.sha256
 $hapLength = (Get-Item -LiteralPath $HapPath).Length
 
 function Get-TerminalSearchInputNodes {
@@ -1009,9 +1058,10 @@ try {
     }
 
     $evidence = [ordered]@{
-        schemaVersion = 1
-        gate = 'diagnostic'
+        schemaVersion = 2
+        gate = $(if ($DiagnosticHap) { 'diagnostic' } else { 'device-behavior' })
         scenario = 'terminal-search'
+        runMode = $(if ($DiagnosticHap) { 'diagnostic' } else { 'acceptance' })
         attemptId = $attemptId
         result = $(if (-not $failure -and -not $cleanupFailure) { 'passed' } else { 'failed' })
         startedAt = $startedAt.ToString('o')
@@ -1020,12 +1070,22 @@ try {
         candidate = [ordered]@{
             sha256 = $hapHash
             bytes = $hapLength
-            provenance = 'explicit-unretained-diagnostic-hap'
+            gitCommit = $candidate.gitCommit
+            gitTree = $candidate.gitTree
+            gitDirty = $candidate.gitDirty
+            retained = (-not $DiagnosticHap)
+            provenance = $(if ($DiagnosticHap) {
+                'explicit-unretained-diagnostic-hap'
+            } else {
+                'retained-verified-candidate'
+            })
+            reusedAcrossHarnessOnlyChanges = ($harnessDifferencePaths.Count -gt 0)
         }
         harness = [ordered]@{
             gitCommit = $harnessCommit
             gitTree = $harnessTree
             gitDirty = $false
+            differencePathsFromCandidate = @($harnessDifferencePaths)
         }
         device = [ordered]@{
             model = $deviceModel
@@ -1059,7 +1119,21 @@ try {
 
 if ($failure) { throw $failure }
 if ($cleanupFailure) { throw "Terminal-search cleanup failed: $cleanupFailure" }
-Write-Host (
-    'DIAGNOSTIC SUCCESS: terminal-search ' +
-    "(scenarios=$($Only -join ','), evidence=$EvidenceDirectory\device-terminal-search.json)"
-) -ForegroundColor Green
+$evidencePath = Join-Path $EvidenceDirectory 'device-terminal-search.json'
+if (-not $DiagnosticHap) {
+    Save-LeanTTYVerifiedCandidate `
+        -RepoRoot $repoRoot `
+        -HapPath $candidate.hapPath `
+        -VerificationMode 'device-behavior' `
+        -EvidencePaths @($evidencePath) `
+        -CandidateBasePath $CandidateBasePath | Out-Null
+    Write-Host (
+        'DEVICE BEHAVIOR SUCCESS: terminal-search ' +
+        "(SHA256=$hapHash, scenarios=$($Only -join ','), evidence=$evidencePath)"
+    ) -ForegroundColor Green
+} else {
+    Write-Host (
+        'DIAGNOSTIC SUCCESS: terminal-search ' +
+        "(scenarios=$($Only -join ','), evidence=$evidencePath; candidate not promoted)"
+    ) -ForegroundColor Yellow
+}

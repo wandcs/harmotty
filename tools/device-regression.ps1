@@ -507,7 +507,7 @@ function Get-LeanTTYAppLogs {
         & $Hdc -t $Target shell (
             "hilog -z 500 -t app -P $ProcessId " +
             '-T SessionViewModel,KeyCommandService,SshClient,EntryAbility,Index,' +
-            'TerminalSurfaceController,TerminalBridge'
+            'TerminalSurfaceController,TerminalBridge,AppViewModel'
         ) 2>&1
     )
     $exitCode = $LASTEXITCODE

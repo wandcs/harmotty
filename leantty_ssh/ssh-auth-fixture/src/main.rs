@@ -165,7 +165,7 @@ impl FixtureServer {
         for byte in data {
             if matches!(*byte, b'\r' | b'\n') {
                 if command.is_none() {
-                    command = parse_fixture_command(&self.shell_input);
+                    command = parse_fixture_command_line(&self.shell_input);
                 }
                 self.shell_input.clear();
             } else if byte.is_ascii() && !byte.is_ascii_control() {
@@ -529,6 +529,10 @@ impl Handler for FixtureServer {
         match self.take_fixture_command(data) {
             Some(FixtureCommand::Perf(PerfCommand::Prepare(request))) => {
                 let expected_bytes = perf_stream_expected_bytes(&request);
+                eprintln!(
+                    "perf case={} bytes={} state=prepared",
+                    request.case_id, expected_bytes
+                );
                 let begin = format!(
                     "\x1b]0;LTTY_PERF_BEGIN__:{}:{}\x07\r\nfixture> ",
                     request.case_id, expected_bytes
@@ -544,6 +548,7 @@ impl Handler for FixtureServer {
                     self.pending_perf_request = Some(request);
                     return Ok(());
                 }
+                eprintln!("perf case={case_id} state=run");
                 let payload = build_perf_stream_payload(&request);
                 let end = format!(
                     "\x1b]0;LTTY_PERF_END__:{}\x07\r\nfixture> ",
@@ -582,11 +587,20 @@ impl Handler for FixtureServer {
                 session.data(channel, response.into_bytes())?;
             }
             Some(FixtureCommand::Bell(request)) => {
+                eprintln!(
+                    "bell case={} delay_ms={} state=scheduled",
+                    request.case_id, request.delay_ms
+                );
                 let handle = session.handle();
                 tokio::spawn(async move {
                     tokio::time::sleep(Duration::from_millis(request.delay_ms)).await;
                     let response = format!("\x07\r\nLTTY_BELL_OK:{}\r\nfixture> ", request.case_id);
-                    let _ = handle.data(channel, response.into_bytes()).await;
+                    let state = if handle.data(channel, response.into_bytes()).await.is_ok() {
+                        "sent"
+                    } else {
+                        "send-failed"
+                    };
+                    eprintln!("bell case={} state={state}", request.case_id);
                 });
             }
             None => {}
@@ -686,6 +700,16 @@ fn parse_fixture_command(input: &[u8]) -> Option<FixtureCommand> {
         case_id: case_id.to_string(),
         bytes,
     }))
+}
+
+fn parse_fixture_command_line(input: &[u8]) -> Option<FixtureCommand> {
+    if let Some(command) = parse_fixture_command(input) {
+        return Some(command);
+    }
+    input
+        .windows(5)
+        .rposition(|window| window == b"ltty-")
+        .and_then(|index| parse_fixture_command(&input[index..]))
 }
 
 fn build_paste_payload(request: &PasteRequest) -> Vec<u8> {
@@ -994,6 +1018,10 @@ mod tests {
             Some(FixtureCommand::InputCheck("input01".to_string()))
         );
         assert_eq!(parse_fixture_command(b"ltty-input-check bad:id"), None);
+        assert_eq!(
+            parse_fixture_command_line(b"[Oltty-input-check input01"),
+            Some(FixtureCommand::InputCheck("input01".to_string()))
+        );
         assert_eq!(
             parse_fixture_command(b"ltty-bell bell01 800"),
             Some(FixtureCommand::Bell(BellRequest {

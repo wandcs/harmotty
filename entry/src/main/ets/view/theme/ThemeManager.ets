@@ -88,7 +88,7 @@ export class TransparencyPolicy {
   }
 
   static chromeSurfaceBackground(mode: TransparencyMode, isLight: boolean): string {
-    let rgb: string = isLight ? 'E6E9EF' : '181825'
+    let rgb: string = isLight ? 'DCE0E8' : '11111B'
     if (mode === TransparencyMode.OFF) return '#FF' + rgb
     if (mode === TransparencyMode.HIGH) return '#CC' + rgb
     if (mode === TransparencyMode.LOW) return '#F0' + rgb
@@ -101,7 +101,7 @@ export class TransparencyPolicy {
   }
 
   static opaqueChromeSurfaceBackground(isLight: boolean): string {
-    return isLight ? '#FFE6E9EF' : '#FF181825'
+    return isLight ? '#FFDCE0E8' : '#FF11111B'
   }
 }
 

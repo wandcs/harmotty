@@ -18,6 +18,8 @@ import { TerminalSurfaceController } from '../model/terminal/TerminalSurfaceCont
 import { LocalCommandLine } from '../model/terminal/LocalCommandLine'
 import { common } from '@kit.AbilityKit'
 import { KnownHostsManager } from '../model/ssh/KnownHostsManager'
+import { UserGuideManager, UserGuideResult } from '../model/guide/UserGuideManager'
+import { UserGuidePolicy } from '../model/guide/UserGuidePolicy'
 
 export { TerminalMode } from '../common/types/TerminalTypes'
 
@@ -73,6 +75,7 @@ export class SessionViewModel {
   private keypushTimeoutId: number = -1
   private terminalFocused: boolean = false
   private outputObserverDecoder: util.TextDecoder = util.TextDecoder.create('utf-8')
+  private localHelpPending: boolean = false
 
   getSession(): SshSession {
     return this.session
@@ -580,6 +583,9 @@ export class SessionViewModel {
   }
 
   private handleIdleInput(data: string): void {
+    if (this.localHelpPending) {
+      return
+    }
     let actions: TerminalInputAction[] = TerminalInputParser.parse(data, true)
     for (let i = 0; i < actions.length; i++) {
       let action: TerminalInputAction = actions[i]
@@ -854,6 +860,7 @@ export class SessionViewModel {
       writeError: (msg: string) => { this.writeError(msg) },
       writeOutput: (text: string) => { this.writeTerminal(text) },
       beginKeyPassphraseChange: (keyName: string) => { this.beginKeyPassphraseChange(keyName) },
+      showTopLevelHelp: (helpText: string) => { this.showTopLevelHelp(helpText) },
       confirmKeyDelete: (name: string, fingerprint: string, onConfirm: () => void, onCancel: () => void) => {
         if (this.onConfirmKeyDelete === null) {
           this.writeError('Key deletion confirmation is unavailable.')
@@ -863,6 +870,28 @@ export class SessionViewModel {
       }
     }
     KeyCommandService.execute(result, ctx)
+  }
+
+  private showTopLevelHelp(helpText: string): void {
+    if (this.context === null || this.localHelpPending) {
+      this.writeTerminal(helpText + '\u001b[31mFull user guide unavailable: Application context is unavailable.\u001b[0m\r\nltty> ')
+      return
+    }
+    this.writeTerminal(helpText)
+    this.localHelpPending = true
+    let context: common.Context = this.context
+    UserGuideManager.sync(context).then((result: UserGuideResult) => {
+      if (result.available) {
+        let link: string = UserGuidePolicy.osc8Link(result.uri)
+        this.writeTerminal('Full user guide: ' + link + ' (Ctrl+Click to open)\r\nltty> ')
+      } else {
+        this.writeTerminal('\u001b[31mFull user guide unavailable: ' + result.errorMessage + '\u001b[0m\r\nltty> ')
+      }
+      this.localHelpPending = false
+    }).catch(() => {
+      this.writeTerminal('\u001b[31mFull user guide unavailable: LeanTTY could not create or update the guide.\u001b[0m\r\nltty> ')
+      this.localHelpPending = false
+    })
   }
 
   private beginKeyPassphraseChange(keyName: string): void {

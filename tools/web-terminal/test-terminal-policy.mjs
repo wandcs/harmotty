@@ -751,6 +751,14 @@ assert.match(indexPage,
 assert.match(indexPage,
   /menuSelectedIndex === 5 && event\.keyCode === 2014[\s\S]*handleFontDecrease\(\)[\s\S]*menuSelectedIndex === 5 && event\.keyCode === 2015[\s\S]*handleFontIncrease\(\)/,
   'left and right must adjust only the selected font-size row');
+assert.match(indexPage,
+  /transparencyShortcutDirection\([\s\S]*adjustTransparency\(transparencyDirection\)[\s\S]*fontSizeShortcutDirection\([\s\S]*handleFontDecrease\(\)[\s\S]*handleFontIncrease\(\)[\s\S]*if \(this\.menuOpen\)/,
+  'global stepper shortcuts must run while the menu is either open or closed');
+for (const shortcut of ['Ctrl+Alt+-', 'Ctrl+Alt+=', 'Ctrl+-', 'Ctrl+=']) {
+  assert.match(indexPage,
+    new RegExp(`bindTips\\('${shortcut.replaceAll('+', '\\+')}', \\{[\\s\\S]*?appearingTime: 300`),
+    `${shortcut} must appear in the matching native hover tip`);
+}
 assert.doesNotMatch(indexPage, /'Font Size \+'|'Reset Font Size'|'Font Size -'/,
   'the production menu must not retain three redundant font-size rows');
 assert.match(indexPage,
@@ -820,8 +828,11 @@ assert.doesNotMatch(chromeBar, /chromeBarWidth|\.onAreaChange\(/,
   'the tab strip must not create a self-measurement feedback loop');
 assert.match(chromeBar, /\.fadingEdge\(this\.tabs\.length > 1\)/,
   'the tab strip must use the platform edge fade without adding width measurement state');
-assert.match(chromeBar, /tabInactiveSurfaceOpacity[\s\S]*\.width\(172\)/,
-  'tabs must keep the fixed width while rendering a restrained inactive surface');
+assert.match(chromeBar,
+  /private surfaceColor\(\): string \{[\s\S]*this\.isActive \|\| this\.hovered[\s\S]*tabActiveBackground[\s\S]*tabBackground/,
+  'tabs must map active and inactive states to explicit palette surfaces');
+assert.doesNotMatch(chromeBar, /tabInactiveSurfaceOpacity|tabHoverSurfaceOpacity/,
+  'tab separation must not depend on alpha that collapses against the Low chrome surface');
 assert.match(chromeBar, /attentionPulseCount[\s\S]*isAnimationReduceEnabledSync[\s\S]*pulseIndex/,
   'tab attention must be finite and respect the system reduced-motion preference');
 assert.match(chromeBar, /indicatorColor\(\): string \{[\s\S]*?if \(this\.hasAttention\) \{[\s\S]*?return this\.chromeColors\.attention/,
@@ -847,6 +858,31 @@ assert.match(terminalHtml,
   'compact 0/0 feedback must distinguish an empty query from a completed no-results search for accessibility');
 assert.match(terminalHtml, /#search-panel button\s*\{[\s\S]*?flex:\s*0 0 26px;[\s\S]*?width:\s*26px;/,
   'search actions must remain compact and equally sized');
+assert.match(terminalHtml,
+  /id="search-navigation" role="group" aria-label="Search result navigation"[\s\S]*?id="search-previous"[\s\S]*?id="search-next"[\s\S]*?<\/div>[\s\S]*?id="search-close"/,
+  'previous and next must share a semantic navigation group while close remains separate');
+assert.match(terminalHtml,
+  /#search-navigation\s*\{[\s\S]*?border:\s*1px solid var\(--search-border\);[\s\S]*?#search-next\s*\{[\s\S]*?border-left:\s*1px solid var\(--search-border\);[\s\S]*?#search-close\s*\{[\s\S]*?border:\s*1px solid var\(--search-border\);/,
+  'search navigation must use one grouped outline and close must keep an independent outline');
+for (const [id, shortcut] of [
+  ['search-previous', 'Shift+Enter'],
+  ['search-next', 'Enter'],
+  ['search-close', 'Esc']
+]) {
+  assert.match(terminalHtml,
+    new RegExp(`id="${id}"[\\s\\S]*?data-tip="${shortcut.replaceAll('+', '\\+')}"`),
+    `${id} must expose its shortcut through the shared hover-tip treatment`);
+}
+assert.match(terminalHtml,
+  /#search-panel button\[data-tip\]::after[\s\S]*?transition-delay:\s*300ms;/,
+  'search shortcut tips must use the same restrained 300 ms hover delay');
+assert.match(terminalHtml,
+  /#search-panel button:disabled\s*\{\s*color:\s*var\(--search-border\);\s*\}/,
+  'disabled navigation must mute only the icon so its shortcut tip stays readable');
+assert.doesNotMatch(terminalHtml, /#search-panel button:disabled\s*\{[^}]*opacity:/,
+  'disabled navigation must not fade the hover-tip pseudo elements');
+assert.doesNotMatch(terminalHtml, /id="search-(?:previous|next|close)"[^>]*\stitle=/,
+  'search controls must not stack browser title popups over the shared shortcut tips');
 assert.match(terminalHtml,
   /new Terminal\(\{[\s\S]*?allowProposedApi:\s*true,[\s\S]*?allowTransparency:\s*true,/,
   'xterm transparency must be enabled before the terminal opens');

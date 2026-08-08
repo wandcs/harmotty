@@ -16,6 +16,15 @@ import { SessionViewModel } from '../main/ets/viewmodel/SessionViewModel'
 import { BrowserLauncher } from '../main/ets/model/browser/BrowserLauncher'
 import { CommandBarViewModel } from '../main/ets/viewmodel/CommandBarViewModel'
 import { AppTheme, ColorMode, TransparencyMode, TransparencyPolicy } from '../main/ets/view/theme/ThemeManager'
+import { UserGuideFileDecision, UserGuidePolicy } from '../main/ets/model/guide/UserGuidePolicy'
+
+function asciiBytes(text: string): Uint8Array {
+  let result: Uint8Array = new Uint8Array(text.length)
+  for (let i: number = 0; i < text.length; i++) {
+    result[i] = text.charCodeAt(i)
+  }
+  return result
+}
 
 export default function interactionFixesTest() {
   describe('InteractionFixes', () => {
@@ -80,6 +89,52 @@ export default function interactionFixesTest() {
       expect(fullwidth instanceof KeyCommandResult).assertEqual(true)
       if (ascii instanceof KeyCommandResult) { expect(ascii.kind).assertEqual(KeyCommandKind.HELP) }
       if (fullwidth instanceof KeyCommandResult) { expect(fullwidth.kind).assertEqual(KeyCommandKind.HELP) }
+    })
+
+    it('keepsAllTopLevelHelpAliasesSeparateFromTopicHelp', 0, () => {
+      let aliases: string[] = ['help', '?', '？', '-h', '--help']
+      for (let i: number = 0; i < aliases.length; i++) {
+        let result = CommandParser.parseInput(aliases[i], new SshConfig())
+        expect(result instanceof KeyCommandResult).assertEqual(true)
+        if (result instanceof KeyCommandResult) {
+          expect(result.kind).assertEqual(KeyCommandKind.HELP)
+          expect(result.keyName).assertEqual('')
+        }
+      }
+      let topic = CommandParser.parseInput('help ssh', new SshConfig())
+      expect(topic instanceof KeyCommandResult).assertEqual(true)
+      if (topic instanceof KeyCommandResult) { expect(topic.keyName).assertEqual('ssh') }
+    })
+
+    it('decidesUserGuideUpdatesFromExactBytesAndOwnership', 0, () => {
+      let current: Uint8Array = asciiBytes('<!-- leantty-owned-user-guide -->current')
+      let old: Uint8Array = asciiBytes('<!-- leantty-owned-user-guide -->old')
+      let foreign: Uint8Array = asciiBytes('<!doctype html><title>mine</title>')
+      expect(UserGuidePolicy.decide(null, current)).assertEqual(UserGuideFileDecision.CREATE)
+      expect(UserGuidePolicy.decide(current, current)).assertEqual(UserGuideFileDecision.CURRENT)
+      expect(UserGuidePolicy.decide(old, current)).assertEqual(UserGuideFileDecision.REPLACE_OWNED)
+      expect(UserGuidePolicy.decide(foreign, current)).assertEqual(UserGuideFileDecision.CONFLICT)
+    })
+
+    it('buildsOnlyTheTwoFixedUserGuidePaths', 0, () => {
+      expect(UserGuidePolicy.guidePath('/downloads/', 'com.leantty.app'))
+        .assertEqual('/downloads/com.leantty.app/LeanTTY-User-Guide.html')
+      expect(UserGuidePolicy.tempPath('/downloads', 'com.leantty.app'))
+        .assertEqual('/downloads/com.leantty.app/.LeanTTY-User-Guide.html.tmp')
+      expect(UserGuidePolicy.validateBundleName('../other')).assertEqual(false)
+      expect(UserGuidePolicy.validateBundleName('com.leantty.app')).assertEqual(true)
+    })
+
+    it('allowsOnlyTheExactCanonicalLocalUserGuideUri', 0, () => {
+      let expected: string = 'file://docs/storage/Users/currentUser/Download/com.leantty.app/' +
+        'LeanTTY-User-Guide.html'
+      expect(BrowserLauncher.isAllowedUserGuideUrl(expected, expected)).assertEqual(true)
+      expect(BrowserLauncher.isAllowedUserGuideUrl(expected + '#section', expected)).assertEqual(false)
+      expect(BrowserLauncher.isAllowedUserGuideUrl(expected.replace('LeanTTY-User-Guide.html', 'other.html'), expected))
+        .assertEqual(false)
+      expect(BrowserLauncher.isAllowedUserGuideUrl('https://example.com', expected)).assertEqual(false)
+      expect(UserGuidePolicy.osc8Link(expected)).assertEqual(
+        '\u001b]8;;' + expected + '\u001b\\LeanTTY-User-Guide.html\u001b]8;;\u001b\\')
     })
 
     it('keepsUnknownAndInvalidLocalCommandsDistinct', 0, () => {
@@ -511,6 +566,17 @@ export default function interactionFixesTest() {
       expect(InteractionPolicy.isTerminalSearchShortcut(2019, true, true, false)).assertEqual(false)
     })
 
+    it('separatesTransparencyAndFontSizeAdjustmentShortcuts', 0, () => {
+      expect(InteractionPolicy.transparencyShortcutDirection(2057, true, true)).assertEqual(-1)
+      expect(InteractionPolicy.transparencyShortcutDirection(2058, true, true)).assertEqual(1)
+      expect(InteractionPolicy.transparencyShortcutDirection(2057, true, false)).assertEqual(0)
+      expect(InteractionPolicy.transparencyShortcutDirection(2058, false, true)).assertEqual(0)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2057, true, false)).assertEqual(-1)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2058, true, false)).assertEqual(1)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2057, true, true)).assertEqual(0)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2058, false, false)).assertEqual(0)
+    })
+
     it('consumesPaneNavigationOnlyForTheFixedTwoPaneLayout', 0, () => {
       expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.FOCUS_LEFT_PANE, 1))
         .assertEqual(-1)
@@ -616,18 +682,18 @@ export default function interactionFixesTest() {
       let extreme: AppTheme = new AppTheme(ColorMode.DARK, TransparencyMode.EXTREME)
       let off: AppTheme = new AppTheme(ColorMode.LIGHT, TransparencyMode.OFF)
       expect(dark.background()).assertEqual('#B81E1E2E')
-      expect(dark.chromeBackground()).assertEqual('#CC181825')
+      expect(dark.chromeBackground()).assertEqual('#CC11111B')
       expect(dark.background(false)).assertEqual('#FF1E1E2E')
-      expect(dark.chromeBackground(false)).assertEqual('#FF181825')
+      expect(dark.chromeBackground(false)).assertEqual('#FF11111B')
       expect(dark.terminal.toJsInitObject().indexOf('rgba(0, 0, 0, 0)') >= 0).assertEqual(true)
       expect(light.background()).assertEqual('#E6EFF1F5')
-      expect(light.chromeBackground()).assertEqual('#F0E6E9EF')
+      expect(light.chromeBackground()).assertEqual('#F0DCE0E8')
       expect(light.background(false)).assertEqual('#FFEFF1F5')
       expect(light.terminal.toJsInitObject().indexOf('rgba(0, 0, 0, 0)') >= 0).assertEqual(true)
       expect(extreme.background()).assertEqual('#991E1E2E')
-      expect(extreme.chromeBackground()).assertEqual('#B3181825')
+      expect(extreme.chromeBackground()).assertEqual('#B311111B')
       expect(off.background()).assertEqual('#FFEFF1F5')
-      expect(off.chromeBackground()).assertEqual('#FFE6E9EF')
+      expect(off.chromeBackground()).assertEqual('#FFDCE0E8')
     })
 
     it('doesNotTreatTerminalQueryResponsesAsLocalCommandText', 0, () => {

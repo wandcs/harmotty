@@ -8,6 +8,12 @@
 
 - Added current-surface terminal search with the fixed `Ctrl+Alt+F` entry,
   compact match navigation and isolated Pane/Tab lifecycle behavior.
+- Added a bilingual offline User Guide that is generated only from top-level
+  local help. The existing terminal help remains intact, then exposes its short
+  file name as one Ctrl-clickable link while retaining the complete Downloads
+  URI only in the OSC 8 target. Exact-byte reuse, owned-file replacement,
+  foreign-file protection and a strict single-file URI allowlist keep the
+  workflow bounded.
 
 ### Changed
 
@@ -16,7 +22,9 @@
   continuous with the terminal, a distinct new-Tab boundary and a lower-weight
   full-height split divider,
   restored HarmonyOS four-dot menu, themed controls and visible keyboard focus
-  states.
+  states. Stabilized the hierarchy at every transparency level by mapping the
+  Chrome track, inactive Tabs and active/hover Tabs to Catppuccin
+  `crust → mantle → base` surfaces instead of low-contrast per-Tab opacity.
 - Replaced the full-Pane BEL warning frame with a finite Tab emphasis, a
   persistent leading status marker for unattended output and a local split
   source marker. Reduced-motion uses static feedback.
@@ -32,6 +40,14 @@
   with one non-wrapping `− current +` stepper. Tightened the search panel spacing
   and made both empty and unsuccessful queries visibly report `0/0` while
   retaining distinct accessible descriptions.
+- Added grouped global shortcuts for the four menu step buttons: `Ctrl+-` /
+  `Ctrl+=` adjust font size and `Ctrl+Alt+-` / `Ctrl+Alt+=` adjust transparency,
+  including while the menu is open. Each button now shows its shortcut in a
+  native hover tip and exposes the same key in its accessible description.
+- Grouped terminal-search Previous/Next under one outlined navigation control
+  with a separator while keeping Close independently outlined. All three icons
+  now use consistent shortcut tips, accessible key descriptions and visible
+  focus treatment; disabled navigation no longer fades its tip text.
 
 ### Security
 
@@ -41,6 +57,22 @@
   Isolated bounded channel writes from the session lifecycle so remote-window
   backpressure cannot block output handling, local cancellation or transport
   disconnect detection.
+
+### Documentation
+
+- Added the reviewed Chinese-default, complete-English User Guide source and a
+  formal-release gate that requires its packaged bytes and version to match the
+  finalized 1.2 Changelog and application version before a candidate is built.
+- Recorded the exact retained 1.2 candidate and physical ARM64 PC evidence for
+  terminal search ownership/lifecycle, UI/window review, SSH transport, BEL,
+  five transparency levels and continuous-output performance distributions;
+  real keyboard/IME, user-server TUI and subjective visual acceptance also
+  completed without an observed issue. The target system has no discoverable
+  user-level reduced-motion setting, so that device scenario is recorded as not
+  applicable while the static fallback remains covered. Final User Guide
+  permission, update/conflict, bilingual rendering and real Ctrl-click behavior
+  were accepted after the visible link was shortened to the file name without
+  changing its complete OSC 8 target.
 
 ## [1.1.1] - 2026-08-06
 

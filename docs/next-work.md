@@ -15,62 +15,46 @@ milestone 不在这里维护第二份清单。
 ## 当前状态与完成定义
 
 1.2 的产品实现已闭合两个受控切片：当前 Pane、当前 Terminal Surface 内的普通文本
-scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛。当前实现包括：
+scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛。离线 User Guide 已获
+当前版本实现授权；第三个受控切片的产品实现和物理机验收已完成。
+已完成实现包括：
 
 - `Ctrl+Alt+F` 和四点菜单 Search 进入当前 Surface 搜索；查询不进入 Session、SSH 或持久化；
-- 固定 172vp Tab、有限 BEL Tab 提示、紧凑搜索、双 Pane 边界和可见键盘焦点；
+- 固定 172vp Tab、有限 BEL Tab 提示、紧凑搜索、成组 Previous/Next 与独立 Close 边界、
+  双 Pane 边界和可见键盘焦点；
 - Off/Low/Medium/High/Extreme 五档非循环透明度，Content 为
   `1.00/0.90/0.82/0.72/0.60`，Chrome 为 `1.00/0.94/0.88/0.80/0.70`；
+- 字号 `Ctrl+-` / `Ctrl+=` 与透明度 `Ctrl+Alt+-` / `Ctrl+Alt+=` 成组全局快捷键，四个菜单
+  步进按钮使用原生 hover Tips 显示对应键位；
 - 非 Off 档只在窗口根固定一次 `BlurStyle.BACKGROUND_REGULAR`，不提供材质设置、自定义
-  Gaussian、CSS/WebGL blur 或逐 Pane 模糊。
+  Gaussian、CSS/WebGL blur 或逐 Pane 模糊；
+- 顶层帮助保留原文并在末尾生成唯一 OSC 8 离线指南链接；中文默认/完整英文
+  HTML 进入包内 rawfile，Download 同步按逐字节版本、所有权和固定 URI 白名单闭合。
 
 已完成的实现、裁剪决定和定向证据分别记录在
 [`design/terminal-search.md`](design/terminal-search.md)、
 [`design/ui-interaction-polish.md`](design/ui-interaction-polish.md) 和 `CHANGELOG.md`。
 `v1.1.1` 已于 2026-08-08 通过 AppGallery 审核并上架，1.2.0 已选择为当前目标版本。
-当前剩余工作只有精确候选、最终物理机矩阵和发布；不得在候选形成后继续加入无关功能。
+1.2 已从 `origin/main` 可达的精确提交
+`59a8cbfb50f7c67931881169a8695a303f22a718` 建立干净 ARM64 保留候选；HAP SHA-256 为
+`3f9e20b195d1353fdd2f59eb2134dbafb018d9baeac06b775dc0f68cbbf9119b`。正式软件门禁、
+SSH 主路径、保留候选搜索矩阵、窗口/UI 证据复核、BEL、五档透明和五档持续输出性能矩阵
+已经完成；用户随后用真实物理键盘、中英文输入法和实际 SSH 服务器完成搜索、focus ring、
+tmux/vim/less/Agent TUI、Medium/Extreme 可读性及 BEL 节奏验收，均未发现问题。详情进入
+两份设计文档。用户随后确认 Low 档 Chrome 轨道与 Tab 表面色差不足，并明确授权在发布前
+修复；修复已把深浅色 Chrome/非活动 Tab/活动 Tab 收敛为 Catppuccin
+`crust → mantle → base` 三层，并通过五档真机抽查；后续授权的四个步进快捷键、菜单 hover
+Tips 及搜索导航/关闭按钮统一也已通过定向真机验证。上述候选保留为验收基线，但不再作为
+最终发布候选，且随后授权的离线 User Guide 会继续改变产品树；发布流程必须从包含这些
+修复和指南能力的新精确提交重建。2026-08-08，用户确认 1.2 全部测试完成，
+最后的指南短文件名链接与其他收口优化补齐后未发现问题。不得借此加入无关功能。
 
 完成 1.2 必须满足：所有产品改动进入精确且已推送的提交；正式软件门禁与干净 ARM64
 候选通过；同一个保留候选完成全部适用的物理 HarmonyOS PC 场景；设计、版本、签名、
 归档、GitHub Release 和 AppGallery 记录可追溯。安装、启动或工作树截图不能替代行为验收。
 
-## 1. 准备精确 1.2.0 正式候选
+## 1. 收口与发布
 
-- [ ] 从精确已推送提交运行 `tools/verify-pc.ps1` 正式门禁：完成完整软件回归、Rust
-  format/Clippy/tests、干净 ARM64 原生与测试签名 HAP 构建、安装和启动；保留同一 HAP，记录
-  commit/tree、ABI、资产、签名、SHA-256 和机器可读 manifest。此项只建立候选，不声称行为通过。
-
-## 2. 对同一候选执行最终物理机矩阵
-
-- [ ] 验收环境前置条件：开始快捷键与 Pane/Tab 场景前关闭鸿蒙飞书。已确认飞书运行时会
-  抢占 `Ctrl+Shift+W`，关闭后 LeanTTY 行为正常；若按键后前台切换到飞书，归类为第三方
-  快捷键抢占和环境未清理，关闭飞书后重试，不修改 LeanTTY 快捷键实现或增加兼容别名。
-- [ ] 搜索输入与冲突：使用真实物理键盘和中英文输入法验证打开、逐字输入、下一处、上一处、
-  首尾回绕、空查询、无结果、关闭和焦点恢复；确认 `Ctrl+Alt+F` 不与 HarmonyOS、输入法或
-  常见终端/TUI 按键产生不可接受冲突。
-- [ ] 搜索正确性与终端兼容：覆盖普通输出、中文/Unicode/宽字符、多行、大 scrollback、
-  持续输出、normal/alternate buffer、tmux、vim、less 和主流 Agent TUI；回归 selection、
-  复制粘贴、OSC 52、HTTP(S)/OSC 8 链接、鼠标上报、滚轮、resize 与 renderer 重建。
-- [ ] UI 与窗口矩阵：在当前产品深色主题及普通/最大化/窄窗口下验证多 Tab 边界与溢出、固定 `+`、
-  拖拽空白区、四点菜单、系统按钮、双 Pane、搜索条、全高分隔和 focus ring。确认 Tab 间
-  无竖线但表面差异清楚；自动化继续约束未暴露的浅色 token，不为验收增加主题入口，也不
-  实现 Tab 拖动排序、自适应 Tab 宽度或新的外观设置。
-- [ ] BEL 矩阵：验证活动 Pane 一次呼吸、非活动 Tab 两次呼吸与静态标记、当前 Tab 非焦点
-  Pane 局部来源、连续 BEL 合并、清除、销毁和系统 reduced-motion；证明无整 Pane 黄框、
-  无限动画、串状态或终端输入延迟。
-- [ ] 透明与材质矩阵：对不透明基线和五档记录同机分布，验证重启持久化、边界不循环、
-  Chrome/Content 派生 alpha、根级 Regular、窗口活动态、已挂载双 Pane、最小化/
-  恢复和 renderer 重建；覆盖 Shell、TUI、selection、搜索高亮、链接、大持续输出与 resize。
-  若可读性、正确性、帧响应、GPU/内存或生命周期不成立，先撤 Regular，再按证据回退透明。
-- [ ] 性能基线：比较搜索打开、逐字查询、跳转、持续输出和关闭，以及不透明/五档透明下的
-  帧响应、GPU、内存和异常分布；先报告分布和设备环境，不用构建时间或单次主观感受替代测量。
-- [ ] 所有物理场景记录候选和干净 harness 身份、结构化结果、截图/录屏、layout/hilog、
-  阶段耗时、失败域、重试和清理结果。候选变化、身份缺失或资源未清理时不得提升为通过。
-
-## 3. 收口与发布
-
-- [ ] 所有候选场景通过后，把两份设计文档更新为 `Verified`，记录最终采用/裁剪决定、精确
-  commit、HAP/APP 哈希和证据索引；把 Changelog 的 `In development` 日期替换为发布日期。
 - [ ] 按 [`release-process.md`](release-process.md) 在隔离的 production/review checkout
   构建同 commit/tree/version/ABI/native 输出的生产 APP/HAP 与 review-test HAP，验证签名、
   manifest、artifact roles 和 clean tree；只用 review-test HAP 做最终真机 smoke 和商店媒体。

@@ -727,20 +727,28 @@ struct Index {
       this.toggleSplit()
       return true
     }
-    if (this.menuOpen) {
-      this.handleMenuKeyEvent(event)
+    let transparencyDirection: number = InteractionPolicy.transparencyShortcutDirection(
+      event.keyCode, ctrlKey, altKey)
+    if (transparencyDirection !== 0) {
+      this.adjustTransparency(transparencyDirection)
       return true
     }
-    if (ctrlKey && event.keyCode === 2058) {
-      this.handleFontIncrease()
-      return true
-    }
-    if (ctrlKey && event.keyCode === 2057) {
+    let fontSizeDirection: number = InteractionPolicy.fontSizeShortcutDirection(
+      event.keyCode, ctrlKey, altKey)
+    if (fontSizeDirection < 0) {
       this.handleFontDecrease()
       return true
     }
-    if (ctrlKey && event.keyCode === 2000) {
+    if (fontSizeDirection > 0) {
+      this.handleFontIncrease()
+      return true
+    }
+    if (ctrlKey && !altKey && event.keyCode === 2000) {
       this.handleFontReset()
+      return true
+    }
+    if (this.menuOpen) {
+      this.handleMenuKeyEvent(event)
       return true
     }
     return false
@@ -828,6 +836,9 @@ struct Index {
     try {
       let context = this.getUIContext().getHostContext() as common.UIAbilityContext
       let opened: boolean = await BrowserLauncher.open(context, url)
+      if (!opened) {
+        opened = await BrowserLauncher.openUserGuide(context, url)
+      }
       if (!opened) {
         this.showTransientFeedback('Unable to open link')
       }
@@ -1268,8 +1279,12 @@ struct Index {
         .backgroundColor(this.transparencyDecreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
         .enabled(TransparencyPolicy.canDecrease(ThemeManager.getInstance().getTransparencyMode()))
         .focusable(false)
-        .accessibilityText('Decrease transparency')
+        .accessibilityText('Decrease transparency, Ctrl+Alt+-')
         .onHover((hovered: boolean) => { this.transparencyDecreaseHovered = hovered })
+        .bindTips('Ctrl+Alt+-', {
+          appearingTime: 300,
+          disappearingTime: 100
+        })
         .onClick(() => {
           this.menuSelectedIndex = 4
           this.adjustTransparency(-1)
@@ -1292,8 +1307,12 @@ struct Index {
         .backgroundColor(this.transparencyIncreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
         .enabled(TransparencyPolicy.canIncrease(ThemeManager.getInstance().getTransparencyMode()))
         .focusable(false)
-        .accessibilityText('Increase transparency')
+        .accessibilityText('Increase transparency, Ctrl+Alt+=')
         .onHover((hovered: boolean) => { this.transparencyIncreaseHovered = hovered })
+        .bindTips('Ctrl+Alt+=', {
+          appearingTime: 300,
+          disappearingTime: 100
+        })
         .onClick(() => {
           this.menuSelectedIndex = 4
           this.adjustTransparency(1)
@@ -1338,8 +1357,12 @@ struct Index {
         .backgroundColor(this.fontDecreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
         .enabled(this.fontSize > InteractionPolicy.MIN_FONT_SIZE)
         .focusable(false)
-        .accessibilityText('Decrease font size')
+        .accessibilityText('Decrease font size, Ctrl+-')
         .onHover((hovered: boolean) => { this.fontDecreaseHovered = hovered })
+        .bindTips('Ctrl+-', {
+          appearingTime: 300,
+          disappearingTime: 100
+        })
         .onClick(() => {
           this.menuSelectedIndex = 5
           this.handleFontDecrease()
@@ -1362,8 +1385,12 @@ struct Index {
         .backgroundColor(this.fontIncreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
         .enabled(this.fontSize < InteractionPolicy.MAX_FONT_SIZE)
         .focusable(false)
-        .accessibilityText('Increase font size')
+        .accessibilityText('Increase font size, Ctrl+=')
         .onHover((hovered: boolean) => { this.fontIncreaseHovered = hovered })
+        .bindTips('Ctrl+=', {
+          appearingTime: 300,
+          disappearingTime: 100
+        })
         .onClick(() => {
           this.menuSelectedIndex = 5
           this.handleFontIncrease()

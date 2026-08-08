@@ -28,6 +28,28 @@ export class InteractionPolicy {
     return keyCode === 2022 && ctrlKey && altKey && !shiftKey
   }
 
+  static transparencyShortcutDirection(keyCode: number, ctrlKey: boolean,
+    altKey: boolean): number {
+    if (!ctrlKey || !altKey) {
+      return 0
+    }
+    if (keyCode === 2057) {
+      return -1
+    }
+    return keyCode === 2058 ? 1 : 0
+  }
+
+  static fontSizeShortcutDirection(keyCode: number, ctrlKey: boolean,
+    altKey: boolean): number {
+    if (!ctrlKey || altKey) {
+      return 0
+    }
+    if (keyCode === 2057) {
+      return -1
+    }
+    return keyCode === 2058 ? 1 : 0
+  }
+
   static warmTabAfterSwitch(currentTabId: string): string {
     return currentTabId
   }

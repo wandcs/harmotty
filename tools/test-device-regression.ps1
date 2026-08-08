@@ -151,6 +151,9 @@ Assert-True (
     $deviceRegressionText -notmatch 'hilog\s+-x[^\r\n]*\s-z\s'
 ) 'Device log query combines mutually exclusive hilog exit and tail modes'
 Assert-True (
+    $deviceRegressionText.Contains('TerminalSurfaceController,TerminalBridge,AppViewModel')
+) 'Device log query omits the Pane attention state owner'
+Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
@@ -413,7 +416,8 @@ foreach ($scriptName in @(
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'") -and
             $content.Contains("'tools/verify-terminal-search-pc.ps1'") -and
             $content.Contains("'docs/design/terminal-search.md'") -and
-            $content.Contains("'docs/next-work.md'")
+            $content.Contains("'docs/next-work.md'") -and
+            $content.Contains('Device did not submit the focused command after three attempts')
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
         Assert-True (
             $content.Contains("'transport-main-path'") -and
@@ -421,11 +425,36 @@ foreach ($scriptName in @(
             $content.Contains("'ltty-paste-prepare russhmain 524288'") -and
             $content.Contains("'Clipboard paste ok,524288'") -and
             $content.Contains("'uitest uiInput keyEvent 2072 2045 2038'") -and
-            $content.Contains("'ltty-perf-prepare russhmain 12000 80'") -and
+            $content.Contains("Invoke-AuthPerfSample -CaseId 'russhmain'") -and
             $content.Contains('"completenessPercent":100') -and
             $content.Contains("'resize cols=\d+ rows=\d+'") -and
             $content.Contains('Wait-AuthPaneCount -Count 1')
         ) 'SSH transport main-path coverage is incomplete'
+        Assert-True (
+            $content.Contains("'performance-matrix'") -and
+            $content.Contains("@('Off', 'Low', 'Medium', 'High', 'Extreme')") -and
+            $content.Contains('Invoke-AuthPerfSample -CaseId $caseId') -and
+            $content.Contains("' bytes=\d+ state=prepared'") -and
+            $content.Contains('Fixture did not accept the PERF prepare command') -and
+            $content.Contains('Fixture did not accept the PERF run command') -and
+            $content.Contains('commandAttempts') -and
+            $content.Contains('renderSamples = @($renderSamples)') -and
+            $content.Contains('memorySamples = @($memorySamples)') -and
+            $content.Contains("hidumper -s 10 -a 'hitchs app0'") -and
+            $content.Contains("hidumper -s 10 -a 'gles'") -and
+            $content.Contains("Set-AuthTransparencyMode -Mode 'Medium'") -and
+            $content.Contains('performanceMatrix = $performanceEvidence')
+        ) 'SSH five-mode performance matrix is incomplete'
+        Assert-True (
+            $content.Contains("'bell-attention'") -and
+            $content.Contains("'ltty-bell active01 500'") -and
+            $content.Contains("'ltty-bell inactive01 5000'") -and
+            $content.Contains("'ltty-bell split01 5000'") -and
+            $content.Contains("'ltty-bell flood01 5000'") -and
+            $content.Contains("'ltty-bell flood02 5000'") -and
+            $content.Contains('Repeated BEL did not coalesce to one pending attention transition') -and
+            $content.Contains('bellAttention = $bellEvidence')
+        ) 'SSH BEL attention matrix is incomplete'
     }
     if ($scriptName -eq 'verify-terminal-search-pc.ps1') {
         Assert-True (
@@ -468,6 +497,9 @@ foreach ($scriptName in @(
             $content.Contains("'layout-search-open.json'") -and
             $content.Contains("'layout-search-closed.json'") -and
             $content.Contains("'explicit-unretained-diagnostic-hap'") -and
+            $content.Contains('Assert-LeanTTYCandidateHarnessCompatibility') -and
+            $content.Contains("'retained-verified-candidate'") -and
+            $content.Contains('Save-LeanTTYVerifiedCandidate') -and
             $content.Contains('harness = [ordered]@{') -and
             $content.Contains('failureDomain = $failureDomain') -and
             $content.Contains('transientSearchClosed = $searchClosed') -and

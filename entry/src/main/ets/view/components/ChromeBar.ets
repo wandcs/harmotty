@@ -7,7 +7,7 @@ export struct ChromeBar {
   @Prop tabs: TabInfo[] = []
   @Prop activeTabIndex: number = 0
   @Prop chromeColors: ChromeColors = new ChromeColors()
-  @Prop chromeBackground: string = '#FF181825'
+  @Prop chromeBackground: string = '#FF11111B'
   @Prop titleButtonReservedWidth: number = 140
   @Prop attentionPulsePaneId: string = ''
   @Prop attentionPulseToken: number = 0
@@ -219,12 +219,11 @@ struct ChromeTab {
     return this.chromeColors.commandBarPlaceholder
   }
 
-  private surfaceOpacity(): number {
-    if (this.isActive) {
-      return 1
+  private surfaceColor(): string {
+    if (this.isActive || this.hovered) {
+      return this.chromeColors.tabActiveBackground
     }
-    return this.hovered ? this.chromeColors.tabHoverSurfaceOpacity :
-      this.chromeColors.tabInactiveSurfaceOpacity
+    return this.chromeColors.tabBackground
   }
 
   build() {
@@ -233,8 +232,7 @@ struct ChromeTab {
         .width(172)
         .height(36)
         .margin({ top: 4 })
-        .backgroundColor(this.chromeColors.tabActiveBackground)
-        .opacity(this.surfaceOpacity())
+        .backgroundColor(this.surfaceColor())
         .borderRadius({
           topLeft: 8,
           topRight: 8,

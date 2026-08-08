@@ -112,17 +112,78 @@
       padding: 0;
       color: var(--terminal-foreground);
       background: transparent;
-      border: 1px solid transparent;
-      border-radius: 3px;
+      border: 0;
       outline: none;
       font: 16px/24px 'HarmonyOS Sans', sans-serif;
     }
-    #search-panel button:hover:not(:disabled),
+    #search-navigation {
+      display: flex;
+      flex: 0 0 54px;
+      width: 54px;
+      height: 26px;
+      overflow: visible;
+      border: 1px solid var(--search-border);
+      border-radius: 3px;
+    }
+    #search-navigation button { border-radius: 0; }
+    #search-previous { border-radius: 2px 0 0 2px; }
+    #search-next {
+      border-left: 1px solid var(--search-border);
+      border-radius: 0 2px 2px 0;
+    }
+    #search-close {
+      margin-left: 2px;
+      border: 1px solid var(--search-border);
+      border-radius: 3px;
+    }
+    #search-panel button:hover:not(:disabled) {
+      background: var(--search-control);
+    }
     #search-panel button:focus-visible {
       background: var(--search-control);
-      border-color: var(--search-border);
+      box-shadow: inset 0 0 0 1px var(--search-accent);
     }
-    #search-panel button:disabled { opacity: 0.38; }
+    #search-panel button:disabled { color: var(--search-border); }
+    #search-panel button[data-tip] { position: relative; }
+    #search-panel button[data-tip]::before,
+    #search-panel button[data-tip]::after {
+      position: absolute;
+      left: 50%;
+      z-index: 4;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, -2px);
+      transition: opacity 90ms ease-out, transform 90ms ease-out;
+    }
+    #search-panel button[data-tip]::before {
+      content: '';
+      top: calc(100% + 4px);
+      border: 4px solid transparent;
+      border-bottom-color: var(--search-border);
+    }
+    #search-panel button[data-tip]::after {
+      content: attr(data-tip);
+      top: calc(100% + 11px);
+      padding: 3px 7px;
+      color: var(--terminal-foreground);
+      background: var(--terminal-overlay-background);
+      border: 1px solid var(--search-border);
+      border-radius: 4px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.30);
+      font: 11px/16px 'HarmonyOS Sans', sans-serif;
+      white-space: nowrap;
+    }
+    #search-panel button[data-tip]:hover::before,
+    #search-panel button[data-tip]:hover::after {
+      opacity: 1;
+      transform: translate(-50%, 0);
+      transition-delay: 300ms;
+    }
+    #search-panel button[data-tip]:focus-visible::before,
+    #search-panel button[data-tip]:focus-visible::after {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
     @media (max-width: 320px) {
       #search-panel {
         top: 44px;
@@ -151,9 +212,14 @@
       <input id="search-input" type="text" aria-label="Search text"
         placeholder="Find" autocomplete="off" autocapitalize="off" spellcheck="false">
       <span id="search-result" aria-live="polite"></span>
-      <button id="search-previous" type="button" aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
-      <button id="search-next" type="button" aria-label="Next match" title="Next match (Enter)">↓</button>
-      <button id="search-close" type="button" aria-label="Close search" title="Close search (Escape)">×</button>
+      <div id="search-navigation" role="group" aria-label="Search result navigation">
+        <button id="search-previous" type="button" aria-label="Previous match, Shift+Enter"
+          data-tip="Shift+Enter">↑</button>
+        <button id="search-next" type="button" aria-label="Next match, Enter"
+          data-tip="Enter">↓</button>
+      </div>
+      <button id="search-close" type="button" aria-label="Close search, Escape"
+        data-tip="Esc">×</button>
     </div>
   </div>
 
@@ -892,7 +958,7 @@
           activate: activateTerminalLink,
           hover: handleLinkHover,
           leave: handleLinkLeave,
-          allowNonHttpProtocols: false
+          allowNonHttpProtocols: true
         }
       });
 
