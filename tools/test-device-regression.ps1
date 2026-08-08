@@ -416,7 +416,8 @@ foreach ($scriptName in @(
             $content.Contains("'process-stop-during-hidden-prompt-cleanup'") -and
             $content.Contains("'tools/verify-terminal-search-pc.ps1'") -and
             $content.Contains("'docs/design/terminal-search.md'") -and
-            $content.Contains("'docs/next-work.md'")
+            $content.Contains("'docs/next-work.md'") -and
+            $content.Contains('Device did not submit the focused command after three attempts')
         ) 'SSH authentication scenario does not declare its bounded physical coverage'
         Assert-True (
             $content.Contains("'transport-main-path'") -and

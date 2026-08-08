@@ -485,11 +485,21 @@ function Submit-FocusedDeviceCommand {
         [Parameter(Mandatory = $true)][string]$Command,
         [Parameter(Mandatory = $true)][string]$LayoutName
     )
-    Focus-ActiveCommandInput -LayoutName $LayoutName
-    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
-    Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
-    Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
+    for ($commandAttempt = 1; $commandAttempt -le 3; $commandAttempt++) {
+        Focus-ActiveCommandInput -LayoutName $LayoutName
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Invoke-LeanTTYDeviceText -Hdc $hdc -Target $Target -Text $Command
+        Invoke-LeanTTYDeviceKey -Hdc $hdc -Target $Target -KeyCode 2054
+        try {
+            Wait-AuthLog -Pattern 'ACCEPTANCE_INPUT_SUBMIT.*kind=command' -TimeoutSeconds 10
+            return
+        } catch {
+            if ($commandAttempt -ge 3) {
+                throw '[harness] Device did not submit the focused command after three attempts'
+            }
+            Invoke-LeanTTYDeviceCtrlC -Hdc $hdc -Target $Target
+        }
+    }
 }
 
 function Assert-AuthCommandLoopbackTarget {
