@@ -426,6 +426,16 @@ foreach ($scriptName in @(
             $content.Contains("'resize cols=\d+ rows=\d+'") -and
             $content.Contains('Wait-AuthPaneCount -Count 1')
         ) 'SSH transport main-path coverage is incomplete'
+        Assert-True (
+            $content.Contains("'bell-attention'") -and
+            $content.Contains("'ltty-bell active01 500'") -and
+            $content.Contains("'ltty-bell inactive01 1200'") -and
+            $content.Contains("'ltty-bell split01 1200'") -and
+            $content.Contains("'ltty-bell flood01 500'") -and
+            $content.Contains("'ltty-bell flood02 500'") -and
+            $content.Contains('Repeated BEL did not coalesce to one pending attention transition') -and
+            $content.Contains('bellAttention = $bellEvidence')
+        ) 'SSH BEL attention matrix is incomplete'
     }
     if ($scriptName -eq 'verify-terminal-search-pc.ps1') {
         Assert-True (
