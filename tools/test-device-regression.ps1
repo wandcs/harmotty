@@ -430,6 +430,17 @@ foreach ($scriptName in @(
             $content.Contains('Wait-AuthPaneCount -Count 1')
         ) 'SSH transport main-path coverage is incomplete'
         Assert-True (
+            $content.Contains("'performance-matrix'") -and
+            $content.Contains("@('Off', 'Low', 'Medium', 'High', 'Extreme')") -and
+            $content.Contains('ltty-perf-prepare $caseId 12000 80') -and
+            $content.Contains('renderSamples = @($renderSamples)') -and
+            $content.Contains('memorySamples = @($memorySamples)') -and
+            $content.Contains("hidumper -s 10 -a 'hitchs app0'") -and
+            $content.Contains("hidumper -s 10 -a 'gles'") -and
+            $content.Contains("Set-AuthTransparencyMode -Mode 'Medium'") -and
+            $content.Contains('performanceMatrix = $performanceEvidence')
+        ) 'SSH five-mode performance matrix is incomplete'
+        Assert-True (
             $content.Contains("'bell-attention'") -and
             $content.Contains("'ltty-bell active01 500'") -and
             $content.Contains("'ltty-bell inactive01 5000'") -and
