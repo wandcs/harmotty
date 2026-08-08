@@ -27,6 +27,7 @@ scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛�
 已完成的实现、裁剪决定和定向证据分别记录在
 [`design/terminal-search.md`](design/terminal-search.md)、
 [`design/ui-interaction-polish.md`](design/ui-interaction-polish.md) 和 `CHANGELOG.md`。
+`v1.1.1` 已于 2026-08-08 通过 AppGallery 审核并上架，1.2.0 已选择为当前目标版本。
 当前剩余工作只有精确候选、最终物理机矩阵和发布；不得在候选形成后继续加入无关功能。
 
 完成 1.2 必须满足：所有产品改动进入精确且已推送的提交；正式软件门禁与干净 ARM64
@@ -35,11 +36,6 @@ scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛�
 
 ## 1. 准备精确 1.2.0 正式候选
 
-- [ ] 确认 1.1.1 AppGallery 审核已经进入终态。若失败，先从适当已发布标签准备最小 1.1.2，
-  不混入 1.2；若仍在审核，1.2 可继续代码审查，但不得发布后继版本或提前消耗 1.2.0。
-- [ ] 按 [`versioning.md`](versioning.md) 选择并准备 1.2.0：更新 `versionName`、递增
-  `versionCode`，把 Changelog 的 1.2 内容移入 `1.2.0 — In development`，提交并推送精确
-  候选源。版本、依赖、资源、ArkTS、Rust 或其他打包输入变化都必须重新形成候选。
 - [ ] 从精确已推送提交运行 `tools/verify-pc.ps1` 正式门禁：完成完整软件回归、Rust
   format/Clippy/tests、干净 ARM64 原生与测试签名 HAP 构建、安装和启动；保留同一 HAP，记录
   commit/tree、ABI、资产、签名、SHA-256 和机器可读 manifest。此项只建立候选，不声称行为通过。

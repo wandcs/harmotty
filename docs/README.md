@@ -51,8 +51,9 @@
    验收；[`next-work.md`](next-work.md) 是唯一活动 TODO。
 2. 每个大的功能点在 [`design/`](design/README.md) 中最多保留一份当前技术方案；WIP
    方案可以记录待讨论和待验证内容，但不授权实现，也不得复制任务勾选。
-3. 当前源码手册默认描述 `main` / `Unreleased`，正式版行为以对应 GitHub Release、
-   Changelog 和明确标注的适用版本为准；WIP、Roadmap 和 Next Work 不得写成已交付。
+3. 当前源码手册默认描述 `main` 中 `Unreleased` 或已选择版本的 `In development` 行为，
+   正式版行为以对应 GitHub Release、Changelog 和明确标注的适用版本为准；WIP、Roadmap
+   和 Next Work 不得写成已交付。
 4. 当前手册只描述稳定事实和执行方法，不混入活动 checkbox 或单次验证状态。
 5. 首次公开前的私有归档不进入公开仓库；完成或被取代的公开方案通常从当前树
    删除，通过 Git 历史追溯。

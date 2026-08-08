@@ -17,18 +17,19 @@ AppGallery review and became the first public release on 2026-07-28.
 published on GitHub on 2026-08-05, then superseded before AppGallery submission
 when its production Profile authorization needed correction.
 [LeanTTY 1.1.1](https://github.com/wandcs/leantty/releases/tag/v1.1.1) was
-published on GitHub on 2026-08-06 with the corrected production Profile; its
-AppGallery submission is pending.
+published on GitHub on 2026-08-06 with the corrected production Profile, then
+passed AppGallery review and was released to users on 2026-08-08.
 
 The `main` branch can contain behavior listed under `CHANGELOG.md` →
-`Unreleased`. Source-tree documentation marks that applicability explicitly;
-do not assume an unreleased command is present in the AppGallery version.
+`Unreleased` or the selected version's `In development` section. Source-tree
+documentation marks that applicability explicitly; do not assume development
+behavior is present in the AppGallery version.
 
 The immutable `v1.0.0`, `v1.0.1`, `v1.1.0` and `v1.1.1` tags record the rejected
 former identity, first AppGallery release, superseded GitHub release and current
-GitHub release respectively. Exact submitted-source mapping, artifact hashes and
-signing verification remain in the private release evidence archive. No signing
-credential or generated application package is stored in Git.
+AppGallery release respectively. Exact submitted-source mapping, artifact hashes
+and signing verification remain in the private release evidence archive. No
+signing credential or generated application package is stored in Git.
 
 ## Features
 
