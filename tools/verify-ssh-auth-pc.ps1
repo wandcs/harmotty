@@ -763,15 +763,20 @@ function Get-AuthPerfRenderRecord {
 
 function Invoke-AuthPerfSample {
     param([Parameter(Mandatory = $true)][string]$CaseId)
-    for ($commandAttempt = 1; $commandAttempt -le 2; $commandAttempt++) {
+    for ($commandAttempt = 1; $commandAttempt -le 3; $commandAttempt++) {
         $preparedPattern = 'perf case=' + [regex]::Escape($CaseId) + ' bytes=\d+ state=prepared'
         $preparedCount = Get-FixtureLogMatchCount -Pattern $preparedPattern
         Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
         Submit-ConnectedInput -Text "ltty-perf-prepare $CaseId 12000 80"
-        Wait-FixtureLogMatchCount `
-            -Pattern $preparedPattern `
-            -GreaterThan $preparedCount `
-            -TimeoutSeconds 15 | Out-Null
+        try {
+            Wait-FixtureLogMatchCount `
+                -Pattern $preparedPattern `
+                -GreaterThan $preparedCount `
+                -TimeoutSeconds 15 | Out-Null
+        } catch {
+            if ($commandAttempt -lt 3) { continue }
+            throw "[harness] Fixture did not accept the PERF prepare command for $CaseId after three attempts"
+        }
 
         $runPattern = "perf case=$CaseId state=run"
         $runCount = Get-FixtureLogMatchCount -Pattern ([regex]::Escape($runPattern))
@@ -783,8 +788,8 @@ function Invoke-AuthPerfSample {
                 -GreaterThan $runCount `
                 -TimeoutSeconds 8 | Out-Null
         } catch {
-            if ($commandAttempt -lt 2) { continue }
-            throw "[harness] Fixture did not accept the PERF run command for $CaseId after two attempts"
+            if ($commandAttempt -lt 3) { continue }
+            throw "[harness] Fixture did not accept the PERF run command for $CaseId after three attempts"
         }
         Wait-AuthLog `
             -Pattern ('PERF render .*"caseId":"' + $CaseId + '".*"completenessPercent":100') `
