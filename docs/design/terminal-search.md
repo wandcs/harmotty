@@ -146,6 +146,11 @@ Terminal Surface；不重排网格可以避免搜索本身触发 PTY resize。�
   已被裁剪且不保留兼容别名。唯一入口改为 `Ctrl+Alt+F`；HDC 三键组合和物理键盘都能
   正常打开产品搜索。中英文逐字输入和远端 TUI 透传仍按最终物理机矩阵完整验收，不能
   由一次打开成功替代。
+- 2026-08-08 的 1.2 最终候选验收确认：鸿蒙飞书在前台或后台运行时会抢占
+  `Ctrl+Shift+W`，关闭飞书后 LeanTTY 的关闭 Pane 快捷键正常。这是第三方应用的全局
+  快捷键冲突，不是 LeanTTY 或 HarmonyOS 系统冲突；不为它增加替代组合、KeyUp/Pre-IME
+  拦截或控件级快捷键。后续物理机验收须先关闭飞书；若触发后前台切换到飞书，应记录为
+  验收环境未清理并重试，不进入 LeanTTY 产品缺陷排查。
 
 参考：[Windows Terminal Search](https://learn.microsoft.com/en-us/windows/terminal/search)、
 [Ghostty 1.3.0 scrollback search](https://ghostty.org/docs/install/release-notes/1-3-0)。
