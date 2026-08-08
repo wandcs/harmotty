@@ -95,8 +95,29 @@ function Get-TerminalSearchContainerNodes {
     })
 }
 
+function Get-LeanTTYTerminalContentTop {
+    param([Parameter(Mandatory = $true)]$Layout)
+
+    $contentTops = @(Get-LeanTTYLayoutNodes -Node $Layout | ForEach-Object {
+        if ([string]$_.attributes.type -ne 'Web' -or
+            [string]$_.attributes.visible -ne 'true' -or
+            [string]$_.attributes.originalText -notmatch 'terminal\.html$') {
+            return
+        }
+        $bounds = [string]$_.attributes.bounds
+        if ($bounds -match '^\[\d+,(?<top>\d+)\]\[\d+,\d+\]$') {
+            return [int]$Matches.top
+        }
+    })
+    if ($contentTops.Count -eq 0) {
+        throw '[harness] LeanTTY terminal content boundary was unavailable'
+    }
+    return [int](($contentTops | Measure-Object -Minimum).Minimum)
+}
+
 function Get-LeanTTYTabNodes {
     param([Parameter(Mandatory = $true)]$Layout)
+    $contentTop = Get-LeanTTYTerminalContentTop -Layout $Layout
     return @(Get-LeanTTYLayoutNodes -Node $Layout | Where-Object {
         if ([string]$_.attributes.type -ne 'Stack' -or
             [string]$_.attributes.clickable -ne 'true' -or
@@ -105,7 +126,7 @@ function Get-LeanTTYTabNodes {
         }
         $bounds = [string]$_.attributes.bounds
         if ($bounds -notmatch '^\[\d+,(?<top>\d+)\]\[\d+,(?<bottom>\d+)\]$') { return $false }
-        return [int]$Matches.top -lt 120 -and [int]$Matches.bottom -le 120
+        return [int]$Matches.top -lt $contentTop -and [int]$Matches.bottom -le $contentTop
     })
 }
 
@@ -350,6 +371,7 @@ function Invoke-TerminalMenuAction {
         -Hdc $hdc `
         -Target $Target `
         -LocalPath (Join-Path $EvidenceDirectory "$LayoutPrefix-before-menu.json")
+    $contentTop = Get-LeanTTYTerminalContentTop -Layout $layout
     $candidates = @(Get-LeanTTYLayoutNodes -Node $layout | Where-Object {
         if ([string]$_.attributes.type -ne 'Stack' -or
             [string]$_.attributes.clickable -ne 'true' -or
@@ -364,7 +386,7 @@ function Invoke-TerminalMenuAction {
         }
         $width = [int]$Matches.right - [int]$Matches.left
         $height = [int]$Matches.bottom - [int]$Matches.top
-        return [int]$Matches.left -gt 1000 -and [int]$Matches.bottom -le 120 -and
+        return [int]$Matches.left -gt 1000 -and [int]$Matches.bottom -le $contentTop -and
             $width -ge 40 -and $width -le 90 -and $height -ge 40 -and $height -le 90
     })
     if ($candidates.Count -ne 1) {
