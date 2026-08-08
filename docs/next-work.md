@@ -34,33 +34,30 @@ scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛�
 已完成的实现、裁剪决定和定向证据分别记录在
 [`design/terminal-search.md`](design/terminal-search.md)、
 [`design/ui-interaction-polish.md`](design/ui-interaction-polish.md) 和 `CHANGELOG.md`。
-`v1.1.1` 已于 2026-08-08 通过 AppGallery 审核并上架，1.2.0 已选择为当前目标版本。
-1.2 已从 `origin/main` 可达的精确提交
-`59a8cbfb50f7c67931881169a8695a303f22a718` 建立干净 ARM64 保留候选；HAP SHA-256 为
-`3f9e20b195d1353fdd2f59eb2134dbafb018d9baeac06b775dc0f68cbbf9119b`。正式软件门禁、
-SSH 主路径、保留候选搜索矩阵、窗口/UI 证据复核、BEL、五档透明和五档持续输出性能矩阵
-已经完成；用户随后用真实物理键盘、中英文输入法和实际 SSH 服务器完成搜索、focus ring、
-tmux/vim/less/Agent TUI、Medium/Extreme 可读性及 BEL 节奏验收，均未发现问题。详情进入
-两份设计文档。用户随后确认 Low 档 Chrome 轨道与 Tab 表面色差不足，并明确授权在发布前
-修复；修复已把深浅色 Chrome/非活动 Tab/活动 Tab 收敛为 Catppuccin
-`crust → mantle → base` 三层，并通过五档真机抽查；后续授权的四个步进快捷键、菜单 hover
-Tips 及搜索导航/关闭按钮统一也已通过定向真机验证。上述候选保留为验收基线，但不再作为
-最终发布候选，且随后授权的离线 User Guide 会继续改变产品树；发布流程必须从包含这些
-修复和指南能力的新精确提交重建。2026-08-08，用户确认 1.2 全部测试完成，
-最后的指南短文件名链接与其他收口优化补齐后未发现问题。不得借此加入无关功能。
+`v1.1.1` 已于 2026-08-08 通过 AppGallery 审核并上架；1.2.0 已成为当前 GitHub Release，
+正在等待 AppGallery 提交。
+2026-08-08，用户确认 1.2 全部测试完成，最后的指南短文件名链接与其他收口优化补齐后
+未发现问题。最终精确提交 `90c20cacf47ac620ccc89d21e70b6cdbbfeb0a68` 已通过正式软件
+门禁、干净 ARM64 构建和 HAD-W32 部署；production/review checkout 记录同一 tree
+`e5aa6598141e3ad5b79475fd30bdaeb864f07b2c` 与原生 SHA-256
+`65489761ce6b4da77cbc6df30a6537c70e5c38b93b5f55ac2a48e4ac0dcf8f3f`。
+production APP SHA-256 为
+`2a5bf97856c0915325abc4ebe5acd1acd6c6c142141e278a9d34f4c6c3505233`；同源 review-test
+HAP SHA-256 为 `b6fc3578e6707bd4813b2faa392715de2ef7163bbfbbac44abbb61f2e161b5ab`，
+且已完成最终物理机安装、启动和可见终端 smoke。签名标签 `v1.2.0` 与
+[GitHub Release](https://github.com/wandcs/leantty/releases/tag/v1.2.0) 已发布并核对 3 个
+归档附件摘要。版本号和发布资产现已不可复用；不得借 AppGallery 提交加入无关功能。
 
 完成 1.2 必须满足：所有产品改动进入精确且已推送的提交；正式软件门禁与干净 ARM64
 候选通过；同一个保留候选完成全部适用的物理 HarmonyOS PC 场景；设计、版本、签名、
 归档、GitHub Release 和 AppGallery 记录可追溯。安装、启动或工作树截图不能替代行为验收。
 
-## 1. 收口与发布
+## 1. AppGallery 提交
 
-- [ ] 按 [`release-process.md`](release-process.md) 在隔离的 production/review checkout
-  构建同 commit/tree/version/ABI/native 输出的生产 APP/HAP 与 review-test HAP，验证签名、
-  manifest、artifact roles 和 clean tree；只用 review-test HAP 做最终真机 smoke 和商店媒体。
-- [ ] 创建不可变签名标签并发布匹配的非草稿 GitHub Release；确认 release、tag、commit 和
-  归档资产一致后，才把同版本 production APP 与商店材料提交 AppGallery。若审核失败，版本
-  已消耗，必须递增 PATCH 并重新执行完整流程，不移动标签或替换 Release。
+- [ ] 将与 `v1.2.0` GitHub Release 对应、SHA-256 为
+  `2a5bf97856c0915325abc4ebe5acd1acd6c6c142141e278a9d34f4c6c3505233` 的 production signed
+  APP 和已审定商店材料提交 AppGallery，并记录标签、commit、包体哈希和审核状态的对应关系。
+  若审核失败，1.2.0 已消耗，必须递增 PATCH 并重新执行完整流程，不移动标签或替换 Release。
 
 ## 当前不活动与明确非目标
 
