@@ -1246,7 +1246,7 @@ try {
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-perf-prepare russhmain 12000 80'
-    Wait-AuthLog -Pattern 'Tab title update: .*LTTY_PERF_BEGIN__:russhmain:' -TimeoutSeconds 15
+    Wait-FixtureLog -Pattern 'perf case=russhmain bytes=696000 state=prepared' -TimeoutSeconds 15 | Out-Null
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-perf-run russhmain'
     Wait-AuthLog `
@@ -1303,9 +1303,9 @@ try {
             $caseId = $modeSlug + '0' + $sampleIndex.ToString()
             Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
             Submit-ConnectedInput -Text "ltty-perf-prepare $caseId 12000 80"
-            Wait-AuthLog `
-                -Pattern ('Tab title update: .*LTTY_PERF_BEGIN__:' + $caseId + ':') `
-                -TimeoutSeconds 15
+            Wait-FixtureLog `
+                -Pattern ('perf case=' + $caseId + ' bytes=696000 state=prepared') `
+                -TimeoutSeconds 15 | Out-Null
             Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
             Submit-ConnectedInput -Text "ltty-perf-run $caseId"
             Wait-AuthLog `
