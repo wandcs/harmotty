@@ -1139,7 +1139,7 @@ try {
     $bellEvidence.screenshots += 'bell-active-after-pulse.png'
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-ConnectedInput -Text 'ltty-bell inactive01 1200'
+    Submit-ConnectedInput -Text 'ltty-bell inactive01 5000'
     Invoke-AuthWorkspaceShortcut -Action 'new-tab'
     Wait-AuthTabCount -Count 2 -LayoutName 'layout-bell-inactive-new-tab.json' | Out-Null
     Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
@@ -1156,7 +1156,7 @@ try {
     Wait-AuthTabCount -Count 1 -LayoutName 'layout-bell-inactive-tab-cleaned.json' | Out-Null
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-ConnectedInput -Text 'ltty-bell split01 1200'
+    Submit-ConnectedInput -Text 'ltty-bell split01 5000'
     Split-AuthPane
     Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
     Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
@@ -1169,8 +1169,8 @@ try {
     $bellEvidence.splitPaneSourceClearedOnFocus = $true
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-ConnectedInput -Text 'ltty-bell flood01 500'
-    Submit-ConnectedInput -Text 'ltty-bell flood02 500'
+    Submit-ConnectedInput -Text 'ltty-bell flood01 5000'
+    Submit-ConnectedInput -Text 'ltty-bell flood02 5000'
     Invoke-AuthWorkspaceShortcut -Action 'focus-right'
     Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
     Start-Sleep -Milliseconds 1200

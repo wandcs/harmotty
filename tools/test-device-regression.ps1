@@ -429,10 +429,10 @@ foreach ($scriptName in @(
         Assert-True (
             $content.Contains("'bell-attention'") -and
             $content.Contains("'ltty-bell active01 500'") -and
-            $content.Contains("'ltty-bell inactive01 1200'") -and
-            $content.Contains("'ltty-bell split01 1200'") -and
-            $content.Contains("'ltty-bell flood01 500'") -and
-            $content.Contains("'ltty-bell flood02 500'") -and
+            $content.Contains("'ltty-bell inactive01 5000'") -and
+            $content.Contains("'ltty-bell split01 5000'") -and
+            $content.Contains("'ltty-bell flood01 5000'") -and
+            $content.Contains("'ltty-bell flood02 5000'") -and
             $content.Contains('Repeated BEL did not coalesce to one pending attention transition') -and
             $content.Contains('bellAttention = $bellEvidence')
         ) 'SSH BEL attention matrix is incomplete'
