@@ -497,6 +497,9 @@ foreach ($scriptName in @(
             $content.Contains("'layout-search-open.json'") -and
             $content.Contains("'layout-search-closed.json'") -and
             $content.Contains("'explicit-unretained-diagnostic-hap'") -and
+            $content.Contains('Assert-LeanTTYCandidateHarnessCompatibility') -and
+            $content.Contains("'retained-verified-candidate'") -and
+            $content.Contains('Save-LeanTTYVerifiedCandidate') -and
             $content.Contains('harness = [ordered]@{') -and
             $content.Contains('failureDomain = $failureDomain') -and
             $content.Contains('transientSearchClosed = $searchClosed') -and
