@@ -113,6 +113,7 @@ if (-not $DiagnosticHap) {
         -Candidate $candidate `
         -AllowedHarnessPaths @(
             'tools/verify-ssh-auth-pc.ps1',
+            'tools/verify-terminal-search-pc.ps1',
             'tools/device-regression.ps1',
             'tools/test-device-regression.ps1',
             'tools/candidate-store.ps1',
@@ -120,6 +121,8 @@ if (-not $DiagnosticHap) {
             'tools/test-build-workflows.ps1',
             'docs/quality-strategy.md',
             'docs/design/ssh-authentication.md',
+            'docs/design/terminal-search.md',
+            'docs/next-work.md',
             'docs/dev-environment.md'
         ))
 }
