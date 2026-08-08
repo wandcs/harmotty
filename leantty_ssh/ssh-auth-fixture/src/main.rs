@@ -582,11 +582,20 @@ impl Handler for FixtureServer {
                 session.data(channel, response.into_bytes())?;
             }
             Some(FixtureCommand::Bell(request)) => {
+                eprintln!(
+                    "bell case={} delay_ms={} state=scheduled",
+                    request.case_id, request.delay_ms
+                );
                 let handle = session.handle();
                 tokio::spawn(async move {
                     tokio::time::sleep(Duration::from_millis(request.delay_ms)).await;
                     let response = format!("\x07\r\nLTTY_BELL_OK:{}\r\nfixture> ", request.case_id);
-                    let _ = handle.data(channel, response.into_bytes()).await;
+                    let state = if handle.data(channel, response.into_bytes()).await.is_ok() {
+                        "sent"
+                    } else {
+                        "send-failed"
+                    };
+                    eprintln!("bell case={} state={state}", request.case_id);
                 });
             }
             None => {}

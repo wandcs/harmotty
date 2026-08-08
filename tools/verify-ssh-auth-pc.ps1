@@ -120,6 +120,7 @@ if (-not $DiagnosticHap) {
             'tools/candidate-store.ps1',
             'tools/package-policy.ps1',
             'tools/test-build-workflows.ps1',
+            'leantty_ssh/ssh-auth-fixture/src/main.rs',
             'docs/quality-strategy.md',
             'docs/design/ssh-authentication.md',
             'docs/design/terminal-search.md',
@@ -1140,8 +1141,10 @@ try {
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-bell inactive01 5000'
+    Wait-FixtureLog -Pattern 'bell case=inactive01 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
     Invoke-AuthWorkspaceShortcut -Action 'new-tab'
     Wait-AuthTabCount -Count 2 -LayoutName 'layout-bell-inactive-new-tab.json' | Out-Null
+    Wait-FixtureLog -Pattern 'bell case=inactive01 state=sent' -TimeoutSeconds 10 | Out-Null
     Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
     Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
         -LocalPath (Join-Path $EvidenceDirectory 'bell-inactive-tab-marker.png')
@@ -1157,7 +1160,9 @@ try {
 
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-bell split01 5000'
+    Wait-FixtureLog -Pattern 'bell case=split01 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
     Split-AuthPane
+    Wait-FixtureLog -Pattern 'bell case=split01 state=sent' -TimeoutSeconds 10 | Out-Null
     Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
     Save-LeanTTYDeviceScreenshot -Hdc $hdc -Target $Target `
         -LocalPath (Join-Path $EvidenceDirectory 'bell-split-pane-marker.png')
@@ -1171,7 +1176,11 @@ try {
     Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
     Submit-ConnectedInput -Text 'ltty-bell flood01 5000'
     Submit-ConnectedInput -Text 'ltty-bell flood02 5000'
+    Wait-FixtureLog -Pattern 'bell case=flood01 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
+    Wait-FixtureLog -Pattern 'bell case=flood02 delay_ms=5000 state=scheduled' -TimeoutSeconds 10 | Out-Null
     Invoke-AuthWorkspaceShortcut -Action 'focus-right'
+    Wait-FixtureLog -Pattern 'bell case=flood01 state=sent' -TimeoutSeconds 10 | Out-Null
+    Wait-FixtureLog -Pattern 'bell case=flood02 state=sent' -TimeoutSeconds 10 | Out-Null
     Wait-AuthLog -Pattern 'Pane attention set:' -TimeoutSeconds 15
     Start-Sleep -Milliseconds 1200
     $floodLogs = Get-LeanTTYAppLogs -Hdc $hdc -Target $Target -ProcessId $appPid
