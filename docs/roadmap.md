@@ -99,7 +99,7 @@ OpenSSH 的全部工具与 option。端口转发、X11、agent、CA/KRL、批处
 - 1.0.1 于 2026-07-28 成为首个公开版本；完成事实以 `CHANGELOG.md`、Git 标签和
   GitHub Release 为准。
 
-## 已发布、AppGallery 审核中 milestone：1.1 — 可信认证与工作连续性
+## 已发布 milestone：1.1 — 可信认证与工作连续性
 
 ### 版本目标
 
@@ -136,6 +136,8 @@ OpenSSH 的全部工具与 option。端口转发、X11、agent、CA/KRL、批处
 
 ### 方案与完成定义
 
+- `v1.1.1` 已于 2026-08-08 通过 AppGallery 审核并上架；其发布身份仍由既有 GitHub
+  Release、不可变标签、精确提交和归档产物共同确定。
 - [`design/ssh-authentication.md`](design/ssh-authentication.md)
 - [`design/workspace-navigation.md`](design/workspace-navigation.md)
 - [`design/command-system.md`](design/command-system.md)

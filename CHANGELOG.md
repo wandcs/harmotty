@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - In development
+
 ### Added
 
 - Added current-surface terminal search with the fixed `Ctrl+Alt+F` entry,

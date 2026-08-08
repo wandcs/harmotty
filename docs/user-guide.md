@@ -4,7 +4,7 @@
 >
 > Last updated: 2026-08-08
 >
-> Applies to: the current repository `main`/`Unreleased` behavior. The public
+> Applies to: the current repository `main` development behavior. The public
 > 1.0.1 release may not contain every command described here; check the matching
 > GitHub Release and `CHANGELOG.md` before relying on a capability.
 
