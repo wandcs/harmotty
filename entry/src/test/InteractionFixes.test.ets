@@ -739,7 +739,6 @@ export default function interactionFixesTest() {
       expect(InteractionPolicy.shouldMountTab(false, false, true, false)).assertEqual(true)
       expect(InteractionPolicy.shouldMountTab(true, false, false, false)).assertEqual(true)
       expect(InteractionPolicy.shouldMountTab(false, true, false, false)).assertEqual(false)
-      expect(InteractionPolicy.INACTIVE_MOUNTED_TAB_OPACITY).assertEqual(0.001)
       expect(InteractionPolicy.shouldDetachTabOnEviction(true)).assertEqual(false)
       expect(InteractionPolicy.shouldDetachTabOnEviction(false)).assertEqual(true)
     })

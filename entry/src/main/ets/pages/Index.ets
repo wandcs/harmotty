@@ -161,8 +161,7 @@ struct Index {
               }
             })
               .width(this.paneWidth(runtime.id))
-              .opacity(this.isPaneInActiveTab(runtime.id) ? 1 :
-                InteractionPolicy.INACTIVE_MOUNTED_TAB_OPACITY)
+              .opacity(this.isPaneInActiveTab(runtime.id) ? 1 : 0)
               .zIndex(this.isPaneInActiveTab(runtime.id) ? 1 : 0)
               .hitTestBehavior(this.isPaneInActiveTab(runtime.id) ? HitTestMode.Default : HitTestMode.None)
               .position(this.isRightPane(runtime.id) ?

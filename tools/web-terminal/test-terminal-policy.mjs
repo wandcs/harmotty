@@ -598,8 +598,6 @@ assert.doesNotMatch(terminalSurfaceController, /terminateRendererForAcceptance|A
 
 const indexPage = readFileSync(
   new URL('../../entry/src/main/ets/pages/Index.ets', import.meta.url), 'utf8');
-const interactionPolicy = readFileSync(
-  new URL('../../entry/src/main/ets/model/ui/InteractionPolicy.ets', import.meta.url), 'utf8');
 const entryAbility = readFileSync(
   new URL('../../entry/src/main/ets/entryability/EntryAbility.ets', import.meta.url), 'utf8');
 const themeConstants = readFileSync(
@@ -667,12 +665,6 @@ assert.match(indexPage,
 assert.match(indexPage,
   /private deactivateActiveTab[\s\S]*?runtime\.viewModel\.requestBlur\(\)/,
   'tab switches must blur every pane in the departing tab before retaining or evicting its surfaces');
-assert.match(interactionPolicy,
-  /INACTIVE_MOUNTED_TAB_OPACITY:\s*number\s*=\s*0\.001/,
-  'inactive connected tabs must stay imperceptibly composited so ArkWeb continues consuming output');
-assert.match(indexPage,
-  /\.opacity\(this\.isPaneInActiveTab\(runtime\.id\) \? 1 :[\s\S]*?InteractionPolicy\.INACTIVE_MOUNTED_TAB_OPACITY\)/,
-  'mounted inactive terminal panes must use the non-zero lifecycle opacity policy');
 assert.match(indexPage,
   /private restoreActivePaneFocus[\s\S]*?else \{\s*runtime\.viewModel\.requestBlur\(\)/,
   'pane switches must blur every non-active pane in the current tab');

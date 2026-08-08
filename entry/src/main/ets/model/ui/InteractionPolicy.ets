@@ -12,10 +12,6 @@ export class InteractionPolicy {
   static readonly MAX_FONT_SIZE: number = 48
   static readonly MIN_SPLIT_RATIO: number = 0.2
   static readonly MAX_SPLIT_RATIO: number = 0.8
-  // ArkWeb stops consuming bridge traffic when a mounted Web component is
-  // fully transparent. Keep inactive connected surfaces composited at an
-  // imperceptible opacity so terminal parsing and BEL attention stay live.
-  static readonly INACTIVE_MOUNTED_TAB_OPACITY: number = 0.001
 
   static clampFontSize(value: number): number {
     return Math.max(InteractionPolicy.MIN_FONT_SIZE,

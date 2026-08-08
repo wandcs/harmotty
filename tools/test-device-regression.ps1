@@ -151,6 +151,9 @@ Assert-True (
     $deviceRegressionText -notmatch 'hilog\s+-x[^\r\n]*\s-z\s'
 ) 'Device log query combines mutually exclusive hilog exit and tail modes'
 Assert-True (
+    $deviceRegressionText.Contains('TerminalSurfaceController,TerminalBridge,AppViewModel')
+) 'Device log query omits the Pane attention state owner'
+Assert-True (
     $deviceRegressionText -notmatch 'terminal-line cleanup|backspaceCount'
 ) 'Device input cleanup still uses inferred backspaces'
 Assert-True (
