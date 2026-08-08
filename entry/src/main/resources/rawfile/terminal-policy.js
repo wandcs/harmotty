@@ -181,10 +181,10 @@
   }
 
   function searchResultLabel(query, resultIndex, resultCount, highlightLimit) {
-    if (typeof query !== 'string' || query.length === 0) return '';
-    if (resultCount <= 0) return 'No results';
+    if (typeof query !== 'string' || query.length === 0) return '0/0';
+    if (resultCount <= 0) return '0/0';
     if (resultIndex < 0) {
-      return resultCount >= highlightLimit ? highlightLimit + '+ results' : 'Results available';
+      return resultCount >= highlightLimit ? highlightLimit + '+' : '0/' + resultCount;
     }
     return (resultIndex + 1) + '/' + resultCount;
   }

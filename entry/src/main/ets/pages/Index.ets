@@ -2,7 +2,7 @@ import { AppViewModel } from '../viewmodel/AppViewModel'
 import { PaneInfo, TabInfo } from '../common/types/TerminalTypes'
 import { SessionViewModel, TerminalMode } from '../viewmodel/SessionViewModel'
 import { SshSessionState } from '../common/types/TerminalTypes'
-import { ThemeManager, AppTheme } from '../view/theme/ThemeManager'
+import { ThemeManager, AppTheme, TransparencyMode, TransparencyPolicy } from '../view/theme/ThemeManager'
 import { ChromeColors } from '../view/theme/ThemeConstants'
 import { Logger } from '../common/logger/Logger'
 import { ChromeBar } from '../view/components/ChromeBar'
@@ -50,17 +50,30 @@ struct Index {
   @State paneRuntimes: PaneRuntime[] = []
   @State activeTabIndex: number = 0
   @State chromeColors: ChromeColors = new ChromeColors()
-  @State terminalBg: string = '#1E1E2E'
+  @State contentBg: string = '#FF1E1E2E'
+  @State chromeBg: string = '#FF181825'
+  @State backgroundMaterial: BlurStyle = BlurStyle.NONE
   @State menuOpen: boolean = false
   @StorageLink('terminalFontSize') fontSize: number = InteractionPolicy.DEFAULT_FONT_SIZE
   @StorageLink('mainWindowVisible') @Watch('onMainWindowVisibilityChanged')
   mainWindowVisible: boolean = true
+  @StorageLink('windowTransparencyAvailable') @Watch('onWindowTransparencyAvailabilityChanged')
+  windowTransparencyAvailable: boolean = false
   @State splitRatio: number = 0.5
   @State splitDragging: boolean = false
   @State splitHandleHovered: boolean = false
+  @State splitHandleFocused: boolean = false
   @State menuSelectedIndex: number = 0
+  @State transparencyLabel: string = 'Medium'
+  @State transparencyDecreaseHovered: boolean = false
+  @State transparencyIncreaseHovered: boolean = false
+  @State fontDecreaseHovered: boolean = false
+  @State fontIncreaseHovered: boolean = false
   @State warmTabId: string = ''
   @State checkpointingTabIds: string[] = []
+  @State attentionPulsePaneId: string = ''
+  @State attentionPulseToken: number = 0
+  @State attentionPulseCount: number = 0
   private workspaceWidth: number = 0
   private splitDragStartRatio: number = 0.5
   private warmTabEvictionTimerId: number = -1
@@ -94,7 +107,11 @@ struct Index {
           tabs: this.tabs,
           activeTabIndex: this.activeTabIndex,
           chromeColors: this.chromeColors,
+          chromeBackground: this.chromeBg,
           titleButtonReservedWidth: this.titleButtonReservedWidth,
+          attentionPulsePaneId: this.attentionPulsePaneId,
+          attentionPulseToken: this.attentionPulseToken,
+          attentionPulseCount: this.attentionPulseCount,
           onTabSelect: (index: number) => { this.selectTab(index) },
           onTabClose: (index: number) => { this.requestCloseTab(index) },
           onNewTab: () => { this.newTab() },
@@ -104,14 +121,15 @@ struct Index {
         Stack() {
           ForEach(this.mountedPaneRuntimes(), (runtime: PaneRuntime) => {
             TerminalPane({
-              paneBackground: this.terminalBg,
               focusVeilColor: this.chromeColors.paneFocusVeil,
               focusVeilOpacity: this.chromeColors.paneFocusVeilOpacity,
               sessionMode: this.paneMode(runtime.id),
               isFocused: this.isPaneFocused(runtime.id),
               paneId: runtime.id,
-              needsAttention: this.paneNeedsAttention(runtime.id),
-              attentionColor: this.chromeColors.statusConnecting,
+              closeButtonBackground: this.chromeColors.paneControlBackground,
+              closeButtonBorder: this.chromeColors.paneControlBorder,
+              closeButtonText: this.chromeColors.paneControlText,
+              focusRing: this.chromeColors.focusRing,
               showCloseButton: this.isPaneInActiveTab(runtime.id) && this.activeTabIsSplit(),
               onWebControllerReady: (ctrl: webview.WebviewController) => {
                 if (this.isPaneFocused(runtime.id)) {
@@ -154,11 +172,33 @@ struct Index {
           }, (runtime: PaneRuntime) => runtime.id + '-' + runtime.generation.toString())
 
           if (this.activeTabIsSplit()) {
-            Stack() {
+            Stack({ alignContent: Alignment.Center }) {
+              Column()
+                .width(1)
+                .height('100%')
+                .backgroundColor(this.chromeColors.divider)
+                .opacity(0.50)
+                .hitTestBehavior(HitTestMode.None)
+              if (this.splitPaneNeedsAttention(false)) {
+                Circle()
+                  .width(5)
+                  .height(5)
+                  .fill(this.chromeColors.attention)
+                  .position({ x: 0, y: 8 })
+                  .accessibilityText('Left pane attention requested')
+              }
+              if (this.splitPaneNeedsAttention(true)) {
+                Circle()
+                  .width(5)
+                  .height(5)
+                  .fill(this.chromeColors.attention)
+                  .position({ x: 9, y: 8 })
+                  .accessibilityText('Right pane attention requested')
+              }
               Column()
                 .width(this.splitDragging || this.splitHandleHovered ? 3 : 2)
                 .height(28)
-                .backgroundColor(this.splitDragging || this.splitHandleHovered ?
+                .backgroundColor(this.splitDragging || this.splitHandleHovered || this.splitHandleFocused ?
                   this.chromeColors.splitHandleActive : this.chromeColors.splitHandle)
                 .borderRadius(2)
                 .animation({ duration: 100, curve: Curve.EaseOut })
@@ -171,6 +211,8 @@ struct Index {
               .accessibilityText('Resize split panes')
               .focusable(true)
               .onHover((hovered: boolean) => { this.splitHandleHovered = hovered })
+              .onFocus(() => { this.splitHandleFocused = true })
+              .onBlur(() => { this.splitHandleFocused = false })
               .onKeyEvent((event: KeyEvent) => {
                 if (event.type !== KeyType.Down) { return true }
                 if (event.keyCode === 2014 || event.keyCode === 2015) {
@@ -210,6 +252,7 @@ struct Index {
         .layoutWeight(1)
         .clip(true)
         .width('100%')
+        .backgroundColor(this.contentBg)
         .onAreaChange((oldArea: Area, newArea: Area) => {
           this.workspaceWidth = Number(newArea.width)
           this.requestActiveTabFit()
@@ -218,7 +261,6 @@ struct Index {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor(this.terminalBg)
 
       if (this.menuOpen) {
         Column()
@@ -234,6 +276,9 @@ struct Index {
     }
     .width('100%')
     .height('100%')
+    .backgroundBlurStyle(this.backgroundMaterial, {
+      policy: BlurStyleActivePolicy.FOLLOWS_WINDOW_ACTIVE_STATE
+    })
   }
 
   private activeTabIsSplit(): boolean {
@@ -284,6 +329,10 @@ struct Index {
     this.warmTabId = ''
   }
 
+  private onWindowTransparencyAvailabilityChanged(): void {
+    this.applyTheme()
+  }
+
   private captureMountedTerminalSnapshots(): void {
     let mounted: PaneRuntime[] = this.mountedPaneRuntimes()
     for (let i = 0; i < mounted.length; i++) {
@@ -314,6 +363,15 @@ struct Index {
     return tab !== null && tab.panes.length === 2 && tab.panes[1].id === paneId
   }
 
+  private splitPaneNeedsAttention(rightPane: boolean): boolean {
+    let tab: TabInfo | null = this.activeTab()
+    if (tab === null || tab.panes.length !== 2) {
+      return false
+    }
+    let paneIndex: number = rightPane ? 1 : 0
+    return tab.panes[paneIndex].needsAttention
+  }
+
   private paneMode(paneId: string): TerminalMode {
     let pane: PaneInfo | null = this.appVm.getPane(paneId)
     return pane === null ? TerminalMode.IDLE : pane.mode
@@ -327,7 +385,12 @@ struct Index {
   private applyTheme(): void {
     let theme: AppTheme = ThemeManager.getInstance().getTheme()
     this.chromeColors = theme.chrome
-    this.terminalBg = theme.background()
+    this.contentBg = theme.background(this.windowTransparencyAvailable)
+    this.chromeBg = theme.chromeBackground(this.windowTransparencyAvailable)
+    this.backgroundMaterial = this.windowTransparencyAvailable &&
+      theme.transparencyMode !== TransparencyMode.OFF ?
+      BlurStyle.BACKGROUND_REGULAR : BlurStyle.NONE
+    this.transparencyLabel = TransparencyPolicy.label(theme.transparencyMode)
     let themeJson: string = theme.terminal.toJsInitObject()
     for (let i = 0; i < this.paneRuntimes.length; i++) {
       this.paneRuntimes[i].viewModel.applyTerminalTheme(themeJson)
@@ -648,10 +711,7 @@ struct Index {
     }
 
     if (InteractionPolicy.isTerminalSearchShortcut(event.keyCode, ctrlKey, altKey, shiftKey)) {
-      let runtime: PaneRuntime | null = this.activePaneRuntime()
-      if (runtime !== null) {
-        runtime.surface.openSearch()
-      }
+      this.openActivePaneSearch()
       return true
     }
 
@@ -726,7 +786,17 @@ struct Index {
   }
 
   private markPaneAttention(paneId: string): void {
-    this.appVm.markPaneAttention(paneId)
+    let persistAttention: boolean = InteractionPolicy.shouldPersistBellAttention(
+      this.isPaneInActiveTab(paneId),
+      this.isPaneFocused(paneId),
+      this.mainWindowVisible,
+      this.menuOpen)
+    if (persistAttention) {
+      this.appVm.markPaneAttention(paneId)
+    }
+    this.attentionPulsePaneId = paneId
+    this.attentionPulseCount = InteractionPolicy.bellPulseCount(persistAttention)
+    this.attentionPulseToken++
     this.syncWorkspace()
   }
 
@@ -770,6 +840,13 @@ struct Index {
   private handleFontIncrease(): void {
     this.fontSize = InteractionPolicy.clampFontSize(this.fontSize + 1)
     this.applyFontSize()
+  }
+
+  private openActivePaneSearch(): void {
+    let runtime: PaneRuntime | null = this.activePaneRuntime()
+    if (runtime !== null) {
+      runtime.surface.openSearch()
+    }
   }
 
   private handleFontDecrease(): void {
@@ -822,11 +899,6 @@ struct Index {
     }
     this.syncWorkspace()
     this.restoreActivePaneFocus()
-  }
-
-  private paneNeedsAttention(paneId: string): boolean {
-    let pane: PaneInfo | null = this.appVm.getPane(paneId)
-    return pane !== null && pane.needsAttention
   }
 
   private async closeActivePane(): Promise<void> {
@@ -1032,6 +1104,22 @@ struct Index {
       this.moveMenuSelection(1)
       return true
     }
+    if (this.menuSelectedIndex === 4 && event.keyCode === 2014) {
+      this.adjustTransparency(-1)
+      return true
+    }
+    if (this.menuSelectedIndex === 4 && event.keyCode === 2015) {
+      this.adjustTransparency(1)
+      return true
+    }
+    if (this.menuSelectedIndex === 5 && event.keyCode === 2014) {
+      this.handleFontDecrease()
+      return true
+    }
+    if (this.menuSelectedIndex === 5 && event.keyCode === 2015) {
+      this.handleFontIncrease()
+      return true
+    }
     if (event.keyCode === 2054) {
       this.executeMenuSelection()
       return true
@@ -1044,14 +1132,29 @@ struct Index {
     if (!this.isMenuItemEnabled(selected)) {
       return
     }
+    if (selected === 4 || selected === 5) { return }
+    if (selected === 3) {
+      this.menuOpen = false
+      this.openActivePaneSearch()
+      return
+    }
     this.menuOpen = false
     setTimeout(() => { this.restoreActivePaneFocus() }, 0)
     if (selected === 0) { this.newTab(); return }
     if (selected === 1) { this.toggleSplit(); return }
     if (selected === 2) { this.requestCloseActivePane(); return }
-    if (selected === 3) { this.handleFontIncrease(); return }
-    if (selected === 4) { this.handleFontReset(); return }
-    if (selected === 5) { this.handleFontDecrease(); return }
+  }
+
+  private adjustTransparency(direction: number): void {
+    let manager: ThemeManager = ThemeManager.getInstance()
+    let current: TransparencyMode = manager.getTransparencyMode()
+    if ((direction < 0 && !TransparencyPolicy.canDecrease(current)) ||
+      (direction > 0 && !TransparencyPolicy.canIncrease(current))) {
+      return
+    }
+    let mode: TransparencyMode = manager.stepTransparencyMode(direction)
+    this.transparencyLabel = TransparencyPolicy.label(mode)
+    UserPreferences.saveTransparencyMode(mode)
   }
 
   private moveMenuSelection(direction: number): void {
@@ -1069,6 +1172,7 @@ struct Index {
     if (index === 0) { return true }
     if (index === 1) { return !this.activeTabIsSplit() }
     if (index === 2) { return this.activeTabIsSplit() }
+    if (index === 3) { return this.activePaneRuntime() !== null }
     return true
   }
 
@@ -1078,18 +1182,18 @@ struct Index {
       this.menuRow(0, '+', 'New Tab', 'Ctrl+Shift+T', true, () => { this.newTab() })
       this.menuRow(1, '⋕', 'Split Pane', 'Ctrl+Shift+D', !this.activeTabIsSplit(), () => { this.toggleSplit() })
       this.menuRow(2, '✕', 'Close Pane', 'Ctrl+Shift+W', this.activeTabIsSplit(), () => { this.requestCloseActivePane() })
+      this.menuRow(3, '⌕', 'Search', 'Ctrl+Alt+F', this.activePaneRuntime() !== null,
+        () => { this.openActivePaneSearch() }, true, false)
       this.menuDivider()
-      this.menuRow(3, 'A⁺', 'Font Size +', 'Ctrl+=', true, () => { this.handleFontIncrease() })
-      this.menuRow(4, 'Aa', 'Reset Font Size', this.fontSize.toString() + ' px · Ctrl+0', true,
-        () => { this.handleFontReset() })
-      this.menuRow(5, 'A⁻', 'Font Size -', 'Ctrl+-', true, () => { this.handleFontDecrease() })
+      this.transparencyMenuRow()
+      this.fontSizeMenuRow()
     }
-    .width(252)
+    .width(292)
     .backgroundColor(this.chromeColors.commandBarBackground)
     .border({ width: 1, color: this.chromeColors.commandBarBorder, radius: 8 })
     .padding({ top: 4, bottom: 4 })
     .position({ x: '100%', y: 42 })
-    .translate({ x: -264 - this.titleButtonReservedWidth, y: 0 })
+    .translate({ x: -304 - this.titleButtonReservedWidth, y: 0 })
     .shadow({ radius: 12, color: '#00000040', offsetY: 4 })
     .focusable(true)
     .defaultFocus(true)
@@ -1097,7 +1201,8 @@ struct Index {
   }
 
   @Builder
-  menuRow(index: number, icon: string, label: string, shortcut: string, enabled: boolean, action?: () => void) {
+  menuRow(index: number, icon: string, label: string, shortcut: string, enabled: boolean, action?: () => void,
+    closeAfterAction: boolean = true, restoreFocusAfterAction: boolean = true) {
     Row() {
       Text(icon)
         .fontSize(14)
@@ -1126,11 +1231,154 @@ struct Index {
     .onHover((hovered: boolean) => { if (hovered) { this.menuSelectedIndex = index } })
     .onClick(() => {
       if (enabled && action !== undefined) {
-        this.menuOpen = false
+        if (closeAfterAction) {
+          this.menuOpen = false
+        }
         action()
-        setTimeout(() => { this.restoreActivePaneFocus() }, 0)
+        if (closeAfterAction && restoreFocusAfterAction) {
+          setTimeout(() => { this.restoreActivePaneFocus() }, 0)
+        }
       }
     })
+  }
+
+  @Builder
+  transparencyMenuRow() {
+    Row() {
+      Text('◐')
+        .fontSize(14)
+        .fontColor(this.chromeColors.commandBarText)
+        .width(24)
+        .textAlign(TextAlign.Center)
+      Text('Transparency')
+        .fontSize(13)
+        .fontColor(this.chromeColors.commandBarText)
+        .layoutWeight(1)
+        .margin({ left: 8 })
+      Text('−')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(TransparencyPolicy.canDecrease(ThemeManager.getInstance().getTransparencyMode()) ?
+          this.chromeColors.commandBarText : this.chromeColors.commandBarPlaceholder)
+        .width(32)
+        .height(28)
+        .textAlign(TextAlign.Center)
+        .borderRadius(4)
+        .border({ width: 1, color: this.chromeColors.commandBarBorder })
+        .backgroundColor(this.transparencyDecreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
+        .enabled(TransparencyPolicy.canDecrease(ThemeManager.getInstance().getTransparencyMode()))
+        .focusable(false)
+        .accessibilityText('Decrease transparency')
+        .onHover((hovered: boolean) => { this.transparencyDecreaseHovered = hovered })
+        .onClick(() => {
+          this.menuSelectedIndex = 4
+          this.adjustTransparency(-1)
+        })
+      Text(this.transparencyLabel)
+        .fontSize(11)
+        .fontColor(this.chromeColors.commandBarPlaceholder)
+        .width(56)
+        .textAlign(TextAlign.Center)
+      Text('+')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(TransparencyPolicy.canIncrease(ThemeManager.getInstance().getTransparencyMode()) ?
+          this.chromeColors.commandBarText : this.chromeColors.commandBarPlaceholder)
+        .width(32)
+        .height(28)
+        .textAlign(TextAlign.Center)
+        .borderRadius(4)
+        .border({ width: 1, color: this.chromeColors.commandBarBorder })
+        .backgroundColor(this.transparencyIncreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
+        .enabled(TransparencyPolicy.canIncrease(ThemeManager.getInstance().getTransparencyMode()))
+        .focusable(false)
+        .accessibilityText('Increase transparency')
+        .onHover((hovered: boolean) => { this.transparencyIncreaseHovered = hovered })
+        .onClick(() => {
+          this.menuSelectedIndex = 4
+          this.adjustTransparency(1)
+        })
+    }
+    .width('100%')
+    .height(40)
+    .padding({ left: 12, right: 12 })
+    .borderRadius(4)
+    .backgroundColor(this.menuSelectedIndex === 4 ? this.chromeColors.commandBarBorder : '#00000000')
+    .focusable(true)
+    .accessibilityText('Transparency, ' + this.transparencyLabel +
+      '. Use left and right arrow keys to adjust')
+    .onHover((hovered: boolean) => { if (hovered) { this.menuSelectedIndex = 4 } })
+    .onClick(() => { this.menuSelectedIndex = 4 })
+  }
+
+  @Builder
+  fontSizeMenuRow() {
+    Row() {
+      Text('Aa')
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.chromeColors.commandBarText)
+        .width(24)
+        .textAlign(TextAlign.Center)
+      Text('Font Size')
+        .fontSize(13)
+        .fontColor(this.chromeColors.commandBarText)
+        .layoutWeight(1)
+        .margin({ left: 8 })
+      Text('−')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.fontSize > InteractionPolicy.MIN_FONT_SIZE ?
+          this.chromeColors.commandBarText : this.chromeColors.commandBarPlaceholder)
+        .width(32)
+        .height(28)
+        .textAlign(TextAlign.Center)
+        .borderRadius(4)
+        .border({ width: 1, color: this.chromeColors.commandBarBorder })
+        .backgroundColor(this.fontDecreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
+        .enabled(this.fontSize > InteractionPolicy.MIN_FONT_SIZE)
+        .focusable(false)
+        .accessibilityText('Decrease font size')
+        .onHover((hovered: boolean) => { this.fontDecreaseHovered = hovered })
+        .onClick(() => {
+          this.menuSelectedIndex = 5
+          this.handleFontDecrease()
+        })
+      Text(this.fontSize.toString() + ' px')
+        .fontSize(11)
+        .fontColor(this.chromeColors.commandBarPlaceholder)
+        .width(56)
+        .textAlign(TextAlign.Center)
+      Text('+')
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.fontSize < InteractionPolicy.MAX_FONT_SIZE ?
+          this.chromeColors.commandBarText : this.chromeColors.commandBarPlaceholder)
+        .width(32)
+        .height(28)
+        .textAlign(TextAlign.Center)
+        .borderRadius(4)
+        .border({ width: 1, color: this.chromeColors.commandBarBorder })
+        .backgroundColor(this.fontIncreaseHovered ? this.chromeColors.commandBarBorder : '#00000000')
+        .enabled(this.fontSize < InteractionPolicy.MAX_FONT_SIZE)
+        .focusable(false)
+        .accessibilityText('Increase font size')
+        .onHover((hovered: boolean) => { this.fontIncreaseHovered = hovered })
+        .onClick(() => {
+          this.menuSelectedIndex = 5
+          this.handleFontIncrease()
+        })
+    }
+    .width('100%')
+    .height(40)
+    .padding({ left: 12, right: 12 })
+    .borderRadius(4)
+    .backgroundColor(this.menuSelectedIndex === 5 ? this.chromeColors.commandBarBorder : '#00000000')
+    .focusable(true)
+    .accessibilityText('Font size, ' + this.fontSize.toString() + ' pixels. ' +
+      'Use left and right arrow keys to adjust. Ctrl+0 resets')
+    .onHover((hovered: boolean) => { if (hovered) { this.menuSelectedIndex = 5 } })
+    .onClick(() => { this.menuSelectedIndex = 5 })
   }
 
   @Builder
@@ -1138,7 +1386,7 @@ struct Index {
     Row()
       .width('100%')
       .height(1)
-      .backgroundColor('#313244')
+      .backgroundColor(this.chromeColors.divider)
       .margin({ top: 4, bottom: 4, left: 12, right: 12 })
   }
 }

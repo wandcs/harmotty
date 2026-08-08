@@ -489,7 +489,8 @@ Assert-True (
     $acceptanceSource.Contains("import { ACCEPTANCE_TESTS } from 'BuildProfile'") -and
     $acceptanceSource.Contains('ACCEPTANCE_INPUT_SUBMIT') -and
     $acceptanceSource.Contains('Acceptance: Rebuild Renderer') -and
-    $acceptanceSource.Contains('Acceptance: Open Search') -and
+    -not $acceptanceSource.Contains('Acceptance: Open Search') -and
+    -not $acceptanceSource.Contains('Debug Material') -and
     $acceptanceSource.Contains('pasteClipboardForAcceptance') -and
     $acceptanceSource.Contains('ctrlKey && altKey && !shiftKey && event.keyCode === 2038') -and
     $acceptanceSource.Contains('Invoke-WithLeanTTYAcceptanceSource')

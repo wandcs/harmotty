@@ -7,6 +7,8 @@ import { DurableStateManager } from '../persistence/DurableStateManager'
 const logger: Logger = new Logger('UserPreferences')
 const PREFERENCES_NAME: string = 'leantty_settings'
 const TERMINAL_FONT_SIZE_KEY: string = 'terminal_font_size'
+const TERMINAL_TRANSPARENCY_MODE_KEY: string = 'terminal_transparency_mode'
+const DEFAULT_TRANSPARENCY_MODE: number = 1
 
 export class UserPreferences {
   private static store: preferences.Preferences | null = null
@@ -56,6 +58,33 @@ export class UserPreferences {
       UserPreferences.writeLocalFontSize(fontSize)
     } catch (e) {
       logger.warn('Failed to save terminal font size: ' + e)
+    }
+  }
+
+  static loadTransparencyMode(): number {
+    if (UserPreferences.store === null) {
+      return DEFAULT_TRANSPARENCY_MODE
+    }
+    try {
+      let storedValue: preferences.ValueType = UserPreferences.store.getSync(
+        TERMINAL_TRANSPARENCY_MODE_KEY, DEFAULT_TRANSPARENCY_MODE)
+      return typeof storedValue === 'number' ? storedValue : DEFAULT_TRANSPARENCY_MODE
+    } catch (e) {
+      logger.warn('Failed to load terminal transparency mode: ' + e)
+      return DEFAULT_TRANSPARENCY_MODE
+    }
+  }
+
+  static saveTransparencyMode(value: number): void {
+    if (UserPreferences.store === null) {
+      logger.warn('Cannot save terminal transparency mode before preferences initialization')
+      return
+    }
+    try {
+      UserPreferences.store.putSync(TERMINAL_TRANSPARENCY_MODE_KEY, value)
+      UserPreferences.store.flushSync()
+    } catch (e) {
+      logger.warn('Failed to save terminal transparency mode: ' + e)
     }
   }
 

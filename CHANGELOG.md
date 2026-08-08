@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added current-surface terminal search with the fixed `Ctrl+Alt+F` entry,
+  compact match navigation and isolated Pane/Tab lifecycle behavior.
+
+### Changed
+
+- Refined the desktop terminal workspace with bounded Tab overflow, clearer
+  inactive-Tab surface contrast without inter-Tab divider lines, Tab surfaces
+  continuous with the terminal, a distinct new-Tab boundary and a lower-weight
+  full-height split divider,
+  restored HarmonyOS four-dot menu, themed controls and visible keyboard focus
+  states.
+- Replaced the full-Pane BEL warning frame with a finite Tab emphasis, a
+  persistent leading status marker for unattended output and a local split
+  source marker. Reduced-motion uses static feedback.
+- Replaced the three-level transparency cycle with a locally retained,
+  non-wrapping Off/Low/Medium/High/Extreme stepper. The active window derives
+  separate coordinated Chrome and content alpha surfaces while ArkWeb/xterm
+  WebGL remain transparent; inactive or unsupported windows fall back to opaque.
+  Fixed the user-selected HarmonyOS Regular background material once at the
+  window root for non-Off levels without adding a material setting, custom
+  Gaussian effect or WebView reconstruction. Reprofiled the content levels to
+  `1.00/0.90/0.82/0.72/0.60` and Chrome to `1.00/0.94/0.88/0.80/0.70`.
+- Added Search to the four-dot menu and replaced three separate font-size rows
+  with one non-wrapping `− current +` stepper. Tightened the search panel spacing
+  and made both empty and unsuccessful queries visibly report `0/0` while
+  retaining distinct accessible descriptions.
+
 ### Security
 
 - Updated `russh` from 0.62.4 to 0.62.5 to enforce established-channel

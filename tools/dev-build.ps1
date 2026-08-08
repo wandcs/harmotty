@@ -47,9 +47,9 @@ if ($Clean) {
 }
 
 $start = Get-Date
-$args = @($hvigorJs, '--mode', 'module', '-p', 'module=entry@default', 'assembleHap', '-p', 'buildMode=debug')
+$hvigorArgs = @($hvigorJs, '--mode', 'module', '-p', 'module=entry@default', 'assembleHap', '-p', 'buildMode=debug')
 Invoke-WithLeanTTYAcceptanceSource -RepoRoot $repoRoot -Enabled $true -Action {
-    & $nodeExe @args
+    & $nodeExe @hvigorArgs
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 }
 

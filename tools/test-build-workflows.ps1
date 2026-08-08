@@ -107,6 +107,12 @@ try {
         Assert-True (($injectedText -join "`n").Contains('Acceptance: Rebuild Renderer')) (
             'Debug acceptance source injection omitted renderer trigger'
         )
+        Assert-True (-not ($injectedText -join "`n").Contains('Debug Material')) (
+            'Debug acceptance source injection must not restore the retired material comparator'
+        )
+        Assert-True (-not ($injectedText -join "`n").Contains('Acceptance: Open Search')) (
+            'Debug acceptance source injection must reuse the production Search action'
+        )
         Assert-True (($injectedText -join "`n").Contains('pasteClipboardForAcceptance')) (
             'Debug acceptance source injection omitted clipboard paste trigger'
         )

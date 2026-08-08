@@ -1,12 +1,17 @@
 import { TabInfo, SshSessionState } from '../../common/types/TerminalTypes'
 import { ChromeColors } from '../theme/ThemeConstants'
+import { accessibility } from '@kit.AccessibilityKit'
 
 @Component
 export struct ChromeBar {
   @Prop tabs: TabInfo[] = []
   @Prop activeTabIndex: number = 0
   @Prop chromeColors: ChromeColors = new ChromeColors()
+  @Prop chromeBackground: string = '#FF181825'
   @Prop titleButtonReservedWidth: number = 140
+  @Prop attentionPulsePaneId: string = ''
+  @Prop attentionPulseToken: number = 0
+  @Prop attentionPulseCount: number = 0
   onTabSelect: (index: number) => void = () => {}
   onTabClose: (index: number) => void = () => {}
   onNewTab: () => void = () => {}
@@ -55,7 +60,19 @@ export struct ChromeBar {
   }
 
   private tabRenderKey(tab: TabInfo): string {
-    return tab.id + ':' + tab.title + ':' + (this.tabNeedsAttention(tab) ? 'attention' : 'normal')
+    return tab.id
+  }
+
+  private tabContainsPane(tab: TabInfo, paneId: string): boolean {
+    if (paneId.length === 0) {
+      return false
+    }
+    for (let i = 0; i < tab.panes.length; i++) {
+      if (tab.panes[i].id === paneId) {
+        return true
+      }
+    }
+    return false
   }
 
   build() {
@@ -68,6 +85,10 @@ export struct ChromeBar {
               isActive: index === this.activeTabIndex,
               sessionState: this.tabState(tab),
               hasAttention: this.tabNeedsAttention(tab),
+              attentionPulseCount: this.tabContainsPane(tab, this.attentionPulsePaneId) ?
+                this.attentionPulseCount : 0,
+              attentionPulseToken: this.tabContainsPane(tab, this.attentionPulsePaneId) ?
+                this.attentionPulseToken : 0,
               chromeColors: this.chromeColors,
               onSelect: () => { this.onTabSelect(index) },
               onClose: () => { this.onTabClose(index) }
@@ -79,16 +100,23 @@ export struct ChromeBar {
       .align(Alignment.TopStart)
       .scrollable(ScrollDirection.Horizontal)
       .scrollBar(BarState.Off)
+      .fadingEdge(this.tabs.length > 1)
       .width(this.tabViewportWidth())
       .constraintSize({ maxWidth: 'calc(100% - 172vp)' })
       .height(40)
+
+      Column()
+        .width(1)
+        .height(18)
+        .backgroundColor(this.chromeColors.divider)
+        .opacity(0.72)
+        .margin({ left: 4, right: 4 })
 
       ChromeButton({
         symbol: '+',
         chromeColors: this.chromeColors,
         onTap: () => { this.onNewTab() }
       })
-        .margin({ left: 4 })
 
       Blank()
         .layoutWeight(1)
@@ -104,7 +132,7 @@ export struct ChromeBar {
     .width('100%')
     .height(40)
     .padding({ right: this.titleButtonReservedWidth })
-    .backgroundColor(this.chromeColors.tabBackground)
+    .backgroundColor(this.chromeBackground)
   }
 }
 
@@ -114,12 +142,70 @@ struct ChromeTab {
   @Prop isActive: boolean = false
   @Prop sessionState: SshSessionState = SshSessionState.IDLE
   @Prop hasAttention: boolean = false
+  @Prop attentionPulseCount: number = 0
+  @Prop @Watch('onAttentionPulseTokenChanged') attentionPulseToken: number = 0
   @Prop chromeColors: ChromeColors = new ChromeColors()
   @State hovered: boolean = false
+  @State focused: boolean = false
+  @State closeFocused: boolean = false
+  @State attentionPulseOpacity: number = 0
+  @State reduceMotion: boolean = false
+  private attentionPulseTimers: number[] = []
   onSelect: () => void = () => {}
   onClose: () => void = () => {}
 
+  aboutToAppear(): void {
+    this.startAttentionPulse()
+  }
+
+  aboutToDisappear(): void {
+    this.clearAttentionPulseTimers()
+  }
+
+  private onAttentionPulseTokenChanged(): void {
+    this.startAttentionPulse()
+  }
+
+  private clearAttentionPulseTimers(): void {
+    for (let i = 0; i < this.attentionPulseTimers.length; i++) {
+      clearTimeout(this.attentionPulseTimers[i])
+    }
+    this.attentionPulseTimers = []
+  }
+
+  private scheduleAttentionPulse(opacity: number, delayMs: number): void {
+    let timerId: number = setTimeout(() => {
+      this.attentionPulseOpacity = opacity
+    }, delayMs)
+    this.attentionPulseTimers.push(timerId)
+  }
+
+  private startAttentionPulse(): void {
+    this.clearAttentionPulseTimers()
+    this.attentionPulseOpacity = 0
+    if (this.attentionPulseCount <= 0) {
+      return
+    }
+    try {
+      this.reduceMotion = accessibility.isAnimationReduceEnabledSync()
+    } catch (e) {
+      this.reduceMotion = false
+    }
+    if (this.reduceMotion) {
+      this.attentionPulseOpacity = 1
+      this.scheduleAttentionPulse(0, 700)
+      return
+    }
+    for (let pulseIndex = 0; pulseIndex < this.attentionPulseCount; pulseIndex++) {
+      this.scheduleAttentionPulse(1, 40 + pulseIndex * 560)
+      this.scheduleAttentionPulse(0, 320 + pulseIndex * 560)
+    }
+  }
+
   private indicatorColor(): string {
+    if (this.hasAttention) {
+      return this.chromeColors.attention
+    }
     if (this.sessionState === SshSessionState.CONNECTED) {
       return this.chromeColors.statusConnected
     }
@@ -133,27 +219,46 @@ struct ChromeTab {
     return this.chromeColors.commandBarPlaceholder
   }
 
-  private surfaceColor(): string {
+  private surfaceOpacity(): number {
     if (this.isActive) {
-      return this.chromeColors.tabActiveBackground
+      return 1
     }
-    return this.hovered ? this.chromeColors.commandBarBorder : '#00000000'
+    return this.hovered ? this.chromeColors.tabHoverSurfaceOpacity :
+      this.chromeColors.tabInactiveSurfaceOpacity
   }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       Row()
         .width(172)
-        .height(this.isActive ? 37 : 32)
+        .height(36)
         .margin({ top: 4 })
-        .backgroundColor(this.surfaceColor())
+        .backgroundColor(this.chromeColors.tabActiveBackground)
+        .opacity(this.surfaceOpacity())
         .borderRadius({
           topLeft: 8,
           topRight: 8,
-          bottomLeft: this.isActive ? 0 : 8,
-          bottomRight: this.isActive ? 0 : 8
+          bottomLeft: 0,
+          bottomRight: 0
         })
         .animation({ duration: 100, curve: Curve.EaseOut })
+
+      if (this.attentionPulseCount > 0) {
+        Row()
+          .width(172)
+          .height(36)
+          .backgroundColor(this.chromeColors.attention)
+          .borderRadius({
+            topLeft: 8,
+            topRight: 8,
+            bottomLeft: 0,
+            bottomRight: 0
+          })
+          .position({ x: 0, y: 4 })
+          .opacity(this.attentionPulseOpacity * 0.18)
+          .animation({ duration: this.reduceMotion ? 0 : 240, curve: Curve.EaseInOut })
+          .hitTestBehavior(HitTestMode.None)
+      }
 
       Row() {
         Circle()
@@ -170,14 +275,6 @@ struct ChromeTab {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
-        if (this.hasAttention) {
-          Text('●')
-            .fontSize(10)
-            .fontColor(this.chromeColors.statusConnecting)
-            .width(16)
-            .textAlign(TextAlign.Center)
-            .accessibilityText('Terminal attention requested')
-        }
         if (this.isActive || this.hovered) {
           Text('\u2715')
             .fontSize(10)
@@ -186,22 +283,34 @@ struct ChromeTab {
             .height(24)
             .textAlign(TextAlign.Center)
             .borderRadius(8)
+            .border({ width: this.closeFocused ? 1 : 0, color: this.chromeColors.focusRing })
             .focusable(true)
             .accessibilityText('Close tab ' + this.title)
             .onClick(() => { this.onClose() })
+            .onFocus(() => { this.closeFocused = true })
+            .onBlur(() => { this.closeFocused = false })
         }
       }
       .width(172)
       .height(32)
       .position({ x: 0, y: 4 })
       .padding({ left: 12, right: 8 })
+
+      Row()
+        .width(172)
+        .height(36)
+        .position({ x: 0, y: 4 })
+        .border({ width: this.focused ? 1 : 0, color: this.chromeColors.focusRing, radius: 8 })
+        .hitTestBehavior(HitTestMode.None)
     }
-    .width(172)
+    .width(176)
     .height(40)
-    .margin({ right: 4 })
     .accessibilityDescription(this.title)
     .accessibilityText((this.isActive ? 'Active tab, ' : 'Tab, ') + this.title +
       (this.hasAttention ? ', attention requested' : ''))
+    .focusable(true)
+    .onFocus(() => { this.focused = true })
+    .onBlur(() => { this.focused = false })
     .onClick(() => { this.onSelect() })
     .onHover((isHover: boolean) => { this.hovered = isHover })
   }
@@ -212,6 +321,7 @@ struct ChromeButton {
   @Prop symbol: string = ''
   @Prop chromeColors: ChromeColors = new ChromeColors()
   @State hovered: boolean = false
+  @State focused: boolean = false
   onTap: () => void = () => {}
 
   build() {
@@ -223,10 +333,13 @@ struct ChromeButton {
       .textAlign(TextAlign.Center)
       .borderRadius(6)
       .backgroundColor(this.hovered ? this.chromeColors.commandBarBorder : '#00000000')
+      .border({ width: this.focused ? 1 : 0, color: this.chromeColors.focusRing, radius: 6 })
       .focusable(true)
       .accessibilityText('New tab')
       .onClick(() => { this.onTap() })
       .onHover((isHover: boolean) => { this.hovered = isHover })
+      .onFocus(() => { this.focused = true })
+      .onBlur(() => { this.focused = false })
   }
 }
 
@@ -234,6 +347,7 @@ struct ChromeButton {
 struct MoreButton {
   @Prop chromeColors: ChromeColors = new ChromeColors()
   @State hovered: boolean = false
+  @State focused: boolean = false
   onTap: () => void = () => {}
 
   build() {
@@ -268,9 +382,12 @@ struct MoreButton {
     .height(32)
     .borderRadius(6)
     .backgroundColor(this.hovered ? this.chromeColors.commandBarBorder : '#00000000')
+    .border({ width: this.focused ? 1 : 0, color: this.chromeColors.focusRing, radius: 6 })
     .focusable(true)
     .accessibilityText('Open terminal menu')
     .onClick(() => { this.onTap() })
     .onHover((isHover: boolean) => { this.hovered = isHover })
+    .onFocus(() => { this.focused = true })
+    .onBlur(() => { this.focused = false })
   }
 }

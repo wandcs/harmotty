@@ -1,10 +1,108 @@
 import { AnsiColors, AnsiColorsLatte, ChromeColors, ChromeColorsLatte, TerminalColors, TerminalColorsLatte, Sizing, Spacing, Typography, GhosttyDefault } from './ThemeConstants'
-import { XtermTheme, CATPPUCCIN_MOCHA_THEME, CATPPUCCIN_LATTE_THEME, TerminalThemeState } from './TerminalTheme'
+import { XtermTheme, TerminalThemeState } from './TerminalTheme'
 
 export enum ColorMode {
   DARK = 0,
   LIGHT = 1,
   SYSTEM = 2
+}
+
+export enum TransparencyMode {
+  HIGH = 0,
+  MEDIUM = 1,
+  LOW = 2,
+  OFF = 3,
+  EXTREME = 4
+}
+
+export class TransparencyPolicy {
+  static defaultMode(): TransparencyMode {
+    return TransparencyMode.MEDIUM
+  }
+
+  static normalize(value: number): TransparencyMode {
+    if (value === TransparencyMode.HIGH) return TransparencyMode.HIGH
+    if (value === TransparencyMode.LOW) return TransparencyMode.LOW
+    if (value === TransparencyMode.OFF) return TransparencyMode.OFF
+    if (value === TransparencyMode.EXTREME) return TransparencyMode.EXTREME
+    return TransparencyMode.MEDIUM
+  }
+
+  static decrease(mode: TransparencyMode): TransparencyMode {
+    if (mode === TransparencyMode.EXTREME) return TransparencyMode.HIGH
+    if (mode === TransparencyMode.HIGH) return TransparencyMode.MEDIUM
+    if (mode === TransparencyMode.MEDIUM) return TransparencyMode.LOW
+    return TransparencyMode.OFF
+  }
+
+  static increase(mode: TransparencyMode): TransparencyMode {
+    if (mode === TransparencyMode.OFF) return TransparencyMode.LOW
+    if (mode === TransparencyMode.LOW) return TransparencyMode.MEDIUM
+    if (mode === TransparencyMode.MEDIUM) return TransparencyMode.HIGH
+    return TransparencyMode.EXTREME
+  }
+
+  static canDecrease(mode: TransparencyMode): boolean {
+    return mode !== TransparencyMode.OFF
+  }
+
+  static canIncrease(mode: TransparencyMode): boolean {
+    return mode !== TransparencyMode.EXTREME
+  }
+
+  static label(mode: TransparencyMode): string {
+    if (mode === TransparencyMode.OFF) return 'Off'
+    if (mode === TransparencyMode.HIGH) return 'High'
+    if (mode === TransparencyMode.LOW) return 'Low'
+    if (mode === TransparencyMode.EXTREME) return 'Extreme'
+    return 'Medium'
+  }
+
+  static contentOpacity(mode: TransparencyMode): number {
+    if (mode === TransparencyMode.OFF) return 1.00
+    if (mode === TransparencyMode.HIGH) return 0.72
+    if (mode === TransparencyMode.LOW) return 0.90
+    if (mode === TransparencyMode.EXTREME) return 0.60
+    return 0.82
+  }
+
+  static chromeOpacity(mode: TransparencyMode): number {
+    if (mode === TransparencyMode.OFF) return 1.00
+    if (mode === TransparencyMode.HIGH) return 0.80
+    if (mode === TransparencyMode.LOW) return 0.94
+    if (mode === TransparencyMode.EXTREME) return 0.70
+    return 0.88
+  }
+
+  static terminalBackground(mode: TransparencyMode, isLight: boolean): string {
+    return 'rgba(0, 0, 0, 0)'
+  }
+
+  static surfaceBackground(mode: TransparencyMode, isLight: boolean): string {
+    let rgb: string = isLight ? 'EFF1F5' : '1E1E2E'
+    if (mode === TransparencyMode.OFF) return '#FF' + rgb
+    if (mode === TransparencyMode.HIGH) return '#B8' + rgb
+    if (mode === TransparencyMode.LOW) return '#E6' + rgb
+    if (mode === TransparencyMode.EXTREME) return '#99' + rgb
+    return '#D1' + rgb
+  }
+
+  static chromeSurfaceBackground(mode: TransparencyMode, isLight: boolean): string {
+    let rgb: string = isLight ? 'E6E9EF' : '181825'
+    if (mode === TransparencyMode.OFF) return '#FF' + rgb
+    if (mode === TransparencyMode.HIGH) return '#CC' + rgb
+    if (mode === TransparencyMode.LOW) return '#F0' + rgb
+    if (mode === TransparencyMode.EXTREME) return '#B3' + rgb
+    return '#E0' + rgb
+  }
+
+  static opaqueSurfaceBackground(isLight: boolean): string {
+    return isLight ? '#FFEFF1F5' : '#FF1E1E2E'
+  }
+
+  static opaqueChromeSurfaceBackground(isLight: boolean): string {
+    return isLight ? '#FFE6E9EF' : '#FF181825'
+  }
 }
 
 export class AppTheme {
@@ -17,9 +115,11 @@ export class AppTheme {
   spacing: Spacing
   typography: Typography
   ghosttyDefault: GhosttyDefault
+  transparencyMode: TransparencyMode
 
-  constructor(mode: ColorMode) {
+  constructor(mode: ColorMode, transparencyMode: TransparencyMode = TransparencyMode.MEDIUM) {
     this.colorMode = mode
+    this.transparencyMode = transparencyMode
     this.sizing = new Sizing()
     this.spacing = new Spacing()
     this.typography = new Typography()
@@ -28,12 +128,16 @@ export class AppTheme {
       this.terminalColors = new TerminalColorsLatte()
       this.ansiColors = new AnsiColorsLatte()
       this.chrome = new ChromeColorsLatte()
-      this.terminal = new TerminalThemeState(CATPPUCCIN_LATTE_THEME)
+      this.terminalColors.background = TransparencyPolicy.terminalBackground(transparencyMode, true)
+      this.terminalColors.surfaceBackground = TransparencyPolicy.surfaceBackground(transparencyMode, true)
+      this.terminal = new TerminalThemeState(new XtermTheme(this.terminalColors, this.ansiColors))
     } else {
       this.terminalColors = new TerminalColors()
       this.ansiColors = new AnsiColors()
       this.chrome = new ChromeColors()
-      this.terminal = new TerminalThemeState(CATPPUCCIN_MOCHA_THEME)
+      this.terminalColors.background = TransparencyPolicy.terminalBackground(transparencyMode, false)
+      this.terminalColors.surfaceBackground = TransparencyPolicy.surfaceBackground(transparencyMode, false)
+      this.terminal = new TerminalThemeState(new XtermTheme(this.terminalColors, this.ansiColors))
     }
   }
 
@@ -41,8 +145,19 @@ export class AppTheme {
     return this.colorMode === ColorMode.DARK
   }
 
-  background(): string {
-    return this.terminalColors.background
+  background(windowTransparencyAvailable: boolean = true): string {
+    if (!windowTransparencyAvailable) {
+      return TransparencyPolicy.opaqueSurfaceBackground(this.colorMode === ColorMode.LIGHT)
+    }
+    return this.terminalColors.surfaceBackground
+  }
+
+  chromeBackground(windowTransparencyAvailable: boolean = true): string {
+    if (!windowTransparencyAvailable) {
+      return TransparencyPolicy.opaqueChromeSurfaceBackground(this.colorMode === ColorMode.LIGHT)
+    }
+    return TransparencyPolicy.chromeSurfaceBackground(
+      this.transparencyMode, this.colorMode === ColorMode.LIGHT)
   }
 }
 
@@ -52,11 +167,13 @@ export class ThemeManager {
   private listeners: (() => void)[]
   private preferredMode: ColorMode
   private systemIsDark: boolean
+  private transparencyMode: TransparencyMode
 
   private constructor() {
     this.preferredMode = ColorMode.DARK
     this.systemIsDark = true
-    this.currentTheme = new AppTheme(ColorMode.DARK)
+    this.transparencyMode = TransparencyPolicy.defaultMode()
+    this.currentTheme = new AppTheme(ColorMode.DARK, this.transparencyMode)
     this.listeners = []
   }
 
@@ -83,12 +200,33 @@ export class ThemeManager {
     }
   }
 
+  getTransparencyMode(): TransparencyMode {
+    return this.transparencyMode
+  }
+
+  setTransparencyMode(mode: TransparencyMode): void {
+    let normalized: TransparencyMode = TransparencyPolicy.normalize(mode)
+    if (normalized === this.transparencyMode) {
+      return
+    }
+    this.transparencyMode = normalized
+    this.refreshTheme()
+  }
+
+  stepTransparencyMode(direction: number): TransparencyMode {
+    let nextMode: TransparencyMode = direction < 0 ?
+      TransparencyPolicy.decrease(this.transparencyMode) :
+      TransparencyPolicy.increase(this.transparencyMode)
+    this.setTransparencyMode(nextMode)
+    return nextMode
+  }
+
   private refreshTheme(): void {
     let effectiveMode: ColorMode = this.preferredMode
     if (this.preferredMode === ColorMode.SYSTEM) {
       effectiveMode = this.systemIsDark ? ColorMode.DARK : ColorMode.LIGHT
     }
-    this.currentTheme = new AppTheme(effectiveMode)
+    this.currentTheme = new AppTheme(effectiveMode, this.transparencyMode)
     this.notifyListeners()
   }
 

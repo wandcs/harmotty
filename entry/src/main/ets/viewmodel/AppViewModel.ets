@@ -6,7 +6,6 @@ export { PaneInfo, TabInfo }
 export class AppViewModel {
   private tabs: TabInfo[] = []
   private activeTabIndex: number = -1
-  private tabBarVisible: boolean = false
   private nextTabId: number = 1
   private nextPaneId: number = 1
   private logger: Logger = new Logger('AppViewModel')
@@ -26,10 +25,6 @@ export class AppViewModel {
     return null
   }
 
-  isTabBarVisible(): boolean {
-    return this.tabBarVisible
-  }
-
   addTab(title: string): TabInfo {
     let id: string = 'tab-' + this.nextTabId.toString()
     this.nextTabId++
@@ -38,9 +33,6 @@ export class AppViewModel {
     tab.panes.push(pane)
     tab.activePaneId = pane.id
     this.tabs.push(tab)
-    if (this.tabs.length >= 2) {
-      this.tabBarVisible = true
-    }
     this.setActiveTab(this.tabs.length - 1)
     this.logger.info('Tab added: ' + id + ' title=' + title)
     return tab
@@ -177,9 +169,6 @@ export class AppViewModel {
     let previousActiveIndex: number = this.activeTabIndex
     this.tabs.splice(index, 1)
     this.tabs = this.tabs.slice()
-    if (this.tabs.length < 2) {
-      this.tabBarVisible = false
-    }
     if (this.tabs.length === 0) {
       this.activeTabIndex = -1
     } else if (index < previousActiveIndex) {
@@ -209,13 +198,6 @@ export class AppViewModel {
       this.tabs[index].title = title
       this.tabs = this.tabs.slice()
     }
-  }
-
-  setTabBarVisible(visible: boolean): void {
-    if (this.tabs.length < 2 && visible) {
-      return
-    }
-    this.tabBarVisible = visible
   }
 
   private createPane(title: string): PaneInfo {

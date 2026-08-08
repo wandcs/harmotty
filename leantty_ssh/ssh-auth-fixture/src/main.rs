@@ -34,6 +34,9 @@ const PERF_MAX_LINE_WIDTH: usize = 160;
 const PERF_OUTPUT_CHUNK_BYTES: usize = 16 * 1024;
 const PASTE_PREPARE_COMMAND: &str = "ltty-paste-prepare";
 const INPUT_CHECK_COMMAND: &str = "ltty-input-check";
+const BELL_COMMAND: &str = "ltty-bell";
+const BELL_MIN_DELAY_MS: u64 = 100;
+const BELL_MAX_DELAY_MS: u64 = 5_000;
 const PASTE_MAX_BYTES: usize = 512 * 1024;
 
 #[derive(Clone)]
@@ -578,6 +581,14 @@ impl Handler for FixtureServer {
                 let response = format!("\r\nLTTY_INPUT_OK:{case_id}\r\nfixture> ");
                 session.data(channel, response.into_bytes())?;
             }
+            Some(FixtureCommand::Bell(request)) => {
+                let handle = session.handle();
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(request.delay_ms)).await;
+                    let response = format!("\x07\r\nLTTY_BELL_OK:{}\r\nfixture> ", request.case_id);
+                    let _ = handle.data(channel, response.into_bytes()).await;
+                });
+            }
             None => {}
         }
         Ok(())
@@ -616,6 +627,12 @@ struct PasteRequest {
     bytes: usize,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct BellRequest {
+    case_id: String,
+    delay_ms: u64,
+}
+
 #[derive(Clone, Debug)]
 struct PasteTransfer {
     case_id: String,
@@ -628,6 +645,7 @@ enum FixtureCommand {
     Perf(PerfCommand),
     Paste(PasteRequest),
     InputCheck(String),
+    Bell(BellRequest),
 }
 
 fn parse_fixture_command(input: &[u8]) -> Option<FixtureCommand> {
@@ -641,6 +659,18 @@ fn parse_fixture_command(input: &[u8]) -> Option<FixtureCommand> {
     if kind == INPUT_CHECK_COMMAND {
         return (parts.next().is_none() && is_valid_perf_case_id(case_id))
             .then(|| FixtureCommand::InputCheck(case_id.to_string()));
+    }
+    if kind == BELL_COMMAND {
+        let delay_ms = parts.next()?.parse::<u64>().ok()?;
+        return (parts.next().is_none()
+            && is_valid_perf_case_id(case_id)
+            && (BELL_MIN_DELAY_MS..=BELL_MAX_DELAY_MS).contains(&delay_ms))
+        .then(|| {
+            FixtureCommand::Bell(BellRequest {
+                case_id: case_id.to_string(),
+                delay_ms,
+            })
+        });
     }
     if kind != PASTE_PREPARE_COMMAND {
         return None;
@@ -964,6 +994,17 @@ mod tests {
             Some(FixtureCommand::InputCheck("input01".to_string()))
         );
         assert_eq!(parse_fixture_command(b"ltty-input-check bad:id"), None);
+        assert_eq!(
+            parse_fixture_command(b"ltty-bell bell01 800"),
+            Some(FixtureCommand::Bell(BellRequest {
+                case_id: "bell01".to_string(),
+                delay_ms: 800,
+            }))
+        );
+        assert_eq!(parse_fixture_command(b"ltty-bell bell01 99"), None);
+        assert_eq!(parse_fixture_command(b"ltty-bell bell01 5001"), None);
+        assert_eq!(parse_fixture_command(b"ltty-bell bad:id 800"), None);
+        assert_eq!(parse_fixture_command(b"ltty-bell bell01 800 extra"), None);
     }
 
     #[test]

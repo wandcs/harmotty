@@ -2,7 +2,7 @@
 
 > Status: current-source user contract
 >
-> Last updated: 2026-08-03
+> Last updated: 2026-08-08
 >
 > Applies to: the current repository `main`/`Unreleased` behavior. The public
 > 1.0.1 release may not contain every command described here; check the matching
@@ -202,9 +202,12 @@ recommended command surface.
 | Action | Current interaction |
 | --- | --- |
 | New tab | `Ctrl+Shift+T` |
+| Next/previous tab | `Ctrl+Tab`, `Ctrl+Shift+Tab` |
 | Split the current tab | `Ctrl+Shift+D` |
+| Focus the left/right pane | `Ctrl+Alt+Left`, `Ctrl+Alt+Right` |
 | Close the active pane | `Ctrl+Shift+W` |
-| Increase/decrease/reset font size | `Ctrl+=`, `Ctrl+-`, `Ctrl+0` |
+| Search the current terminal surface | Four-dot menu or `Ctrl+Alt+F`; Enter/Shift+Enter move next/previous, Escape closes |
+| Increase/decrease/reset font size | Four-dot menu `−`/`+`, or `Ctrl+=`, `Ctrl+-`, `Ctrl+0` |
 | Copy a local selection | `Ctrl+C`; without a selection it remains terminal `Ctrl+C` |
 | Paste | `Ctrl+V` or secondary click when no selection exists |
 | Secondary-click with a selection | Copy the selection |
@@ -218,6 +221,30 @@ does not support OSC 52 clipboard reads.
 
 The split divider can be dragged. When it has keyboard focus, Left/Right adjust
 the ratio and Enter resets the split to equal widths.
+
+Search belongs only to the current pane and its in-memory terminal surface. It
+does not search another pane, tab, remote file, command history or a destroyed
+session. Closing search restores terminal focus without sending the query to
+the remote session. An empty query and an unsuccessful query are both shown
+compactly as `0/0`, while accessibility distinguishes “Type to search” from
+“No results”.
+
+The terminal content and top Chrome use coordinated, restrained translucent
+surfaces with one fixed HarmonyOS Regular background material at the window
+root. Open the four-dot menu and use the minus and plus buttons
+beside **Transparency** to step through Off, Low, Medium, High and Extreme.
+Medium is the default; the range does not wrap, its boundary button is disabled,
+and the menu stays open for direct comparison. Left and Right adjust the selected
+row from the keyboard. **Font Size** uses the same `− current +` interaction;
+`Ctrl+0` remains the reset shortcut. The selected transparency level is restored
+after a normal application restart but is not part of the uninstall-surviving asset
+set. Off and platforms that cannot enable window transparency fall back to an
+opaque surface without material. Explicit terminal and TUI background colors
+remain authoritative. A BEL briefly emphasizes its source tab. If the source is
+not active, the tab's
+leading status dot remains amber until that pane is entered; a non-focused pane
+in the current split also shows a small marker beside the divider. BEL never
+draws a warning frame around the terminal content.
 
 ## Data retention and uninstall
 
