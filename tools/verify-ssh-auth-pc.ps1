@@ -761,6 +761,41 @@ function Get-AuthPerfRenderRecord {
     throw "[harness] PERF render record was not found for $CaseId"
 }
 
+function Invoke-AuthPerfSample {
+    param([Parameter(Mandatory = $true)][string]$CaseId)
+    for ($commandAttempt = 1; $commandAttempt -le 2; $commandAttempt++) {
+        $preparedPattern = "perf case=$CaseId bytes=696000 state=prepared"
+        $preparedCount = Get-FixtureLogMatchCount -Pattern ([regex]::Escape($preparedPattern))
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Submit-ConnectedInput -Text "ltty-perf-prepare $CaseId 12000 80"
+        Wait-FixtureLogMatchCount `
+            -Pattern ([regex]::Escape($preparedPattern)) `
+            -GreaterThan $preparedCount `
+            -TimeoutSeconds 15 | Out-Null
+
+        $runPattern = "perf case=$CaseId state=run"
+        $runCount = Get-FixtureLogMatchCount -Pattern ([regex]::Escape($runPattern))
+        Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
+        Submit-ConnectedInput -Text "ltty-perf-run $CaseId"
+        try {
+            Wait-FixtureLogMatchCount `
+                -Pattern ([regex]::Escape($runPattern)) `
+                -GreaterThan $runCount `
+                -TimeoutSeconds 8 | Out-Null
+        } catch {
+            if ($commandAttempt -lt 2) { continue }
+            throw "[harness] Fixture did not accept the PERF run command for $CaseId after two attempts"
+        }
+        Wait-AuthLog `
+            -Pattern ('PERF render .*"caseId":"' + $CaseId + '".*"completenessPercent":100') `
+            -TimeoutSeconds 30
+        $record = Get-AuthPerfRenderRecord -CaseId $CaseId
+        $record | Add-Member -NotePropertyName commandAttempts -NotePropertyValue $commandAttempt
+        return $record
+    }
+    throw "[harness] PERF sample did not complete for $CaseId"
+}
+
 function Wait-AuthPaneCount {
     param(
         [Parameter(Mandatory = $true)][ValidateRange(1, 2)][int]$Count,
@@ -1244,14 +1279,7 @@ try {
         -Pattern 'paste case=russhmain bytes=524288 result=matched' `
         -TimeoutSeconds 30 | Out-Null
 
-    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-ConnectedInput -Text 'ltty-perf-prepare russhmain 12000 80'
-    Wait-FixtureLog -Pattern 'perf case=russhmain bytes=696000 state=prepared' -TimeoutSeconds 15 | Out-Null
-    Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-    Submit-ConnectedInput -Text 'ltty-perf-run russhmain'
-    Wait-AuthLog `
-        -Pattern 'PERF render .*"caseId":"russhmain".*"completenessPercent":100' `
-        -TimeoutSeconds 30
+    Invoke-AuthPerfSample -CaseId 'russhmain' | Out-Null
 
     $resizeCount = Get-FixtureLogMatchCount -Pattern 'resize cols=\d+ rows=\d+'
     Split-AuthPane
@@ -1301,17 +1329,7 @@ try {
         $memorySamples = [Collections.Generic.List[object]]::new()
         for ($sampleIndex = 1; $sampleIndex -le 3; $sampleIndex++) {
             $caseId = $modeSlug + '0' + $sampleIndex.ToString()
-            Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-            Submit-ConnectedInput -Text "ltty-perf-prepare $caseId 12000 80"
-            Wait-FixtureLog `
-                -Pattern ('perf case=' + $caseId + ' bytes=696000 state=prepared') `
-                -TimeoutSeconds 15 | Out-Null
-            Clear-LeanTTYAppLogs -Hdc $hdc -Target $Target
-            Submit-ConnectedInput -Text "ltty-perf-run $caseId"
-            Wait-AuthLog `
-                -Pattern ('PERF render .*"caseId":"' + $caseId + '".*"completenessPercent":100') `
-                -TimeoutSeconds 30
-            $renderSamples.Add((Get-AuthPerfRenderRecord -CaseId $caseId))
+            $renderSamples.Add((Invoke-AuthPerfSample -CaseId $caseId))
             $memorySamples.Add([pscustomobject][ordered]@{
                 sample = $sampleIndex
                 processes = @(Get-AuthProcessMemorySample)

@@ -424,7 +424,7 @@ foreach ($scriptName in @(
             $content.Contains("'ltty-paste-prepare russhmain 524288'") -and
             $content.Contains("'Clipboard paste ok,524288'") -and
             $content.Contains("'uitest uiInput keyEvent 2072 2045 2038'") -and
-            $content.Contains("'ltty-perf-prepare russhmain 12000 80'") -and
+            $content.Contains("Invoke-AuthPerfSample -CaseId 'russhmain'") -and
             $content.Contains('"completenessPercent":100') -and
             $content.Contains("'resize cols=\d+ rows=\d+'") -and
             $content.Contains('Wait-AuthPaneCount -Count 1')
@@ -432,8 +432,9 @@ foreach ($scriptName in @(
         Assert-True (
             $content.Contains("'performance-matrix'") -and
             $content.Contains("@('Off', 'Low', 'Medium', 'High', 'Extreme')") -and
-            $content.Contains('ltty-perf-prepare $caseId 12000 80') -and
-            $content.Contains("'perf case=' + `$caseId + ' bytes=696000 state=prepared'") -and
+            $content.Contains('Invoke-AuthPerfSample -CaseId $caseId') -and
+            $content.Contains('Fixture did not accept the PERF run command') -and
+            $content.Contains('commandAttempts') -and
             $content.Contains('renderSamples = @($renderSamples)') -and
             $content.Contains('memorySamples = @($memorySamples)') -and
             $content.Contains("hidumper -s 10 -a 'hitchs app0'") -and
