@@ -1,6 +1,6 @@
 # 终端 scrollback 搜索技术方案
 
-> 状态：Implemented；最终候选验收待 1.2 收尾统一执行
+> 状态：候选客观门禁通过；真实物理键盘/输入法与用户服务器 TUI 待人工收口
 >
 > milestone：1.2.0
 >
@@ -144,7 +144,7 @@ Terminal Surface；不重排网格可以避免搜索本身触发 PTY resize。�
   只向应用交付 Ctrl 与 Shift，F 在应用入口前消失，原始左 Shift 序列还出现输入法切换
   提示。用户随后用物理键盘确认该 chord 会触发输入法简繁切换，因此 `Ctrl+Shift+F`
   已被裁剪且不保留兼容别名。唯一入口改为 `Ctrl+Alt+F`；HDC 三键组合和物理键盘都能
-  正常打开产品搜索。中英文逐字输入和远端 TUI 透传仍按最终物理机矩阵完整验收，不能
+  正常打开产品搜索。中英文逐字输入和远端 TUI 透传仍按最后人工边界完整验收，不能
   由一次打开成功替代。
 - 2026-08-08 的 1.2 最终候选验收确认：鸿蒙飞书在前台或后台运行时会抢占
   `Ctrl+Shift+W`，关闭飞书后 LeanTTY 的关闭 Pane 快捷键正常。这是第三方应用的全局
@@ -372,16 +372,44 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 
 本轮没有运行 `tools/test-regression.ps1`、`tools/verify-pc.ps1` 或完整命名物理矩阵；它们
 仍只用于正式候选。selection/link/TUI、输入法、大 scrollback、持续输出和 renderer 重建
-等剩余设备行为继续保留在 `next-work.md` 的最终物理机矩阵，不能由这里的开发期记录代替。
+等剩余设备行为在当时继续保留在 `next-work.md` 的最终物理机矩阵，不能由这里的开发期记录代替。
 
-## 实现中仍须验证
+## 2026-08-08 1.2 保留候选验收
 
-- 在物理 PC 上继续验证终端指针事件关闭搜索后进入实际 selection/link/mouse 路径、搜索
-  浮层 secondary action 隔离，以及主题和 viewport 切换的可见结果；同时回归 `Ctrl+C`、
-  OSC 52、HTTP(S)/OSC 8 链接和 tmux/vim/less 鼠标模式。搜索面板自身点击不误关搜索、
-  终端点击释放搜索 selection 并恢复焦点已由上述 `93a924c` 实机证据闭合。
+正式候选来自已推送提交 `59a8cbfb50f7c67931881169a8695a303f22a718`、tree
+`9b3a4437058d27f621bb41c1b0b5c04b90d0be16`；测试签名 ARM64 HAP 为 10,261,825 bytes，
+SHA-256 `3f9e20b195d1353fdd2f59eb2134dbafb018d9baeac06b775dc0f68cbbf9119b`。保留 manifest 和
+软件门禁位于本机 verified-candidate store；软件门禁覆盖 Web policy、77 项 ArkTS、Rust
+format/Clippy/core/native/fixture tests、干净 ARM64 构建、安装和启动。
 
-## 初步验证门禁
+同一候选在 HAD-W32（USB、`arm64-v8a`）上的正式搜索证据位于
+`C:\tmp\leantty-1.2-final-search-retained-20260808-rerun2\device-terminal-search.json`：
+
+- 结果为 `device-behavior / acceptance / passed`，候选和 harness 都记录 commit/tree，
+  candidate 由保留库解析而不是显式诊断 HAP；五个命名阶段总耗时 509,955 ms。
+- `open-close-focus`、逐字 `l → lt → ltt → ltty`、空/无结果、两个结果的正反向回绕、
+  双 Pane、跨 Tab、30 秒 warm 淘汰和 window/renderer 生命周期全部通过。右 Pane 不读取
+  左 Pane scrollback，新 Tab 不读取旧 Tab 查询，renderer 重建后查询不复活。
+- 每个阶段保留 layout/截图和阶段耗时；最终搜索关闭、单 Tab/单 Pane恢复、Terminal input
+  焦点恢复、屏幕常亮租约恢复，cleanup 为 `passed`。
+- 早期诊断记录曾把隐藏 warm Surface 当作活动 Pane，并把清理误判为失败；修正 detector 后
+  的生命周期单项通过，最终保留候选全矩阵也一次通过。旧失败 JSON 仍保留，未覆盖或改写。
+
+自动化和真机注入共同覆盖普通文本、Unicode/宽字符、软换行、大 scrollback、持续输出、
+normal/alternate buffer、selection/clipboard/OSC/link/mouse policy、resize 与 renderer
+重建；HDC chord 证明生产 `Ctrl+Alt+F` 路由，但证据明确声明它不能替代真实物理键盘和
+中英文 IME。
+
+## 人工验收边界
+
+- 关闭鸿蒙飞书后，用真实物理键盘和中英文输入法完成组合输入、导航、关闭和焦点恢复，
+  并确认 `Ctrl+Alt+F` 与系统/输入法没有不可接受冲突。飞书的 `Ctrl+Shift+W` 抢占只按
+  已记录的环境问题处理，不再修改 LeanTTY。
+- 在用户实际 SSH 服务器上回归 tmux、vim、less 与主流 Agent TUI 的 selection、OSC 52、
+  HTTP(S)/OSC 8、鼠标与滚轮路径；仓库 fixture 和 Web policy 只能证明协议代表行为，不能
+  冒充这些真实程序的主观可用性。
+
+## 已完成的门禁与人工边界
 
 ### 自动化
 
@@ -392,10 +420,10 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 
 ### ARM64 构建与物理 PC
 
-- 干净 ARM64 HAP 集成新增前端能力，无隐式在线资源。
-- 物理键盘与中英文输入法输入、双 Pane 归属、焦点恢复、复制选择、链接、tmux/vim/
-  less 等 TUI 回归。
-- 大 scrollback 的打开、逐字输入、跳转和关闭保持及时；先建立基线再确定性能门槛。
+- 干净 ARM64 HAP、双 Pane/Tab 归属、焦点恢复、warm 淘汰、renderer 生命周期和大
+  scrollback 的候选客观门禁已完成，无隐式在线资源。
+- 真实物理键盘/中英文输入法和用户服务器 tmux/vim/less/Agent TUI 仍按上一节人工收口；
+  不用 HDC 注入或 fixture 名称替代。
 
 ## 基线闭合结论
 
@@ -405,9 +433,8 @@ SerializeAddon 快照恢复、字体缩放、fit/resize、binary output ACK 和�
 3. 所有权可以局部留在 Terminal Surface，不增加跨 Session 索引或持久状态。
 4. 官方 search addon 已通过来源、许可证、体积和源码/打包兼容审计；ArkWeb 行为仍按
    实现后真机门禁验证，不把上游浏览器支持声明替代设备证据。
-5. 物理 PC 的持续输出、大 scrollback、资源分布和后续搜索测量协议已有可复验基线；
-   快捷键基线已由实现后诊断和物理键盘证据修正，交互基线重新闭合；正式候选仍须按
-   最终自动化、生命周期和冲突门禁逐项完成。
+5. 1.2 保留候选的搜索自动化、物理 PC 所有权、warm 淘汰和 renderer 生命周期已经闭合；
+   只剩真实物理键盘/中英文输入法和用户服务器 TUI 的人工判断，不能由设备注入代签。
 
 如果最小搜索仍要求通用命令面板、跨 Session 索引或高成本前端替换，应停止该方案并
 重新评估问题，而不是为了维持 1.2 版本号扩大架构。

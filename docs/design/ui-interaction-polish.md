@@ -1,6 +1,6 @@
 # 桌面终端界面与交互收敛
 
-> 状态：Implemented；最终候选验收待 1.2 收尾统一执行
+> 状态：候选客观门禁通过；真实键盘/TUI/reduced-motion 与主观观感待人工收口
 >
 > milestone：1.2
 >
@@ -93,7 +93,8 @@ Terminal Surface 独占。透明效果不得暴露新的终端内容副本，也
 - xterm 的 `allowTransparency` 必须在 `open` 前确定，并明确可能增加性能成本。当前实现
   让活动态 PC 容器和原生内容窗口透明，仅由 ArkUI 根 Surface 持有选定 alpha；ArkWeb、
   HTML/body 和 xterm/WebGL 保持全透明，避免多层 alpha 叠加。物理 PC 已证明五档
-  Chrome/Content 分层合成链成立，正式候选仍需完成同机性能、TUI 和生命周期矩阵。
+  Chrome/Content 分层合成链成立；正式候选同机性能和生命周期已完成，真实用户服务器
+  TUI 与主观可读性仍按人工边界收口。
 - 现有深浅主题已统一 Chrome、Terminal、divider、text、accent、attention、focus 与
   Pane 控件 token；生产路径中三个确认无引用的旧组件已删除。
 
@@ -487,9 +488,72 @@ Search、Transparency/Font Size 两个步进器、Medium→Extreme→Medium、16
 两个 known_hosts 端点、HDC reverse、fixture 进程/控制目录、额外 Tab 和屏幕常亮租约均
 已清理。
 
-这些是实现与定向验收证据。当前产品深色主题下的窗口尺寸全矩阵、真实物理键盘、连续 BEL、系统
-reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正式候选门禁，因此本文
-保持 `Implementing`，透明也仍可按既定路径回退。
+这些是实现与定向验收证据。后续正式候选结果见下一节；历史调试 HAP 不因最终候选通过而
+改写为发布证据。
+
+## 2026-08-08 1.2 保留候选验收
+
+正式候选来自已推送提交 `59a8cbfb50f7c67931881169a8695a303f22a718`、tree
+`9b3a4437058d27f621bb41c1b0b5c04b90d0be16`；测试签名 ARM64 HAP 为 10,261,825 bytes，
+SHA-256 `3f9e20b195d1353fdd2f59eb2134dbafb018d9baeac06b775dc0f68cbbf9119b`。所有下述设备证据
+都复用这个 HAP；候选后的提交只修改仓库验收 fixture、脚本和文档，候选兼容检查没有发现
+产品输入变化。
+
+### UI、搜索、透明与 BEL
+
+- UI/window 证据位于 `C:\tmp\leantty-1.2-final-ui-window-20260808`。普通、最大化和窄窗
+  分别可见 7/8/3 个裁剪 Tab，固定 `+`、四点菜单、系统按钮、表面区分、空搜索 `0/0`、
+  双 Pane 全高分隔及窗口恢复均可见。原 `device-ui-window.json` 的总结果作废，因为它把
+  “可见 Tab”当总 Tab、把空查询的可访问说明 `Type to search` 当作可视计数、把隐藏 warm
+  WebView 当活动 Pane，并漏掉关闭确认；没有覆盖该文件。校正后的 layout/截图复核和截图
+  SHA-256 写入 `device-ui-window-reviewed.json`，结果为 `passed`。
+- 保留候选搜索全矩阵位于
+  `C:\tmp\leantty-1.2-final-search-retained-20260808-rerun2\device-terminal-search.json`，
+  `device-behavior / acceptance / passed`；五个命名阶段、单 Tab/Pane恢复和常亮租约清理均通过。
+- 五档透明证据位于
+  `C:\tmp\leantty-1.2-final-transparency-20260808-rerun1\device-transparency.json`，结果
+  `passed`。设备实测 Content/Chrome alpha 为 Off `FF/FF`、Low `E6/F0`、Medium `D1/E0`、
+  High `B8/CC`、Extreme `99/B3`；Extreme 加号禁用、重启保持 Extreme、边界不循环，最后
+  恢复 Medium 并关闭菜单。
+- BEL 证据位于
+  `C:\tmp\leantty-1.2-final-bell-20260808-rerun4\device-ssh-auth.json`，结果 `passed`。
+  活动 Pane 瞬时提示、后台 Tab 持久标记与进入清除、分屏局部来源与聚焦清除、重复 BEL
+  合并全部由真实 `SSH → Rust/N-API → ArkTS → Tab/Pane` 链路确认；截图保留活动、后台 Tab
+  和分屏三种状态，cleanup 与 Preferences 不变检查通过。
+
+### 五档持续输出分布
+
+HAD-W32 使用 HUAWEI Maleoon 916、OpenGL ES 3.2 B289。证据位于
+`C:\tmp\leantty-1.2-final-performance-20260808-rerun12\device-ssh-auth.json`；每档连续三次
+12,000 × 80 流均为 100% 完整，三个 hitch 计数档位的增量全部为 0：
+
+| 档位 | rendered min / P50 / max | 完整度 | 主进程 RSS 采样范围 |
+| --- | ---: | ---: | ---: |
+| Off | 2647.5 / 2682.4 / 2752.6 ms | 3 × 100% | 268,636–277,544 KiB |
+| Low | 2602.5 / 2687.3 / 2738.8 ms | 3 × 100% | 283,684–292,372 KiB |
+| Medium | 2793.5 / 2824.5 / 2826.5 ms | 3 × 100% | 298,688–305,320 KiB |
+| High | 2589.8 / 2610.8 / 2764.3 ms | 3 × 100% | 310,396–314,512 KiB |
+| Extreme | 2749.4 / 2762.8 / 2875.3 ms | 3 × 100% | 317,708–321,188 KiB |
+
+RSS 是同一进程按 Off→Extreme 顺序累计输出后的采样，不能解释成透明度本身的档位成本；
+renderer RSS 约 239,928–250,676 KiB，RenderService GPU 样本通常为 2 MiB。时延没有随
+透明强度单调恶化，Extreme 仍在同轮总体分布内，未出现输出缺失、renderer 中断或 hitch
+累计，因此没有触发撤 Regular 或降低透明度的停止条件。
+
+性能阶段本身和资源清理均为 `passed`，但该 JSON 的顶层结果保留为 `failed`：完成采样后
+HDC 吞掉最终 `ssh-keygen -R` 的 Enter 提交遥测。该假阴性促使断开态命令也采用三次有界
+重试；随后短场景
+`C:\tmp\leantty-1.2-final-cleanup-20260808-rerun1\device-ssh-auth.json` 完整通过候选预检、
+密码连接、Preferences 不变、known_hosts 删除及 key/reverse/fixture 独立清理。失败记录仍
+保留，不把顶层字段改写成通过。
+
+### 剩余人工边界
+
+客观设备矩阵已经覆盖当前深色主题的窗口尺寸、Tab/Pane、搜索、五档 alpha/Regular、BEL
+状态、持续输出、最小化/恢复和 renderer 生命周期。HDC 不能代替以下人为判断：真实物理
+键盘 Tab/Shift+Tab focus ring；中英文 IME；用户服务器上的 tmux/vim/less/Agent TUI；
+Extreme 的长期可读性；BEL 节奏是否舒适；系统 reduced-motion。设置搜索只找到“开发者
+选项 → 过渡动画缩放”，本轮没有改动它，也不把开发者动画倍率冒充用户级 reduced-motion。
 
 ## 验证边界
 
@@ -513,16 +577,17 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
 
 ### 物理 HarmonyOS PC 证明
 
-最终验收在实现和自动化闭合后进行，并与搜索剩余门禁一起排在 1.2 收尾阶段：
+保留候选已完成的客观物理门禁包括：
 
 - 当前产品深色主题下的普通/最大化/窄窗口、多 Tab 溢出、`+`、拖拽区、双 Pane 和搜索条
   可见边界；浅色 token 由自动化约束，不为验收增加产品入口。
-- 物理键盘 Tab/Shift+Tab 导航、focus ring、系统窗口按钮与拖拽不回归。
-- 活动 Pane、非活动 Tab、非焦点分屏和连续 BEL 的动画、静态标记、清除及 reduced-motion。
-- 轻透明下普通 Shell、tmux、vim、less、Agent TUI、selection、搜索高亮、链接、鼠标上报、
-  大持续输出、滚动、resize、最小化/恢复和 renderer 重建。
+- 活动 Pane、非活动 Tab、非焦点分屏和连续 BEL 的状态、重复合并、清除与销毁。
+- 轻透明下普通 Shell、搜索高亮、大持续输出、resize、最小化/恢复和 renderer 重建。
 - 记录目标设备、精确 HAP/commit、截图或录屏、layout/hilog、重试和清理结果；先比较
   不透明与候选透明的分布和失败域，不用单次主观感受代替证据。
+
+仍需人工完成真实物理键盘 focus ring、中英文输入法、用户服务器 TUI、主观可读性/BEL
+节奏和系统 reduced-motion；详情以 `docs/next-work.md` 的两项活动工作为准。
 
 ## 裁剪与停止条件
 
@@ -539,6 +604,9 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
 
 ## 决策记录
 
+- 2026-08-08：精确保留候选完成 UI/window 证据复核、搜索、SSH 主路径、BEL、五档透明与
+  五档持续输出分布；候选客观停止条件均未触发。真实键盘/IME、用户服务器 TUI、主观观感
+  和系统 reduced-motion 不由 HDC 代签，继续保留为最后人工门禁。
 - 2026-08-08：提交前审查保持 `tab.id` 为稳定渲染身份，BEL 呼吸由瞬时 token/Prop 触发，
   不再通过改变 ForEach key 重建整个 Tab，避免提示动画干扰 Tab/关闭按钮焦点与组件状态。
 - 2026-08-08：用户通过调试比较器选择 Regular；正式实现固定一次根级
@@ -555,11 +623,11 @@ reduced-motion、常见 TUI、性能分布和 renderer 生命周期仍属于正�
   96vp 拖拽区，通过分隔和条件淡出表达边界。
 - 2026-08-07：确认搜索条紧凑化、分屏/图标/焦点/主题一致性进入同一 1.2 收敛切片。
 - 2026-08-07：首轮采用 0.97、无 blur 的轻透明候选；采用有限 Tab 强调、前导状态点和
-  分屏来源点；定向自动化、ARM64 构建与物理 PC 场景通过，正式候选矩阵仍待最终验收完成。
+  分屏来源点；当时定向自动化、ARM64 构建与物理 PC 场景通过，正式候选矩阵尚未执行。
 - 2026-08-07：二次走查确认终端现有留白与右侧 scrollbar 的视觉平衡成立，不作修改；
   修正 Tab 间分隔与内容基线、`0/0` 搜索反馈、搜索/Pane 关闭间距、四点菜单和分屏线权重，
   并采用高 `0.78`、中 `0.88`、低 `0.96` 三档内容透明度及本地重启持久化。
 - 2026-08-08：用活动态透明、非活动态不透明的 PC 容器配置闭合系统合成层；ArkUI 根
   Surface 成为唯一 alpha 所有者，ArkWeb/xterm WebGL 全透明透传，能力失败回退为不透明。
-  HAD-W32 已确认三档标签/alpha 一致、菜单连续循环和 Low 重启恢复；完整候选矩阵仍留在
-  `next-work.md` 的最终物理机矩阵。
+  HAD-W32 当时已确认三档标签/alpha 一致、菜单连续循环和 Low 重启恢复；该历史矩阵后来
+  被五档保留候选验收取代。

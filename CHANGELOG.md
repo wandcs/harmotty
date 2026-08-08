@@ -42,6 +42,14 @@
   backpressure cannot block output handling, local cancellation or transport
   disconnect detection.
 
+### Documentation
+
+- Recorded the exact retained 1.2 candidate and physical ARM64 PC evidence for
+  terminal search ownership/lifecycle, UI/window review, SSH transport, BEL,
+  five transparency levels and continuous-output performance distributions.
+  Remaining acceptance is limited to real keyboard/IME, user-server TUI,
+  reduced-motion and subjective visual checks before release packaging.
+
 ## [1.1.1] - 2026-08-06
 
 ### Fixed
