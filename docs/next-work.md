@@ -32,29 +32,16 @@ scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛�
 `59a8cbfb50f7c67931881169a8695a303f22a718` 建立干净 ARM64 保留候选；HAP SHA-256 为
 `3f9e20b195d1353fdd2f59eb2134dbafb018d9baeac06b775dc0f68cbbf9119b`。正式软件门禁、
 SSH 主路径、保留候选搜索矩阵、窗口/UI 证据复核、BEL、五档透明和五档持续输出性能矩阵
-已经完成，详情进入两份设计文档。不得在候选形成后继续加入无关功能。
+已经完成；用户随后用真实物理键盘、中英文输入法和实际 SSH 服务器完成搜索、focus ring、
+tmux/vim/less/Agent TUI、Medium/Extreme 可读性及 BEL 节奏验收，均未发现问题。详情进入
+两份设计文档。不得在候选形成后继续加入无关功能。
 
 完成 1.2 必须满足：所有产品改动进入精确且已推送的提交；正式软件门禁与干净 ARM64
 候选通过；同一个保留候选完成全部适用的物理 HarmonyOS PC 场景；设计、版本、签名、
 归档、GitHub Release 和 AppGallery 记录可追溯。安装、启动或工作树截图不能替代行为验收。
 
-## 1. 完成不能由设备注入替代的人工验收
+## 1. 收口与发布
 
-- [ ] 关闭鸿蒙飞书后，用真实物理键盘和中英文输入法完成搜索打开、逐字组合输入、下一处、
-  上一处、首尾回绕、空查询、无结果、关闭与焦点恢复；确认 `Ctrl+Alt+F` 没有不可接受的
-  系统/输入法冲突，并用 Tab/Shift+Tab 确认可见 focus ring。飞书只会抢占
-  `Ctrl+Shift+W`；若按键后前台切到飞书，应关闭飞书重试，不修改 LeanTTY。
-- [ ] 在用户实际 SSH 服务器上用 Medium 和 Extreme 各完成一轮 tmux、vim、less 与一个
-  主流 Agent TUI，检查中文/宽字符、alternate buffer、selection、复制粘贴、OSC 52、
-  HTTP(S)/OSC 8 链接、鼠标上报、滚轮和 resize，并主观确认 Extreme 可读性及 BEL 节奏。
-  当前 HAD-W32 设置搜索对“减少动态效果”无结果；“动画”只返回开发者选项的过渡动画
-  缩放。SDK 只提供 reduced-motion 状态读取、没有设置接口，因此当前目标系统的用户级
-  reduced-motion 场景记为不适用，不改开发者倍率；静态降级仍由自动化门禁约束。
-
-## 2. 收口与发布
-
-- [ ] 上述两项人工场景通过后，把两份设计文档从“候选客观门禁通过”更新为 `Verified`，记录最终采用/裁剪决定、精确
-  commit、HAP/APP 哈希和证据索引；把 Changelog 的 `In development` 日期替换为发布日期。
 - [ ] 按 [`release-process.md`](release-process.md) 在隔离的 production/review checkout
   构建同 commit/tree/version/ABI/native 输出的生产 APP/HAP 与 review-test HAP，验证签名、
   manifest、artifact roles 和 clean tree；只用 review-test HAP 做最终真机 smoke 和商店媒体。

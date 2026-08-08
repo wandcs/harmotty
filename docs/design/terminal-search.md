@@ -1,6 +1,6 @@
 # 终端 scrollback 搜索技术方案
 
-> 状态：候选客观门禁通过；真实物理键盘/输入法与用户服务器 TUI 待人工收口
+> 状态：Verified
 >
 > milestone：1.2.0
 >
@@ -400,16 +400,16 @@ normal/alternate buffer、selection/clipboard/OSC/link/mouse policy、resize 与
 重建；HDC chord 证明生产 `Ctrl+Alt+F` 路由，但证据明确声明它不能替代真实物理键盘和
 中英文 IME。
 
-## 人工验收边界
+## 人工验收结果
 
-- 关闭鸿蒙飞书后，用真实物理键盘和中英文输入法完成组合输入、导航、关闭和焦点恢复，
-  并确认 `Ctrl+Alt+F` 与系统/输入法没有不可接受冲突。飞书的 `Ctrl+Shift+W` 抢占只按
-  已记录的环境问题处理，不再修改 LeanTTY。
-- 在用户实际 SSH 服务器上回归 tmux、vim、less 与主流 Agent TUI 的 selection、OSC 52、
-  HTTP(S)/OSC 8、鼠标与滚轮路径；仓库 fixture 和 Web policy 只能证明协议代表行为，不能
-  冒充这些真实程序的主观可用性。
+- 2026-08-08，用户关闭鸿蒙飞书后，用真实物理键盘和中英文输入法完成组合输入、导航、
+  关闭、焦点恢复及 focus ring 检查，未发现问题；`Ctrl+Alt+F` 没有不可接受的系统或
+  输入法冲突。飞书的 `Ctrl+Shift+W` 抢占继续只按已记录的环境问题处理。
+- 同日，用户在实际 SSH 服务器上完成 tmux、vim、less 与主流 Agent TUI 的 Medium/Extreme
+  回归，覆盖 selection、OSC 52、HTTP(S)/OSC 8、鼠标、滚轮、resize、可读性和 BEL 节奏，
+  未发现问题。
 
-## 已完成的门禁与人工边界
+## 已完成的验收
 
 ### 自动化
 
@@ -422,8 +422,8 @@ normal/alternate buffer、selection/clipboard/OSC/link/mouse policy、resize 与
 
 - 干净 ARM64 HAP、双 Pane/Tab 归属、焦点恢复、warm 淘汰、renderer 生命周期和大
   scrollback 的候选客观门禁已完成，无隐式在线资源。
-- 真实物理键盘/中英文输入法和用户服务器 tmux/vim/less/Agent TUI 仍按上一节人工收口；
-  不用 HDC 注入或 fixture 名称替代。
+- 真实物理键盘/中英文输入法和用户服务器 tmux/vim/less/Agent TUI 已由用户按上一节完成；
+  该结论来自人工验收，不用 HDC 注入或 fixture 名称替代。
 
 ## 基线闭合结论
 
@@ -434,7 +434,7 @@ normal/alternate buffer、selection/clipboard/OSC/link/mouse policy、resize 与
 4. 官方 search addon 已通过来源、许可证、体积和源码/打包兼容审计；ArkWeb 行为仍按
    实现后真机门禁验证，不把上游浏览器支持声明替代设备证据。
 5. 1.2 保留候选的搜索自动化、物理 PC 所有权、warm 淘汰和 renderer 生命周期已经闭合；
-   只剩真实物理键盘/中英文输入法和用户服务器 TUI 的人工判断，不能由设备注入代签。
+   真实物理键盘/中英文输入法和用户服务器 TUI 也已完成人工验收。
 
 如果最小搜索仍要求通用命令面板、跨 Session 索引或高成本前端替换，应停止该方案并
 重新评估问题，而不是为了维持 1.2 版本号扩大架构。
