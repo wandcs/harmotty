@@ -417,7 +417,10 @@ Window compositor(active transparent; inactive opaque)
 - 动画运行状态是短生命周期 UI 状态，不持久化、不进入 Session、不经过 SSH Bridge。
 - 搜索查询与布局继续由 Terminal Surface 独占；本轮只改变其 CSS/布局。
 - 四点菜单 Search 只调用当前活动 Pane 的既有 `openSearch`；Transparency 和 Font Size 都是
-  单焦点 `[−] 当前值 [+]` 复合行，Left/Right 调整且不关闭菜单，`Ctrl+0` 保留字号重置。
+  单焦点 `[−] 当前值 [+]` 复合行，Left/Right 调整且不关闭菜单。字号全局使用
+  `Ctrl+-` / `Ctrl+=`，透明度使用同一增减语义的 `Ctrl+Alt+-` / `Ctrl+Alt+=`，Alt 层必须
+  阻止透明度调整误入字号分支；`Ctrl+0` 保留字号重置。四个按钮使用平台原生 hover Tips
+  显示各自快捷键，并在无障碍说明中包含同一键位。
 - 主题 token 是颜色与层次的唯一来源；`ThemeManager` 统一派生 Chrome/Content 两个
   非重叠 ArkUI Surface 的 ARGB，Web/xterm 背景保持透明，透明能力检测与回退只决定表现，
   不改变业务状态。
@@ -465,6 +468,9 @@ AttentionService 或 SurfaceEffect 抽象。无引用旧组件的删除必须独
 - Tab 间竖线已移除，所有 Tab 表面接到内容区基线；搜索条仍为 344px，结果区改为 48px，
   空查询和无结果都显示 `0/0`，右侧安全间距增加到 54px；HarmonyOS 2×2 四点菜单已恢复，
   并包含正式 Search、Transparency/Font Size 两个复合步进器；全高分屏线静态 opacity 降为 0.50。
+- 字号步进器沿用 `Ctrl+-` / `Ctrl+=`，透明度步进器新增 `Ctrl+Alt+-` / `Ctrl+Alt+=`；四个
+  全局快捷键在菜单打开或关闭时都由工作区优先处理。四个按钮使用 300ms 延迟的原生
+  `bindTips`，鼠标悬停时显示对应键位；没有引入自定义 Tooltip、计时器或覆盖层框架。
 - 删除生产路径确认无引用的 `TabBar.ets`、`PaneHeader.ets` 和 `ToolMenu.ets`，未引入依赖
   或新的状态/服务层。
 
@@ -577,6 +583,25 @@ reduced-motion 在当前目标系统记为不适用。没有改动开发者动�
 `+` 前短分隔与四点菜单保持不变。设备结束时恢复 Low。该 HAP 只证明本次定向修复，不替代
 从新精确提交重建的正式发布候选。
 
+### 2026-08-08 步进按钮快捷键与 hover 提示
+
+字号保留既有 `Ctrl+-` / `Ctrl+=`，透明度采用相同的减/加键并增加 Alt 层：
+`Ctrl+Alt+-` / `Ctrl+Alt+=`。纯策略分别返回两个目标的调整方向，字号策略明确拒绝 Alt，
+避免透明度键位同时修改字号；路由位于菜单捕获之前，因此菜单开关不改变快捷键语义。
+四个按钮的无障碍说明包含键位，视觉提示采用 HarmonyOS 原生 `bindTips`，300ms 后出现、
+离开后 100ms 消失。早期 `bindPopup` 诊断节点会被菜单层遮挡，已由真机截图否决并删除，
+没有保留第二套提示实现。
+
+Web terminal policy、静态 UI 契约和 78 项 ArkTS 单元测试通过；HAD-W32（USB、ARM64）debug
+HAP 构建、测试签名、安装和启动成功，SHA-256 为
+`A988DFA2089A5A549FB321A506650F8F86395DF5EC23F4A0ED0EC94624C7FB26`，源码基线提交为
+`cd60a83342c08e21111e57c850c9b0eaf9e34e3e` 加当前工作树改动。菜单打开和关闭两种状态都
+实测得到 `Medium/16 → Low/16 → Medium/16 → Medium/15 → Medium/16`，证明四个键位生效
+且互不串线；真实鼠标逐个悬停后，layout 中四个 Popup 均为 visible、opacity 1，并分别显示
+`Ctrl+Alt+-`、`Ctrl+Alt+=`、`Ctrl+-`、`Ctrl+=`。最终字号加提示的屏幕可见截图及逐按钮
+layout 位于 `C:\tmp\leantty-shortcut-buttons-20260808-r1`。该 debug HAP 只证明本次定向
+改动，不替代从新精确提交重建的正式发布候选。
+
 ## 验证边界
 
 ### 自动化证明
@@ -589,6 +614,7 @@ reduced-motion 在当前目标系统记为不适用。没有改动开发者动�
 - 五档透明度的数值/非循环边界/默认与深浅主题派生、Chrome/Content 分区所有权、Preferences
   恢复、已挂载 Pane 同步、xterm 初始化时机、renderer 重建策略，以及生产只含一次固定
   Regular 根材质且不含其他材质选择或自定义 blur 路径。
+- 四个步进快捷键的目标隔离、菜单开关一致性、按钮与 hover Tips 文本一一对应。
 
 自动化不能证明视觉观感、系统合成成本、物理键盘焦点或 ArkWeb/WebGL 真机行为。
 
@@ -605,6 +631,7 @@ reduced-motion 在当前目标系统记为不适用。没有改动开发者动�
   可见边界；浅色 token 由自动化约束，不为验收增加产品入口。
 - 活动 Pane、非活动 Tab、非焦点分屏和连续 BEL 的状态、重复合并、清除与销毁。
 - 轻透明下普通 Shell、搜索高亮、大持续输出、resize、最小化/恢复和 renderer 重建。
+- 菜单打开/关闭时四个步进快捷键的真实状态变化，以及四个按钮的鼠标 hover Tips 可见性。
 - 记录目标设备、精确 HAP/commit、截图或录屏、layout/hilog、重试和清理结果；先比较
   不透明与候选透明的分布和失败域，不用单次主观感受代替证据。
 
@@ -626,6 +653,9 @@ reduced-motion 在当前目标系统记为不适用。没有改动开发者动�
 
 ## 决策记录
 
+- 2026-08-08：字号沿用 `Ctrl+-` / `Ctrl+=`，透明度采用 `Ctrl+Alt+-` / `Ctrl+Alt+=`；四个
+  按钮用平台原生 hover Tips 展示键位。真机否决会被菜单遮挡的普通 Popup 实现，不建立
+  自定义 Tooltip 或覆盖层。
 - 2026-08-08：Low 档不再用局部 opacity 区分 Tab；采用 Catppuccin
   `crust → mantle → base` 的显式表面层级，并在 HAD-W32 上逐档确认。保持无 Tab 间竖线、
   固定 4vp 间距、活动 Tab 连接内容区和单一透明度设置。

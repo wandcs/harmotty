@@ -511,6 +511,17 @@ export default function interactionFixesTest() {
       expect(InteractionPolicy.isTerminalSearchShortcut(2019, true, true, false)).assertEqual(false)
     })
 
+    it('separatesTransparencyAndFontSizeAdjustmentShortcuts', 0, () => {
+      expect(InteractionPolicy.transparencyShortcutDirection(2057, true, true)).assertEqual(-1)
+      expect(InteractionPolicy.transparencyShortcutDirection(2058, true, true)).assertEqual(1)
+      expect(InteractionPolicy.transparencyShortcutDirection(2057, true, false)).assertEqual(0)
+      expect(InteractionPolicy.transparencyShortcutDirection(2058, false, true)).assertEqual(0)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2057, true, false)).assertEqual(-1)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2058, true, false)).assertEqual(1)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2057, true, true)).assertEqual(0)
+      expect(InteractionPolicy.fontSizeShortcutDirection(2058, false, false)).assertEqual(0)
+    })
+
     it('consumesPaneNavigationOnlyForTheFixedTwoPaneLayout', 0, () => {
       expect(InteractionPolicy.workspacePaneIndex(WorkspaceNavigationAction.FOCUS_LEFT_PANE, 1))
         .assertEqual(-1)

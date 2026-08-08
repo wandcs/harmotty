@@ -751,6 +751,14 @@ assert.match(indexPage,
 assert.match(indexPage,
   /menuSelectedIndex === 5 && event\.keyCode === 2014[\s\S]*handleFontDecrease\(\)[\s\S]*menuSelectedIndex === 5 && event\.keyCode === 2015[\s\S]*handleFontIncrease\(\)/,
   'left and right must adjust only the selected font-size row');
+assert.match(indexPage,
+  /transparencyShortcutDirection\([\s\S]*adjustTransparency\(transparencyDirection\)[\s\S]*fontSizeShortcutDirection\([\s\S]*handleFontDecrease\(\)[\s\S]*handleFontIncrease\(\)[\s\S]*if \(this\.menuOpen\)/,
+  'global stepper shortcuts must run while the menu is either open or closed');
+for (const shortcut of ['Ctrl+Alt+-', 'Ctrl+Alt+=', 'Ctrl+-', 'Ctrl+=']) {
+  assert.match(indexPage,
+    new RegExp(`bindTips\\('${shortcut.replaceAll('+', '\\+')}', \\{[\\s\\S]*?appearingTime: 300`),
+    `${shortcut} must appear in the matching native hover tip`);
+}
 assert.doesNotMatch(indexPage, /'Font Size \+'|'Reset Font Size'|'Font Size -'/,
   'the production menu must not retain three redundant font-size rows');
 assert.match(indexPage,

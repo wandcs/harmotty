@@ -21,6 +21,8 @@ scrollback 搜索，以及桌面终端 Chrome/Surface 的界面与交互收敛�
 - 固定 172vp Tab、有限 BEL Tab 提示、紧凑搜索、双 Pane 边界和可见键盘焦点；
 - Off/Low/Medium/High/Extreme 五档非循环透明度，Content 为
   `1.00/0.90/0.82/0.72/0.60`，Chrome 为 `1.00/0.94/0.88/0.80/0.70`；
+- 字号 `Ctrl+-` / `Ctrl+=` 与透明度 `Ctrl+Alt+-` / `Ctrl+Alt+=` 成组全局快捷键，四个菜单
+  步进按钮使用原生 hover Tips 显示对应键位；
 - 非 Off 档只在窗口根固定一次 `BlurStyle.BACKGROUND_REGULAR`，不提供材质设置、自定义
   Gaussian、CSS/WebGL blur 或逐 Pane 模糊。
 
@@ -36,8 +38,9 @@ SSH 主路径、保留候选搜索矩阵、窗口/UI 证据复核、BEL、五档
 tmux/vim/less/Agent TUI、Medium/Extreme 可读性及 BEL 节奏验收，均未发现问题。详情进入
 两份设计文档。用户随后确认 Low 档 Chrome 轨道与 Tab 表面色差不足，并明确授权在发布前
 修复；修复已把深浅色 Chrome/非活动 Tab/活动 Tab 收敛为 Catppuccin
-`crust → mantle → base` 三层，并通过五档真机抽查。上述候选保留为验收基线，但不再作为
-最终发布候选，发布流程必须从包含该修复的新精确提交重建。不得借此加入无关功能。
+`crust → mantle → base` 三层，并通过五档真机抽查；后续授权的四个步进快捷键和 hover Tips
+也已通过定向真机验证。上述候选保留为验收基线，但不再作为最终发布候选，发布流程必须从
+包含这些修复的新精确提交重建。不得借此加入无关功能。
 
 完成 1.2 必须满足：所有产品改动进入精确且已推送的提交；正式软件门禁与干净 ARM64
 候选通过；同一个保留候选完成全部适用的物理 HarmonyOS PC 场景；设计、版本、签名、

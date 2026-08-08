@@ -34,6 +34,10 @@
   with one non-wrapping `− current +` stepper. Tightened the search panel spacing
   and made both empty and unsuccessful queries visibly report `0/0` while
   retaining distinct accessible descriptions.
+- Added grouped global shortcuts for the four menu step buttons: `Ctrl+-` /
+  `Ctrl+=` adjust font size and `Ctrl+Alt+-` / `Ctrl+Alt+=` adjust transparency,
+  including while the menu is open. Each button now shows its shortcut in a
+  native hover tip and exposes the same key in its accessible description.
 
 ### Security
 
