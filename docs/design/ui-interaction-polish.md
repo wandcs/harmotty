@@ -1,6 +1,6 @@
 # 桌面终端界面与交互收敛
 
-> 状态：Verified
+> 状态：Verified；发布候选待按最新 UI 修复重建
 >
 > milestone：1.2
 >
@@ -84,7 +84,8 @@ Terminal Surface 独占。透明效果不得暴露新的终端内容副本，也
 
 - 活动窗口使用自定义 40vp Chrome；Tab 固定 172vp，Tab 间距 4vp，Tab 区横向滚动，
   `+` 位于滚动区外，标题栏保留至少 96vp 拖拽区域和约 140vp 系统按钮区域。
-- 非活动 Tab 的原基线返回透明表面色；当前实现已改为轻表面、低对比分隔和条件边缘淡出。
+- 非活动 Tab 的原基线返回透明表面色；当前实现让 Chrome 轨道、非活动 Tab、活动/hover Tab
+  分别使用 Catppuccin `crust → mantle → base`，只通过既有 4vp 间距显示相邻边界。
 - `needsAttention` 的原基线在 Pane 四周绘制 2px 黄色边框；当前实现已改为有限 Tab 强调、
   复用 Tab 前导状态点的静态标记，以及分屏来源侧的局部标记。
 - 搜索条原基线固定约 420px；当前实现收敛为 344px，并固定结果区和三个操作按钮宽度。
@@ -94,7 +95,7 @@ Terminal Surface 独占。透明效果不得暴露新的终端内容副本，也
   让活动态 PC 容器和原生内容窗口透明，仅由 ArkUI 根 Surface 持有选定 alpha；ArkWeb、
   HTML/body 和 xterm/WebGL 保持全透明，避免多层 alpha 叠加。物理 PC 已证明五档
   Chrome/Content 分层合成链成立；正式候选同机性能和生命周期已完成，真实用户服务器
-  TUI 与主观可读性仍按人工边界收口。
+  TUI 与主观可读性也已由用户完成。
 - 现有深浅主题已统一 Chrome、Terminal、divider、text、accent、attention、focus 与
   Pane 控件 token；生产路径中三个确认无引用的旧组件已删除。
 
@@ -300,6 +301,9 @@ Extreme 也必须在系统材质不可用的无 blur 回退下保持终端字形
 ### 颜色与字体
 
 - 继续使用现有 Catppuccin 深浅色 token，不新增第二套 palette。
+- Chrome 轨道使用深色 `#11111B` / 浅色 `#DCE0E8` crust，并继续承载五档区域 alpha；
+  非活动 Tab 使用不透明 mantle `#181825` / `#E6E9EF`，活动与 hover 使用不透明 base
+  `#1E1E2E` / `#EFF1F5`。Tab 不再依赖容易在 Low 档塌缩的局部 opacity 表达层级。
 - 结构边界优先使用 divider token 的低对比度变体；活动、hover、pressed 和键盘焦点
   逐级增强，但不使用纯白描边。
 - attention 使用现有琥珀色 token；静态标记同时保留形状，不能只靠色相表达状态。
@@ -322,9 +326,9 @@ Tab 多于可视宽度时仍横向滚动；边缘只在确实还有不可见 Tab
 ### Tab 与溢出
 
 - Tab 宽度保持 172vp，不做自适应压缩、最小/最大宽度算法或用户设置。
-- 非活动 Tab 使用极轻表面色；相邻 Tab 只通过 4vp Chrome 间距与 active/inactive/hover
-  表面差异区分，不绘制竖线。所有 Tab 表面延伸到内容区基线且底角不再圆角，活动 Tab 与
-  Terminal 形成连续层次，不增加完整外框。
+- 非活动 Tab 使用 mantle，活动与 hover 使用 base；相邻 Tab 只通过 4vp crust 轨道间距与
+  active/inactive/hover 表面差异区分，不绘制竖线。所有 Tab 表面延伸到内容区基线且底角
+  不再圆角，活动 Tab 与 Terminal 形成连续层次，不增加完整外框。
 - 关闭按钮默认低权重，hover、pressed 和键盘焦点时明确；不能因缩小标题空间而遮住
   状态图标或主机名。
 - 当 Tab 区未溢出时不显示边缘淡出；溢出时淡出不能遮住可点击内容，也不能取代滚动。
@@ -557,6 +561,22 @@ tmux/vim/less/Agent TUI、Extreme 可读性及 BEL 节奏，均未发现问题�
 “动画”只找到“开发者选项 → 过渡动画缩放”；SDK 只提供状态读取、没有设置接口，因此用户级
 reduced-motion 在当前目标系统记为不适用。没有改动开发者动画倍率，也不拿它冒充该场景。
 
+### 2026-08-08 Low 档 Tab 层级修复
+
+用户在最终人工走查中确认 Low 档 Chrome 轨道与 Tab 表面色差不足。根因是所有 Tab 都使用
+`#1E1E2E`，非活动/hover 仅叠加 `0.42/0.72` opacity，而 Low Chrome 又是几乎不透明的
+`#F0181825`；局部 alpha 合成后，非活动 Tab 与底色的差异接近消失。其他透明档位只是因
+桌面透入更多而偶然放大色差，不能作为稳定的状态表达。
+
+修复删除两个局部 opacity token，把 Chrome 轨道 RGB 改为 crust，非活动 Tab 固定 mantle，
+活动与 hover 固定 base；不增加分隔线、描边、设置或状态源。测试签名诊断 HAP SHA-256 为
+`17c327dfb670ca6a3991d05a48e7f0915a539804b7c835fe60f588c23a44c253`。HAD-W32 五档证据位于
+`C:\tmp\leantty-tab-contrast-20260808`：Off/Low/Medium/High/Extreme 的 Chrome 分别实际报告
+`#FF11111B/#F011111B/#E011111B/#CC11111B/#B311111B`，每档布局均为三个
+`#FF181825` 非活动 Tab 和一个 `#FF1E1E2E` 活动 Tab；截图确认 4vp 间距、活动 Tab 连续层次、
+`+` 前短分隔与四点菜单保持不变。设备结束时恢复 Low。该 HAP 只证明本次定向修复，不替代
+从新精确提交重建的正式发布候选。
+
 ## 验证边界
 
 ### 自动化证明
@@ -606,6 +626,9 @@ reduced-motion 在当前目标系统记为不适用。没有改动开发者动�
 
 ## 决策记录
 
+- 2026-08-08：Low 档不再用局部 opacity 区分 Tab；采用 Catppuccin
+  `crust → mantle → base` 的显式表面层级，并在 HAD-W32 上逐档确认。保持无 Tab 间竖线、
+  固定 4vp 间距、活动 Tab 连接内容区和单一透明度设置。
 - 2026-08-08：精确保留候选完成 UI/window 证据复核、搜索、SSH 主路径、BEL、五档透明与
   五档持续输出分布；候选客观停止条件均未触发。用户随后完成真实键盘/IME、用户服务器
   TUI 和主观观感验收，未发现问题；当前目标系统未暴露用户级 reduced-motion，该场景记为

@@ -16,7 +16,9 @@
   continuous with the terminal, a distinct new-Tab boundary and a lower-weight
   full-height split divider,
   restored HarmonyOS four-dot menu, themed controls and visible keyboard focus
-  states.
+  states. Stabilized the hierarchy at every transparency level by mapping the
+  Chrome track, inactive Tabs and active/hover Tabs to Catppuccin
+  `crust → mantle → base` surfaces instead of low-contrast per-Tab opacity.
 - Replaced the full-Pane BEL warning frame with a finite Tab emphasis, a
   persistent leading status marker for unattended output and a local split
   source marker. Reduced-motion uses static feedback.

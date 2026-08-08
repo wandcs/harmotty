@@ -820,8 +820,11 @@ assert.doesNotMatch(chromeBar, /chromeBarWidth|\.onAreaChange\(/,
   'the tab strip must not create a self-measurement feedback loop');
 assert.match(chromeBar, /\.fadingEdge\(this\.tabs\.length > 1\)/,
   'the tab strip must use the platform edge fade without adding width measurement state');
-assert.match(chromeBar, /tabInactiveSurfaceOpacity[\s\S]*\.width\(172\)/,
-  'tabs must keep the fixed width while rendering a restrained inactive surface');
+assert.match(chromeBar,
+  /private surfaceColor\(\): string \{[\s\S]*this\.isActive \|\| this\.hovered[\s\S]*tabActiveBackground[\s\S]*tabBackground/,
+  'tabs must map active and inactive states to explicit palette surfaces');
+assert.doesNotMatch(chromeBar, /tabInactiveSurfaceOpacity|tabHoverSurfaceOpacity/,
+  'tab separation must not depend on alpha that collapses against the Low chrome surface');
 assert.match(chromeBar, /attentionPulseCount[\s\S]*isAnimationReduceEnabledSync[\s\S]*pulseIndex/,
   'tab attention must be finite and respect the system reduced-motion preference');
 assert.match(chromeBar, /indicatorColor\(\): string \{[\s\S]*?if \(this\.hasAttention\) \{[\s\S]*?return this\.chromeColors\.attention/,
